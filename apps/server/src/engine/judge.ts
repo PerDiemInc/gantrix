@@ -18,7 +18,8 @@ const clip = (text: string) =>
   text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n[truncated]` : text;
 
 const STEP_JUDGE = `You check an AI agent's work. Decide only whether the output meets the acceptance
-criterion; ignore style. You can't open files: rely on the output and the workspace file list.
+criterion; ignore style. Rely on the output, the workspace file list and the contents of the
+files the step wrote.
 If it fails, say exactly what is missing so the agent can fix it.`;
 
 const GOAL_JUDGE = `You decide whether a goal has been achieved, based on the results of the steps

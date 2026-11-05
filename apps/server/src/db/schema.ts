@@ -20,6 +20,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -137,7 +138,10 @@ export const steps = pgTable(
   },
   (t) => [
     check('steps_status_valid', oneOf('status', STEP_STATUSES)),
-    unique('steps_task_key_key').on(t.taskId, t.key),
+    // A replan may reuse the key of a step it superseded.
+    uniqueIndex('steps_task_key_active_idx')
+      .on(t.taskId, t.key)
+      .where(sql`${t.status} <> 'superseded'`),
     index('steps_task_status_idx').on(t.taskId, t.status),
   ],
 );
@@ -152,6 +156,7 @@ export const approvals = pgTable(
     stepId: uuid('step_id')
       .notNull()
       .references(() => steps.id, { onDelete: 'cascade' }),
+    interruptId: text('interrupt_id').notNull(), // LangGraph interrupt this approval resumes
     tool: text('tool').notNull(),
     args: jsonb('args').$type<Record<string, unknown>>().notNull(),
     status: text('status').$type<ApprovalStatus>().notNull().default('pending'),
@@ -160,6 +165,7 @@ export const approvals = pgTable(
   },
   (t) => [
     check('approvals_status_valid', oneOf('status', APPROVAL_STATUSES)),
+    unique('approvals_step_interrupt_key').on(t.stepId, t.interruptId),
     index('approvals_pending_idx').on(t.taskId).where(sql`${t.status} = 'pending'`),
   ],
 );

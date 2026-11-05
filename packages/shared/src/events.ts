@@ -8,6 +8,7 @@ export type GantrixEvent =
   | { type: 'step.tool_call'; stepId: string; tool: string; summary: string }
   | { type: 'approval.requested'; approvalId: string; stepId: string; tool: string }
   | { type: 'approval.decided'; approvalId: string; approved: boolean }
+  | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
   | { type: 'budget.exceeded'; limit: 'tokens' | 'time' | 'replans'; detail: string };
 
 export type GantrixEventType = GantrixEvent['type'];

@@ -9,6 +9,15 @@ export const TASK_STATUSES = [
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+export const TERMINAL_TASK_STATUSES = [
+  'succeeded',
+  'failed',
+  'needs_attention',
+  'cancelled',
+] as const;
+export const isTerminal = (status: TaskStatus): boolean =>
+  (TERMINAL_TASK_STATUSES as readonly string[]).includes(status);
+
 export const STEP_STATUSES = [
   'pending',
   'queued',
