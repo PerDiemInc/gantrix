@@ -1,0 +1,30 @@
+{
+  "name": "gantrix",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=26.13"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "db:migrate": "npm run db:migrate -w @gantrix/server",
+    "dev:api": "npm run dev:api -w @gantrix/server",
+    "dev:worker": "npm run dev:worker -w @gantrix/server",
+    "dev:web": "npm run dev -w @gantrix/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "biome check .",
+    "test": "vitest run --project unit",
+    "test:e2e": "vitest run --project e2e"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.5",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
