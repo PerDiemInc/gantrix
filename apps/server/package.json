@@ -1,0 +1,24 @@
+{
+  "name": "@gantrix/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=../../.env src/db/migrate.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@gantrix/shared": "*",
+    "@langchain/core": "^1.3.4",
+    "@langchain/langgraph": "^1.7.0",
+    "@langchain/langgraph-checkpoint-postgres": "^1.1.2",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11"
+  }
+}
