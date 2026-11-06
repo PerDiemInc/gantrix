@@ -233,7 +233,10 @@ export function AgentsPage() {
           {skills.map((s) => (
             <label key={s.id} className="check">
               <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />
-              {s.name} <span className="muted small">{s.manifest.tools.join(', ')}</span>
+              {s.name}{' '}
+              <span className="muted small">
+                {s.version} · {s.manifest.tools.join(', ')}
+              </span>
             </label>
           ))}
         </fieldset>
