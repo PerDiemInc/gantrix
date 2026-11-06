@@ -328,3 +328,4 @@ footer .foot-links a { color: var(--muted); }
 .crumbs { font: 500 13px var(--font-mono); color: var(--muted); }
 .crumbs a { color: var(--muted); }
 .note { font-size: 14px; color: var(--muted); }
+.prereq td code { white-space: nowrap; }

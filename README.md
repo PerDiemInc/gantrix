@@ -164,12 +164,60 @@ Instructions the agent gets whenever it has this skill.
 MCP tools are named `<server>_<tool>` (for example `search_query`) and need approval unless a
 skill lists them in `auto-approve`.
 
-Three examples are in [`examples/skills`](examples/skills): `workspace-files`,
-`shell-commands` and `web-reader`.
+Examples are in [`examples/skills`](examples/skills): `workspace-files`, `shell-commands`,
+`web-reader`, and `media-images` / `media-video` (see below).
 
 Installing a skill copies it to `~/.gantrix/skills/<name>/<version>` and records a checksum, so
 editing your original folder doesn't change what runs. To update a skill, bump its `version`
 and install it again.
+
+## Images and video (optional)
+
+Agents can create images and short video clips with open models on your own machine. Gantrix
+runs them through a local [ComfyUI](https://github.com/Comfy-Org/ComfyUI), which stays a
+separate program, so nothing here changes Gantrix's MIT licence.
+
+| Model | Makes | Licence | Time on a 48 GB M5 Pro |
+|---|---|---|---|
+| `z-image-turbo` | PNG images from text, or variations of an image | Apache-2.0 | about 30 s for 1024×576 |
+| `wan-2.2-5b` | MP4 clips (no sound) from text or a start image | Apache-2.0 | per 2 s clip: `fast` 640×352 ~1.5 min, `standard` 832×480 ~3.5 min, `high` 1280×704 ~12 min |
+
+**Set it up** (tested on Apple Silicon with 48 GB; about 21 GB of downloads per model):
+
+```bash
+npm run comfyui:setup -- all     # or: images | video. Installs ComfyUI v0.42.1 in ~/ComfyUI
+cd ~/ComfyUI && .venv/bin/python main.py --listen 127.0.0.1 --port 8188   # keep it running
+npm run media:link               # makes the gantrix-media-mcp command available to skills
+npm run gantrix -- skills add examples/skills/media-images
+npm run gantrix -- skills add examples/skills/media-video
+npm run gantrix -- agents add artist -d "Creates images and short video clips" -s media-images,media-video
+```
+
+**How it works:**
+- The skills start the `gantrix-media-mcp` server. It gives agents `generate_image`,
+  `generate_video` and `list_media_models`, and saves the files in the task's folder.
+- Images run without asking. Each video clip asks for your approval, because it takes minutes.
+- You choose the models per skill with `MEDIA_MODELS`. The agent picks among them per call.
+
+**Settings** (in a skill's `mcp-servers` → `env`):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MEDIA_MODELS` | `z-image-turbo` | Which models this skill can use, comma-separated |
+| `MEDIA_DEFAULT_IMAGE`, `MEDIA_DEFAULT_VIDEO` | the first enabled | Default model per kind |
+| `MEDIA_VIDEO_QUALITY` | `standard` | `fast`, `standard` or `high` |
+| `MEDIA_UNLOAD_AFTER` | `true` | Free ComfyUI's RAM after each job; set `false` for faster back-to-back jobs |
+| `COMFYUI_URL` | `http://127.0.0.1:8188` | Where ComfyUI runs |
+| `MEDIA_ACCEPT_LICENSES` | empty | Models that aren't open source can only be enabled by listing them here |
+
+**Good to know:**
+- `high` video needs more than 48 GB of RAM to avoid swapping. On a 48 GB Mac, use `standard`.
+- Image variations keep the layout and colours up to strength 0.8. They can't keep a character
+  while changing the scene; animating an image with `generate_video` does keep it.
+- Any model that isn't OSI open source shows a ⚠ warning with its usage limits wherever it
+  appears, and stays off until it's listed in `MEDIA_ACCEPT_LICENSES`.
+- LTX-2 was tried and dropped: running LTX Desktop next to ComfyUI used more RAM than a 48 GB
+  Mac has.
 
 ## Approvals and safety
 
@@ -233,7 +281,8 @@ The end-to-end tests use their own database (`gantrix_test`) and Valkey DB 2, so
 touch your data.
 
 Layout: `apps/server` (API, engine, worker), `apps/cli`, `apps/web` (dashboard),
-`packages/shared` (types used by all three), `examples/skills`, `site` (the overview page).
+`packages/shared` (types used by all three), `packages/media-mcp` (image and video server),
+`examples/skills`, `scripts` (setup), `site` (the website).
 
 ## License
 

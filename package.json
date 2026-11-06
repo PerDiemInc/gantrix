@@ -23,7 +23,9 @@
     "test:e2e": "vitest run --project e2e",
     "gantrix": "node apps/cli/src/index.ts",
     "build:web": "npm run build -w @gantrix/web",
-    "token": "node -e \"process.loadEnvFile('.env'); console.log(process.env.GANTRIX_TOKEN)\""
+    "token": "node -e \"process.loadEnvFile('.env'); console.log(process.env.GANTRIX_TOKEN)\"",
+    "media:link": "npm link -w @gantrix/media-mcp",
+    "comfyui:setup": "bash scripts/setup-comfyui.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.5",
