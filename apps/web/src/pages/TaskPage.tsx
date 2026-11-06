@@ -43,7 +43,7 @@ function eventText(e: StreamEvent, keys: Map<string, string>): string {
     case 'step.status':
       return `${e.key} ${label(e.status)}${e.attempt > 1 ? ` (try ${e.attempt})` : ''}`;
     case 'step.tool_call':
-      return `${keys.get(e.stepId) ?? 'step'} → ${e.tool} ${e.summary}`;
+      return `${keys.get(e.stepId) ?? 'step'} → ${e.tool} ${e.summary}${e.autoApproved ? ' ⚡ auto-approved' : ''}`;
     case 'approval.requested':
       return `${keys.get(e.stepId) ?? 'A step'} asks to run ${e.tool}`;
     case 'approval.decided':
@@ -171,6 +171,11 @@ export function TaskPage({ id }: { id: string }) {
           <h1>{task.goal}</h1>
         </div>
         <div className="task-actions">
+          {task.approveAll && (
+            <span className="pill big god-mode" title="Tool calls run without asking">
+              ⚡ God mode
+            </span>
+          )}
           <span className={`pill big s-${task.status}`}>{label(task.status)}</span>
           {!isTerminal(task.status) && (
             <button

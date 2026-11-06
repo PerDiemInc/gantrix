@@ -11,7 +11,7 @@ import type { EngineDeps } from './deps.ts';
 
 export async function createTask(
   deps: EngineDeps,
-  input: { goal: string; budget?: Partial<Budget> },
+  input: { goal: string; budget?: Partial<Budget>; approveAll?: boolean },
 ) {
   const id = randomUUIDv7();
   const workspacePath = await createWorkspace(deps.config.GANTRIX_WORKSPACES_DIR, id);
@@ -19,7 +19,13 @@ export async function createTask(
   const task = await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .insert(tasks)
-      .values({ id, goal: input.goal, budget, workspacePath })
+      .values({
+        id,
+        goal: input.goal,
+        budget,
+        workspacePath,
+        approveAll: input.approveAll ?? deps.config.GANTRIX_APPROVE_ALL,
+      })
       .returning();
     await emit(tx, id, { type: 'task.status', status: 'planning' });
     return row;

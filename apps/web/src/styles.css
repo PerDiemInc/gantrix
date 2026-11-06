@@ -665,3 +665,12 @@ ul.cards {
   display: grid;
   gap: 12px;
 }
+
+.pill.god-mode {
+  background: var(--danger);
+  color: #fff;
+}
+label.god-mode {
+  color: var(--danger);
+  font-weight: 600;
+}

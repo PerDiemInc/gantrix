@@ -289,7 +289,8 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <div class="two">
         <ul class="safety">
           <li><b>Only the step that needs you pauses.</b> Approve or deny on the dashboard, in <code>gantrix tail</code>, or with <code>gantrix approve</code>. The rest of the plan keeps running.</li>
-          <li><b>Shell isn't sandboxed.</b> It can do anything your user account can, so it always asks, and no skill can turn that off. Read every command before you approve it.</li>
+          <li><b>Shell isn't sandboxed.</b> It can do anything your user account can, so it always asks, and no skill can turn that off; only you can, with god mode. Read every command before you approve it.</li>
+          <li><b>God mode when you want it.</b> <code>--approve-all</code> or the ⚡ toggle lets one task run every tool without asking. It's off by default, and every auto-approved call is still logged.</li>
           <li><b>Web pages can talk back.</b> Fetched text can try to steer an agent. Approval is where you catch it.</li>
         </ul>
         <ul class="safety">

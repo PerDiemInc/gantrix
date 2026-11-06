@@ -11,6 +11,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -85,6 +86,8 @@ export const tasks = pgTable(
     tokensUsed: integer('tokens_used').notNull().default(0),
     replans: integer('replans').notNull().default(0),
     workspacePath: text('workspace_path').notNull(),
+    // God mode: every tool call runs without asking, including shell.
+    approveAll: boolean('approve_all').notNull().default(false),
     result: text('result'),
     error: text('error'),
     createdAt: createdAt(),

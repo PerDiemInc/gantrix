@@ -109,6 +109,33 @@ describe('engine', () => {
     expect(toolCalls).toHaveLength(1);
   });
 
+  it('runs gated tools without asking in god mode and marks them auto-approved', async () => {
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length
+        ? `Fetch result: ${toolResults[0]}`
+        : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const task = await createTask(e.deps, { goal: 'Fetch a page', approveAll: true });
+    const done = await e.waitFor(task.id);
+
+    expect(done.status).toBe('succeeded');
+    expect(await e.db.select().from(approvals).where(eq(approvals.taskId, task.id))).toHaveLength(
+      0,
+    );
+    const calls = (
+      await e.db.select().from(events).where(eq(events.taskId, task.id)).orderBy(asc(events.id))
+    ).filter((r) => r.type === 'step.tool_call');
+    expect(calls.map((c) => c.payload)).toEqual([
+      expect.objectContaining({ tool: 'web_fetch', autoApproved: true }),
+    ]);
+  });
+
+  it('still asks when god mode is off by default', async () => {
+    const t = await createTask(e.deps, { goal: 'Default task' });
+    expect(t.approveAll).toBe(false);
+  });
+
   it('tells the agent when an approval is denied', async () => {
     await e.addAgent('fetcher', ['web_fetch']);
     e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });

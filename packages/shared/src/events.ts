@@ -5,7 +5,14 @@ export type GantrixEvent =
   | { type: 'task.status'; status: TaskStatus; reason?: string }
   | { type: 'plan.created'; version: number; stepKeys: string[]; reason: string }
   | { type: 'step.status'; stepId: string; key: string; status: StepStatus; attempt: number }
-  | { type: 'step.tool_call'; stepId: string; tool: string; summary: string }
+  | {
+      type: 'step.tool_call';
+      stepId: string;
+      tool: string;
+      summary: string;
+      /** Would have asked, but the task is in god mode. */
+      autoApproved?: boolean;
+    }
   | { type: 'approval.requested'; approvalId: string; stepId: string; tool: string }
   | { type: 'approval.decided'; approvalId: string; approved: boolean }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }

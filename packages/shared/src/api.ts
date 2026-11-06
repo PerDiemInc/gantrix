@@ -39,6 +39,8 @@ export interface TaskDto {
   tokensUsed: number;
   replans: number;
   workspacePath: string;
+  /** God mode: tool calls run without asking. */
+  approveAll: boolean;
   result: string | null;
   error: string | null;
   createdAt: string;

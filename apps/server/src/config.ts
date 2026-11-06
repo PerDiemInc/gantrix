@@ -20,6 +20,8 @@ const ConfigSchema = z.object({
   GANTRIX_MAX_REPLANS: positiveInt(5),
   GANTRIX_MAX_TOKENS: positiveInt(200_000),
   GANTRIX_MAX_MINUTES: positiveInt(60),
+  // God mode for every new task unless the request says otherwise. Off by default.
+  GANTRIX_APPROVE_ALL: z.stringbool().default(false),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

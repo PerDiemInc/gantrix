@@ -27,6 +27,7 @@ const CreateTask = z.object({
     })
     .partial()
     .optional(),
+  approveAll: z.boolean().optional(),
 });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 const EventsPage = z.object({
@@ -69,7 +70,11 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
     const budget = Object.fromEntries(
       Object.entries(input.budget ?? {}).filter(([, v]) => v !== undefined),
     ) as Partial<Budget>;
-    const task = await createTask(deps, { goal: input.goal, budget });
+    const task = await createTask(deps, {
+      goal: input.goal,
+      budget,
+      ...(input.approveAll === undefined ? {} : { approveAll: input.approveAll }),
+    });
     return reply.code(201).send(task);
   });
 

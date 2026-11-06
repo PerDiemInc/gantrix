@@ -90,6 +90,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
       ),
       tools: [...builtinTools(toolkit.builtinTools, task.workspacePath), ...mcp.tools],
       autoApprove: toolkit.autoApprove,
+      approveAll: task.approveAll,
       checkpointer,
       beforeTurn: async () => {
         const t = await db.query.tasks.findFirst({
@@ -98,12 +99,18 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
         });
         if (!t || isTerminal(t.status)) throw new StepStopped();
       },
-      onToolCall: async (tool, args) => {
+      onToolCall: async (tool, args, autoApproved) => {
         const summary = clip(JSON.stringify(args), 200);
         await emit(
           db,
           task.id,
-          { type: 'step.tool_call', stepId: step.id, tool, summary },
+          {
+            type: 'step.tool_call',
+            stepId: step.id,
+            tool,
+            summary,
+            ...(autoApproved ? { autoApproved } : {}),
+          },
           step.id,
         );
       },

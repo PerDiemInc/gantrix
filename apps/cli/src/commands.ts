@@ -167,15 +167,30 @@ export async function listTasks(client: Client, o: { limit?: string }): Promise<
 export async function runTask(
   client: Client,
   goal: string,
-  o: { maxMinutes?: string; maxTokens?: string; maxReplans?: string; detach?: boolean },
+  o: {
+    maxMinutes?: string;
+    maxTokens?: string;
+    maxReplans?: string;
+    approveAll?: boolean;
+    detach?: boolean;
+  },
 ): Promise<void> {
   const budget = {
     ...(o.maxMinutes ? { maxMinutes: Number(o.maxMinutes) } : {}),
     ...(o.maxTokens ? { maxTokens: Number(o.maxTokens) } : {}),
     ...(o.maxReplans ? { maxReplans: Number(o.maxReplans) } : {}),
   };
-  const task = await client.post<TaskDto>('/api/tasks', { goal, budget });
+  const task = await client.post<TaskDto>('/api/tasks', {
+    goal,
+    budget,
+    ...(o.approveAll ? { approveAll: true } : {}),
+  });
   console.log(`Task ${paint('bold', short(task.id))} created. Workspace: ${task.workspacePath}`);
+  if (task.approveAll) {
+    console.log(
+      paint('red', '⚡ God mode: every tool call, including shell, runs without asking.'),
+    );
+  }
   if (!o.detach) await tail(client, task.id);
 }
 

@@ -271,6 +271,11 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 - When a step needs approval, only that step pauses. Decide on the dashboard's Approvals page,
   in `gantrix tail <task>` (it asks `Approve? [y/N]`), or with `gantrix approve <id>` /
   `gantrix deny <id>`.
+- **God mode** skips every approval for one task: `gantrix run --approve-all "…"`, or tick
+  ⚡ God mode on the dashboard. Shell commands, web requests, MCP tools and emails then run
+  without asking. Each such call is still logged and marked ⚡ auto-approved. To make it the
+  default for every task, set `GANTRIX_APPROVE_ALL=true`. It's off by default; use it only with
+  goals and skills you trust.
 - **`shell` is not sandboxed.** It can do anything your user account can. Read every command
   before you approve it.
 - Web pages and MCP results can contain text that tries to steer the agent. Approval is where
@@ -285,7 +290,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [--max-concurrency n] | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
-gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--detach]
+gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | cancel <task> | files <task> [path]
 gantrix approvals | approve <id> | deny <id>
 ```
@@ -316,6 +321,7 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `GANTRIX_LLM_CONCURRENCY` | `2` | Model calls at once per worker |
 | `GANTRIX_WORKSPACES_DIR`, `GANTRIX_SKILLS_DIR` | `~/.gantrix/…` | Where task files and skills live |
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |
+| `GANTRIX_APPROVE_ALL` | `false` | God mode for every new task (tool calls run without asking) |
 
 ## Development
 
