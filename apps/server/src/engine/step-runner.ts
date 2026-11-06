@@ -22,6 +22,7 @@ import {
   MAX_MODEL_TURNS,
   summarize,
 } from './step-agent.ts';
+import { stepThreadId } from './threads.ts';
 
 type Task = typeof tasks.$inferSelect;
 type Step = typeof steps.$inferSelect;
@@ -116,7 +117,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
       },
     });
     const run: RunConfig = {
-      configurable: { thread_id: `step-${step.id}-${step.attempt}` },
+      configurable: { thread_id: stepThreadId(step.id, step.attempt) },
       recursionLimit: MAX_MODEL_TURNS * 2 + 1,
     };
     const before = await graph.getState(run);

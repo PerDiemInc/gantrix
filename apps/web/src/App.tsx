@@ -4,6 +4,7 @@ import { ApiError, api, getToken, setToken, subscribe } from './api.ts';
 import { useRoute } from './hooks.ts';
 import { AgentsPage } from './pages/AgentsPage.tsx';
 import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
+import { LogsPage } from './pages/LogsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
 import { TaskPage } from './pages/TaskPage.tsx';
 import { TasksPage } from './pages/TasksPage.tsx';
@@ -68,7 +69,7 @@ export function App() {
     ['skills', 'Skills'],
     ['approvals', 'Approvals'],
   ] as const;
-  const current = route.page === 'task' ? 'tasks' : route.page;
+  const current = route.page === 'task' || route.page === 'logs' ? 'tasks' : route.page;
   return (
     <>
       <nav className="top">
@@ -100,6 +101,9 @@ export function App() {
       <main>
         {route.page === 'tasks' && <TasksPage />}
         {route.page === 'task' && <TaskPage id={route.id} />}
+        {route.page === 'logs' && (
+          <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />
+        )}
         {route.page === 'agents' && <AgentsPage />}
         {route.page === 'skills' && <SkillsPage />}
         {route.page === 'approvals' && <ApprovalsPage />}

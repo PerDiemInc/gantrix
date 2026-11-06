@@ -674,3 +674,65 @@ label.god-mode {
   color: var(--danger);
   font-weight: 600;
 }
+
+a.button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.logs-columns {
+  grid-template-columns: minmax(200px, 1fr) 3fr;
+}
+.step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.step-list li + li {
+  margin-top: 6px;
+}
+.step-list .link {
+  text-align: left;
+  width: 100%;
+}
+.conversation {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.msg {
+  border-left: 3px solid var(--border);
+  padding: 4px 0 4px 12px;
+  min-width: 0;
+}
+.msg-assistant {
+  border-left-color: var(--accent);
+}
+.msg-tool {
+  border-left-color: var(--muted);
+}
+.msg-head,
+.msg summary {
+  margin-bottom: 4px;
+  cursor: default;
+}
+.msg summary {
+  cursor: pointer;
+}
+.tool-call .mono {
+  color: var(--accent);
+}
+.thinking summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.judge {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .logs-columns {
+    grid-template-columns: 1fr;
+  }
+}

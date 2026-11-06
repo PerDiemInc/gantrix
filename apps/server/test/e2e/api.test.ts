@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
+import { createTask } from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 let e: Engine;
@@ -45,6 +46,53 @@ describe('api', () => {
     expect(
       (await create({ name: 'x', skillIds: ['01a1ad93-969e-770a-ac86-c319f1b264f3'] })).statusCode,
     ).toBe(400);
+  });
+
+  it("returns a step's conversation with tool calls, scoped to its task", async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({
+      steps: [
+        {
+          key: 'notes',
+          title: 'Write notes',
+          agent: 'writer',
+          instructions: 'Write notes.md',
+          acceptance: 'notes.md exists',
+          dependsOn: [],
+        },
+      ],
+    });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length
+        ? 'Wrote notes.md.'
+        : { name: 'write_file', args: { path: 'notes.md', content: 'hello' } };
+    const task = await createTask(e.deps, { goal: 'Write notes' });
+    await e.waitFor(task.id);
+    const detail = (await app.inject({ url: `/api/tasks/${task.id}`, headers: auth })).json();
+    const stepId = detail.steps[0].id;
+
+    const res = await app.inject({
+      url: `/api/tasks/${task.id}/steps/${stepId}/conversation`,
+      headers: auth,
+    });
+    expect(res.statusCode).toBe(200);
+    const convo = res.json();
+    expect(convo).toMatchObject({ key: 'notes', attempts: [{ attempt: 1 }] });
+    const roles = convo.attempts[0].messages.map((m: { role: string }) => m.role);
+    expect(roles).toEqual(['system', 'user', 'assistant', 'tool', 'assistant']);
+    expect(convo.attempts[0].messages[2].toolCalls[0]).toMatchObject({
+      name: 'write_file',
+      args: { path: 'notes.md' },
+    });
+    expect(convo.attempts[0].messages[3]).toMatchObject({ role: 'tool', toolName: 'write_file' });
+    expect(convo.attempts[0].messages[4].text).toBe('Wrote notes.md.');
+
+    const other = await createTask(e.deps, { goal: 'Another task' });
+    const wrongTask = await app.inject({
+      url: `/api/tasks/${other.id}/steps/${stepId}/conversation`,
+      headers: auth,
+    });
+    expect(wrongTask.statusCode).toBe(404);
   });
 
   it('creates a task with a merged budget and returns its detail', async () => {

@@ -6,6 +6,7 @@ import {
   type ApprovalListItem,
   isTerminal,
   type SkillDto,
+  type StepConversationDto,
   type TaskDetailDto,
   type TaskDto,
   type TaskListItem,
@@ -317,3 +318,77 @@ export function explain(error: unknown): string {
   }
   return error instanceof Error ? error.message : String(error);
 }
+
+// ---- logs
+
+const CLIP = 1_200;
+const clipText = (t: string, full: boolean) =>
+  full || t.length <= CLIP ? t : `${t.slice(0, CLIP)}… (${t.length - CLIP} more; --full shows all)`;
+
+/** Each step's conversation: what the agent was told, what it said, and every tool call. */
+export async function logs(
+  client: Client,
+  ref: string,
+  stepRef: string | undefined,
+  o: { full?: boolean },
+): Promise<void> {
+  const id = await resolveTask(client, ref);
+  const [task, agents] = await Promise.all([
+    client.get<TaskDetailDto>(`/api/tasks/${id}`),
+    client.get<AgentDto[]>('/api/agents'),
+  ]);
+  const names = new Map(agents.map((a) => [a.id, a.name]));
+  const steps = stepRef
+    ? task.steps.filter((s) => s.key === stepRef || s.id === stepRef || s.id.endsWith(stepRef))
+    : task.steps.filter((s) => s.status !== 'superseded');
+  if (!steps.length) {
+    throw new Error(
+      stepRef
+        ? `No step "${stepRef}" in this task. Steps: ${task.steps.map((s) => s.key).join(', ')}.`
+        : 'No steps yet.',
+    );
+  }
+  const full = Boolean(o.full);
+  for (const s of steps) {
+    const convo = await client.get<StepConversationDto>(
+      `/api/tasks/${id}/steps/${s.id}/conversation`,
+    );
+    const agent = s.agentId ? (names.get(s.agentId) ?? '?') : 'deleted agent';
+    console.log(
+      `\n${paint('bold', `━━ ${s.key}`)} ${paint('gray', `${agent} · ${s.status}`)}  ${s.title}`,
+    );
+    if (!convo.attempts.length) console.log(paint('gray', '  not started'));
+    for (const a of convo.attempts) {
+      if (convo.attempts.length > 1) console.log(paint('bold', `  attempt ${a.attempt}`));
+      for (const m of a.messages) {
+        if (m.role === 'system' && !full) {
+          console.log(
+            paint('gray', `  system prompt (${m.text.length} characters; --full shows it)`),
+          );
+          continue;
+        }
+        const head =
+          m.role === 'assistant'
+            ? paint('blue', '  agent')
+            : m.role === 'tool'
+              ? paint('gray', `  ${m.toolName ?? 'tool'} →`)
+              : paint('yellow', `  ${m.role === 'user' ? 'task' : m.role}`);
+        if (m.thinking && full)
+          console.log(`${paint('gray', '  thinking')}\n${indent(m.thinking)}`);
+        if (m.text) console.log(`${head}\n${indent(clipText(m.text, full))}`);
+        for (const c of m.toolCalls ?? []) {
+          console.log(
+            `${paint('blue', '  agent calls')} ${c.name} ${clipText(JSON.stringify(c.args), full)}`,
+          );
+        }
+      }
+    }
+    if (s.judgeReason) console.log(`${paint('yellow', '  judge')}\n${indent(s.judgeReason)}`);
+  }
+}
+
+const indent = (t: string) =>
+  t
+    .split('\n')
+    .map((l) => `    ${l}`)
+    .join('\n');

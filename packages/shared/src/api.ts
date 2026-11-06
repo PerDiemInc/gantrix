@@ -107,3 +107,25 @@ export interface TaskDetailDto extends TaskDto {
 
 /** One message on /api/stream: the event plus its id, task and time. */
 export type StreamEvent = GantrixEvent & { id: number; taskId: string; at: string };
+
+/** One message in a step's conversation, as the agent saw it. */
+export interface ConversationMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  text: string;
+  /** The model's reasoning, when the model returns it separately (e.g. qwen3 thinking). */
+  thinking?: string;
+  /** Tool calls the assistant asked for. */
+  toolCalls?: { id: string; name: string; args: Record<string, unknown> }[];
+  /** For role "tool": which tool answered, and the call it answers. */
+  toolName?: string;
+  toolCallId?: string;
+  tokens?: number;
+}
+
+export interface StepConversationDto {
+  stepId: string;
+  key: string;
+  title: string;
+  /** One entry per attempt, oldest first; a retry starts a fresh conversation. */
+  attempts: { attempt: number; messages: ConversationMessage[] }[];
+}

@@ -91,6 +91,14 @@ npm run gantrix -- files last compare.md    # print one
 
 Or watch it on the dashboard: Tasks, then the task.
 
+To see what each agent was told, what it answered and every tool call it made, open **Logs**
+on the task page, or click "View conversation" on a step. You can also print it in the terminal:
+
+```bash
+npm run gantrix -- logs last                # every step
+npm run gantrix -- logs last compare_facts  # one step; add --full for system prompts and thinking
+```
+
 ### Troubleshooting
 
 | You see | Fix |
@@ -291,7 +299,7 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [--max-concur
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
-gantrix tasks | show <task> [--all] | tail <task> | cancel <task> | files <task> [path]
+gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix approvals | approve <id> | deny <id>
 ```
 

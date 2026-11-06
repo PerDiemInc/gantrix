@@ -5,12 +5,16 @@ import { api, subscribe } from './api.ts';
 export type Route =
   | { page: 'tasks' }
   | { page: 'task'; id: string }
+  | { page: 'logs'; id: string; stepId?: string }
   | { page: 'agents' }
   | { page: 'skills' }
   | { page: 'approvals' };
 
 function parseHash(hash: string): Route {
-  const [, page, id] = hash.replace(/^#/, '').split('/');
+  const [, page, id, sub, stepId] = hash.replace(/^#/, '').split('/');
+  if (page === 'tasks' && id && sub === 'logs') {
+    return stepId ? { page: 'logs', id, stepId } : { page: 'logs', id };
+  }
   if (page === 'tasks' && id) return { page: 'task', id };
   if (page === 'agents' || page === 'skills' || page === 'approvals') return { page };
   return { page: 'tasks' };

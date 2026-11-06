@@ -95,6 +95,11 @@ program
   .option('-a, --all', 'include superseded steps from earlier plans')
   .action(run((ref: string, o) => cmd.showTask(client, ref, o)));
 program
+  .command('logs <task> [step]')
+  .description("show each step's conversation: prompts, replies, tool calls and the judge")
+  .option('--full', 'show system prompts, thinking and long text in full')
+  .action(run((ref: string, step: string | undefined, o) => cmd.logs(client, ref, step, o)));
+program
   .command('tail <task>')
   .description('follow a task live and answer approvals')
   .action(run((ref: string) => cmd.tail(client, ref)));
