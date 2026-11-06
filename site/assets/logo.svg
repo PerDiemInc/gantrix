@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 260" role="img" aria-labelledby="t">
+  <title id="t">Gantrix mascot: a cartoon critter made of three Gantt bars</title>
+  <defs>
+    <style>
+      .ink { stroke: #1d1a33; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; }
+      .shine { fill: #ffffff; opacity: 0.38; }
+    </style>
+  </defs>
+  <g transform="rotate(-5 160 130)">
+    <!-- sticker shadow -->
+    <g fill="#1d1a33" transform="translate(9 9)">
+      <rect x="40" y="40" width="150" height="48" rx="22"/>
+      <rect x="95" y="98" width="190" height="74" rx="26"/>
+      <rect x="60" y="184" width="120" height="46" rx="22"/>
+      <ellipse cx="222" cy="226" rx="17" ry="10"/>
+      <ellipse cx="272" cy="226" rx="17" ry="10"/>
+    </g>
+
+    <!-- antennae -->
+    <path class="ink" fill="none" d="M232 100 C 228 84 214 80 208 64"/>
+    <path class="ink" fill="none" d="M256 100 C 260 84 272 78 276 62"/>
+    <circle class="ink" cx="206" cy="58" r="9" fill="#ff5ea8"/>
+    <circle class="ink" cx="278" cy="56" r="9" fill="#ffb627"/>
+
+    <!-- legs and sneakers -->
+    <path class="ink" fill="none" d="M232 170 L 226 218"/>
+    <path class="ink" fill="none" d="M258 170 L 266 218"/>
+    <ellipse class="ink" cx="220" cy="224" rx="17" ry="10" fill="#ff5ea8"/>
+    <ellipse class="ink" cx="272" cy="224" rx="17" ry="10" fill="#ff5ea8"/>
+    <path d="M210 221 h14 M262 221 h14" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- bar 1: done -->
+    <rect class="ink" x="40" y="40" width="150" height="48" rx="22" fill="#4f7cff"/>
+    <rect class="shine" x="56" y="49" width="72" height="8" rx="4"/>
+    <path d="M150 64 l9 9 l17 -19" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- bar 3: queued -->
+    <rect class="ink" x="60" y="184" width="120" height="46" rx="22" fill="#ffb627"/>
+    <rect class="shine" x="76" y="193" width="56" height="8" rx="4"/>
+    <circle cx="94" cy="214" r="4.5" fill="#1d1a33"/>
+    <circle cx="114" cy="214" r="4.5" fill="#1d1a33"/>
+    <circle cx="134" cy="214" r="4.5" fill="#1d1a33"/>
+
+    <!-- bar 2: the face -->
+    <rect class="ink" x="95" y="98" width="190" height="74" rx="26" fill="#2ed18a"/>
+    <rect class="shine" x="112" y="108" width="80" height="9" rx="4.5"/>
+    <circle cx="200" cy="150" r="7" fill="#ff5ea8" opacity="0.7"/>
+    <circle cx="279" cy="150" r="7" fill="#ff5ea8" opacity="0.7"/>
+    <circle class="ink" cx="222" cy="126" r="16" fill="#ffffff"/>
+    <circle class="ink" cx="258" cy="126" r="16" fill="#ffffff"/>
+    <circle cx="226" cy="129" r="7.5" fill="#1d1a33"/>
+    <circle cx="262" cy="129" r="7.5" fill="#1d1a33"/>
+    <circle cx="229" cy="126" r="2.6" fill="#ffffff"/>
+    <circle cx="265" cy="126" r="2.6" fill="#ffffff"/>
+    <path class="ink" d="M216 148 Q 240 170 266 148 Z" fill="#1d1a33"/>
+    <path d="M232 158 Q 241 166 250 158 Q 241 153 232 158 Z" fill="#ff7eb6"/>
+
+    <!-- sparkles -->
+    <path d="M24 120 l5 -12 l5 12 l12 5 l-12 5 l-5 12 l-5 -12 l-12 -5 z" fill="#ffb627" class="ink" stroke-width="4"/>
+    <path d="M298 22 l3.5 -8 l3.5 8 l8 3.5 l-8 3.5 l-3.5 8 l-3.5 -8 l-8 -3.5 z" fill="#4f7cff" class="ink" stroke-width="3.5"/>
+    <circle cx="30" cy="212" r="6" fill="#ff5ea8" class="ink" stroke-width="4"/>
+  </g>
+</svg>

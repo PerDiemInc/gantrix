@@ -1,6 +1,11 @@
-# Gantrix
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/assets/wordmark-dark.png">
+    <img src="site/assets/wordmark-light.png" alt="Gantrix: a cartoon critter made of three Gantt bars, next to the word Gantrix" width="460">
+  </picture>
+</p>
 
-Open-source AI agents that work a plan like a Gantt chart, on your own machine.
+<p align="center"><b>Open-source AI agents that work a plan like a Gantt chart, on your own machine.</b></p>
 
 You create **agents**, give each one or more **skills**, and hand Gantrix a **goal**. A planner
 splits the goal into steps that depend on each other. Steps that are ready run in parallel. A
@@ -14,8 +19,8 @@ is met or a budget runs out.
                      0                                               1m6s
 ```
 
-**Site:** open [`site/index.html`](site/index.html) in a browser for an overview and the same
-getting-started steps.
+**Site:** [`site/index.html`](site/index.html) has an overview and the same getting-started steps.
+The mascot is Gant; the logo files are in [`site/assets`](site/assets).
 
 ---
 
