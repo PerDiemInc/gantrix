@@ -19,7 +19,7 @@ is met or a budget runs out.
                      0                                               1m6s
 ```
 
-**Site:** [`site/index.html`](site/index.html) has an overview and the same getting-started steps.
+**Site:** https://perdieminc.github.io/gantrix/ has an overview and the same getting-started steps.
 The mascot is Gant; the logo files are in [`site/assets`](site/assets).
 
 ---

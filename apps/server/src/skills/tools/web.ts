@@ -86,7 +86,7 @@ export function webFetchTool() {
           const response = await fetch(current, {
             redirect: 'manual',
             signal: AbortSignal.timeout(TIMEOUT_MS),
-            headers: { 'user-agent': 'Gantrix/0.1 (+https://github.com/doron2402/gantrix)' },
+            headers: { 'user-agent': 'Gantrix/0.1 (+https://github.com/PerDiemInc/gantrix)' },
           });
           const location = response.headers.get('location');
           if (response.status >= 300 && response.status < 400 && location) {
