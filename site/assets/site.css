@@ -1,33 +1,37 @@
 /* Layout: one timeline column; every section sits on the same faint time grid as the hero Gantt. */
+/* Layout: one column on graph paper; every block is a sticker with an ink outline, like the mascot. */
 :root {
-  --paper: #f5f7f9;
+  --paper: #fff6df;
   --surface: #ffffff;
-  --ink: #12161c;
-  --muted: #5b6574;
-  --rule: #dfe4ea;
-  --grid: #e9edf2;
-  --code-bg: #eef1f5;
-  --run: #3d6bff;
-  --done: #1f9d68;
-  --wait: #d99a1e;
-  --queue: #b9c2ce;
-  --accent: #3d6bff;
-  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --ink: #1d1a33;
+  --muted: #5d5873;
+  --rule: #e6dcc1;
+  --grid: #f1e6c8;
+  --code-bg: #fffdf6;
+  --edge: #1d1a33;
+  --drop: #1d1a33;
+  --run: #4f7cff;
+  --done: #2ed18a;
+  --wait: #ffb627;
+  --pop: #ff5ea8;
+  --queue: #cbbf9f;
+  --accent: #3554e0;
+  --font-display: "Lilita One", "Arial Rounded MT Bold", "Helvetica Neue", sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --measure: 66ch;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #0e1116; --surface: #151a21; --ink: #e8ecf1; --muted: #9aa4b2; --rule: #262d37;
-    --grid: #1b2129; --code-bg: #1a2029; --run: #6b8cff; --done: #34c08a; --wait: #f0b43c;
-    --queue: #46505e; --accent: #7b98ff; color-scheme: dark;
+    --paper: #17152a; --surface: #221f3a; --ink: #fff6df; --muted: #b9b3cf; --rule: #35304f;
+    --grid: #1e1b34; --code-bg: #1c1932; --edge: #fff6df; --drop: #ff5ea8; --queue: #514a6b;
+    --accent: #8ea4ff; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #0e1116; --surface: #151a21; --ink: #e8ecf1; --muted: #9aa4b2; --rule: #262d37;
-  --grid: #1b2129; --code-bg: #1a2029; --run: #6b8cff; --done: #34c08a; --wait: #f0b43c;
-  --queue: #46505e; --accent: #7b98ff; color-scheme: dark;
+  --paper: #17152a; --surface: #221f3a; --ink: #fff6df; --muted: #b9b3cf; --rule: #35304f;
+  --grid: #1e1b34; --code-bg: #1c1932; --edge: #fff6df; --drop: #ff5ea8; --queue: #514a6b;
+  --accent: #8ea4ff; color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -225,47 +229,102 @@ ul.safety b { font-weight: 600; }
 footer { margin-top: 72px; border-top: 1px solid var(--rule); }
 footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-block: 24px 40px; color: var(--muted); font-size: 14px; }
 
+/* ---- funky sticker theme ---- */
+body {
+  background-color: var(--paper);
+  background-image: linear-gradient(var(--grid) 2px, transparent 2px), linear-gradient(90deg, var(--grid) 2px, transparent 2px);
+  background-size: 48px 48px;
+}
+.brand { font: 400 26px/1 var(--font-display); letter-spacing: 0.5px; }
+.brand img { width: 44px; height: auto; display: block; }
+.brand .x { color: var(--pop); }
+.hero { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; column-gap: 32px; }
+.hero > .chart, .hero > .cta, .hero > .lede { grid-column: 1 / -1; }
+.hero > .cta { margin-top: -8px; }
+.hero h1 {
+  font: 400 clamp(46px, 8vw, 92px)/0.95 var(--font-display); letter-spacing: 0.5px; max-width: 16ch;
+  text-shadow: 5px 5px 0 var(--wait); transform: rotate(-2deg);
+}
+.hero h1 em { color: var(--pop); text-shadow: 5px 5px 0 var(--run); }
+.mascot { width: 100%; max-width: 380px; justify-self: center; height: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .mascot { animation: bob 2.6s ease-in-out infinite; transform-origin: 60% 90%; }
+}
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(-2deg); } }
+@media (max-width: 760px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .mascot { max-width: 240px; order: -1; }
+}
+h2 { font: 400 clamp(32px, 4.6vw, 46px)/1.05 var(--font-display); letter-spacing: 0.4px; }
+h3 { font: 400 20px/1.25 var(--font-display); letter-spacing: 0.3px; }
+.facts b { font: 400 19px/1.25 var(--font-display); letter-spacing: 0.3px; }
+.chart, .code, ol.flow li, .stack span, .btn, .facts {
+  border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--drop);
+}
+.chart { border-radius: 18px; }
+.code { border-radius: 14px; }
+.facts { border-radius: 18px; background: var(--surface); margin-top: 18px; }
+.facts div { padding: 18px; }
+.facts div + div { border-left: 2px dashed var(--rule); }
+@media (max-width: 800px) { .facts div:nth-child(n+3) { border-top: 2px dashed var(--rule); } .facts div:nth-child(3) { padding-left: 18px; } }
+ol.flow { background: none; border: 0; gap: 18px; overflow: visible; }
+ol.flow li { border-radius: 16px; }
+ol.flow li:nth-child(3n+1) { transform: rotate(-0.8deg); }
+ol.flow li:nth-child(3n+3) { transform: rotate(0.8deg); }
+ol.flow .n { color: var(--pop); font-weight: 600; }
+.btn { border-radius: 12px; transition: transform .12s, box-shadow .12s; }
+.btn:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--drop); }
+.btn.primary { background: var(--pop); color: #1d1a33; border-color: var(--edge); }
+.btn.primary small { color: #1d1a33b0; }
+ol.steps .n { background: var(--wait); color: #1d1a33; border: 3px solid var(--edge); width: 38px; height: 38px; font-weight: 600; }
+.stack span { border-radius: 999px; }
+.stack span:nth-child(4n+1) { background: color-mix(in srgb, var(--run) 22%, var(--surface)); }
+.stack span:nth-child(4n+2) { background: color-mix(in srgb, var(--done) 22%, var(--surface)); }
+.stack span:nth-child(4n+3) { background: color-mix(in srgb, var(--wait) 26%, var(--surface)); }
+.stack span:nth-child(4n) { background: color-mix(in srgb, var(--pop) 20%, var(--surface)); }
+.gantt .dur { fill: #1d1a33; }
+.gantt .bar { stroke: var(--edge); stroke-width: 2.5; }
+.eyebrow { color: var(--pop); font-weight: 600; }
+.copy { border: 2px solid var(--edge); border-radius: 8px; font-weight: 600; }
+footer { border-top: 3px solid var(--edge); background: var(--surface); }
+footer img { width: 34px; vertical-align: middle; margin-right: 8px; }
 
-/* ---- site pieces the timeline design didn't have, in the same calm style ---- */
-.hero h1 { max-width: 16ch; }
-.brand svg { display: block; }
+@media (max-width: 520px) { nav.links .opt2 { display: none; } .hero h1 { max-width: none; } }
+/* dark: a cream die-cut outline so the ink lines stay visible */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mascot, :root:not([data-theme="light"]) .brand img, :root:not([data-theme="light"]) footer img {
+    filter: drop-shadow(2px 0 0 #fff6df) drop-shadow(-2px 0 0 #fff6df) drop-shadow(0 2px 0 #fff6df) drop-shadow(0 -2px 0 #fff6df);
+  }
+}
+:root[data-theme="dark"] .mascot, :root[data-theme="dark"] .brand img, :root[data-theme="dark"] footer img {
+  filter: drop-shadow(2px 0 0 #fff6df) drop-shadow(-2px 0 0 #fff6df) drop-shadow(0 2px 0 #fff6df) drop-shadow(0 -2px 0 #fff6df);
+}
 footer .wrap { align-items: center; }
-footer .brand-foot { display: inline-flex; align-items: center; gap: 10px; }
-footer .brand-foot img { width: 34px; height: auto; }
+.powered {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
+  border: 3px solid var(--edge); box-shadow: 3px 3px 0 var(--drop); background: var(--wait);
+  color: #1d1a33; text-decoration: none; font-weight: 500; transform: rotate(-2deg);
+}
+.powered b { font: 400 16px/1 var(--font-display); letter-spacing: 0.3px; }
+.powered:hover { transform: rotate(0deg) translate(-1px, -1px); box-shadow: 4px 4px 0 var(--drop); }
+
 footer .foot-links { display: flex; gap: 16px; flex-wrap: wrap; }
 footer .foot-links a { color: var(--muted); }
-.powered {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
-  border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
-  text-decoration: none; font-size: 14px;
-}
-.powered b { font: 700 14px/1 var(--font-display); }
-.powered:hover { border-color: var(--accent); }
-@media (max-width: 520px) { nav.links .opt2 { display: none; } .hero h1 { max-width: none; } }
-/* the mascot's ink lines need a light edge on dark backgrounds */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) footer .brand-foot img { filter: drop-shadow(0 0 1.5px #e8ecf1); }
-}
-:root[data-theme="dark"] footer .brand-foot img { filter: drop-shadow(0 0 1.5px #e8ecf1); }
-
 /* comparison pages */
 .page { padding-block: 56px 8px; display: grid; gap: 22px; }
-.page h1 {
-  margin: 0; font: 800 clamp(36px, 6vw, 60px)/1 var(--font-display); font-stretch: 80%;
-  letter-spacing: -0.02em; text-wrap: balance; max-width: 22ch;
-}
-.page h1 em { font-style: normal; color: var(--run); }
+.page h1 { margin: 0; font: 400 clamp(36px, 6vw, 64px)/1 var(--font-display); letter-spacing: 0.5px; text-shadow: 4px 4px 0 var(--wait); text-wrap: balance; max-width: 22ch; }
+.page h1 em { font-style: normal; color: var(--pop); text-shadow: 4px 4px 0 var(--run); }
 .page .lede { margin: 0; }
 .verdict { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 @media (max-width: 760px) { .verdict { grid-template-columns: minmax(0, 1fr); } }
-.verdict > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+.verdict > div { background: var(--surface); border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--drop); border-radius: 16px; padding: 18px 20px; min-width: 0; }
 .verdict ul { margin: 8px 0 0; padding-left: 20px; }
 .verdict li { margin-bottom: 6px; }
 .compare { width: 100%; border-collapse: collapse; background: var(--surface); }
 .compare th, .compare td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
 .compare th { font: 500 12px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .compare td:first-child { font-weight: 600; width: 24%; }
-.box { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow-x: auto; }
+.box { background: var(--surface); border: 3px solid var(--edge); box-shadow: 5px 5px 0 var(--drop); border-radius: 16px; overflow-x: auto; }
 .crumbs { font: 500 13px var(--font-mono); color: var(--muted); }
 .crumbs a { color: var(--muted); }
 .note { font-size: 14px; color: var(--muted); }
