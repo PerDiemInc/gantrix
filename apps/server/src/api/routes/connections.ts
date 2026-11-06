@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { agents, connections } from '../../db/schema.ts';
 import { modelDefaults } from '../../engine/deps.ts';
+import { clearModelCatalog, modelCatalog } from '../../models/catalog.ts';
 import { connectionSpec, toConnectionDto } from '../../models/connections.ts';
 import { createChatModel } from '../../models/provider.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
@@ -55,6 +56,13 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
     return c;
   }
 
+  // For the agent form: the models each place offers. ?fresh=1 skips the one-minute cache.
+  app.get('/api/models', async (request) => {
+    const { fresh } = parse(z.object({ fresh: z.stringbool().optional() }), request.query);
+    const rows = await db.select().from(connections).orderBy(asc(connections.name));
+    return modelCatalog(rows, config.OLLAMA_BASE_URL, fresh ?? false);
+  });
+
   app.get('/api/connections', async () =>
     (await db.select().from(connections).orderBy(asc(connections.name))).map(dto),
   );
@@ -74,6 +82,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
       .values({ ...body, baseUrl: body.baseUrl ?? null, headers: body.headers ?? {} })
       .returning();
     if (!row) throw new HttpError(500, 'Connection insert returned no row.');
+    clearModelCatalog();
     return reply.code(201).send(dto(row));
   });
 
@@ -98,6 +107,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
       .where(eq(connections.id, current.id))
       .returning();
     if (!row) throw notFound('Connection');
+    clearModelCatalog();
     return dto(row);
   });
 
@@ -118,6 +128,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
       .where(eq(connections.id, id))
       .returning({ id: connections.id });
     if (!row) throw notFound('Connection');
+    clearModelCatalog();
     return reply.code(204).send();
   });
 

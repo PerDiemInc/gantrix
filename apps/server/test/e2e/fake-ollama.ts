@@ -43,6 +43,11 @@ export async function startFakeOllama() {
   const headers: Record<string, string | string[] | undefined>[] = [];
 
   const server: Server = createServer((req, res) => {
+    if (req.url === '/api/tags') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ models: [{ name: 'fake' }, { name: 'fake-big' }] }));
+      return;
+    }
     if (req.url !== '/api/chat') {
       res.writeHead(404).end();
       return;

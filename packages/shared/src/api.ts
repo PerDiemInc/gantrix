@@ -148,3 +148,14 @@ export interface ConnectionDto {
   createdAt: string;
   updatedAt: string;
 }
+
+/** The models one place offers, for the agent form's dropdown. */
+export interface ModelSource {
+  /** null = the default Ollama. */
+  connectionId: string | null;
+  name: string;
+  provider: ModelProvider;
+  models: string[];
+  /** Why the list couldn't be fetched (you can still type a model name). */
+  error?: string;
+}

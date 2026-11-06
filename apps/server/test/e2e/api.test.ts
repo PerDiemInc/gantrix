@@ -142,6 +142,23 @@ describe('api', () => {
     expect((await del()).statusCode).toBe(204);
   });
 
+  it('lists the models each place offers, with an error for one it cannot reach', async () => {
+    const add = (body: object) =>
+      app.inject({ method: 'POST', url: '/api/connections', headers: auth, payload: body });
+    await add({ name: 'claude-local', provider: 'claude-code' });
+    await add({ name: 'dead', provider: 'openai', baseUrl: 'http://127.0.0.1:9/v1' });
+    const res = await app.inject({ url: '/api/models?fresh=true', headers: auth });
+    expect(res.statusCode).toBe(200);
+    const byName = Object.fromEntries(res.json().map((s: { name: string }) => [s.name, s]));
+    expect(byName['Ollama (default)']).toMatchObject({
+      connectionId: null,
+      models: ['fake', 'fake-big'],
+    });
+    expect(byName['claude-local'].models).toEqual(['haiku', 'opus', 'sonnet']);
+    expect(byName.dead.models).toEqual([]);
+    expect(byName.dead.error).toBeTruthy();
+  });
+
   it('creates a task with a merged budget and returns its detail', async () => {
     const res = await app.inject({
       method: 'POST',
