@@ -1,8 +1,8 @@
 import { randomUUIDv7 } from 'node:crypto';
-import { type Budget, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
+import { type Budget, isTerminal, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
 import { and, eq, ne, notInArray } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
-import { approvals, steps, tasks } from '../db/schema.ts';
+import { approvals, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
 import type { EngineDeps } from './deps.ts';
@@ -119,4 +119,52 @@ export async function enqueueStep(
     and(eq(approvals.stepId, stepId), ne(approvals.status, 'pending')),
   );
   await deps.queues.step(stepId, attempt, decided ? `r${decided}` : undefined);
+}
+
+const FINISHED_STEP = new Set(['succeeded', 'failed', 'superseded']);
+
+/**
+ * A note from the user. To one step: that agent gets it before its next model turn. To the
+ * whole team: the planner reads it, after the running steps finish, and replans.
+ */
+export async function sendMessage(
+  deps: EngineDeps,
+  taskId: string,
+  input: { text: string; stepId?: string },
+): Promise<
+  | { status: 'sent'; id: string }
+  | { status: 'task_finished' }
+  | { status: 'no_step' }
+  | { status: 'step_finished' }
+> {
+  const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  if (!task || isTerminal(task.status)) return { status: 'task_finished' };
+  if (input.stepId) {
+    const step = await deps.db.query.steps.findFirst({
+      where: and(eq(steps.id, input.stepId), eq(steps.taskId, taskId)),
+    });
+    if (!step) return { status: 'no_step' };
+    if (FINISHED_STEP.has(step.status)) return { status: 'step_finished' };
+  }
+  const id = await deps.db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(taskMessages)
+      .values({ taskId, text: input.text, ...(input.stepId ? { stepId: input.stepId } : {}) })
+      .returning({ id: taskMessages.id });
+    if (!row) throw new Error('Message insert returned no row');
+    await emit(
+      tx,
+      taskId,
+      {
+        type: 'user.message',
+        messageId: row.id,
+        text: input.text,
+        ...(input.stepId ? { stepId: input.stepId } : {}),
+      },
+      input.stepId,
+    );
+    return row.id;
+  });
+  if (!input.stepId) await deps.queues.tick(taskId);
+  return { status: 'sent', id };
 }

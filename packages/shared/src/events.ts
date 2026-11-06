@@ -15,6 +15,8 @@ export type GantrixEvent =
     }
   | { type: 'approval.requested'; approvalId: string; stepId: string; tool: string }
   | { type: 'approval.decided'; approvalId: string; approved: boolean }
+  | { type: 'user.message'; messageId: string; text: string; stepId?: string }
+  | { type: 'user.message_delivered'; messageId: string; stepId: string }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
   | { type: 'budget.exceeded'; limit: 'tokens' | 'time' | 'replans'; detail: string };
 

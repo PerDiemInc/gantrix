@@ -189,7 +189,8 @@ npm run gantrix -- files last compare.md</pre></div>
         <li><span class="n">05 · replan</span><h3>Change course</h3><p>A step that keeps failing triggers a new plan that keeps the finished work and routes around the problem.</p></li>
         <li><span class="n">06 · finish</span><h3>Check the goal</h3><p>When every step passes, the judge checks the goal itself. Budgets for tokens, time and replans stop runaway tasks.</p></li>
       </ol>
-      <p class="intro" style="margin-top:22px"><b>Nothing is hidden.</b> Each task's Logs page shows every step's full conversation: the instructions, the agent's replies, each tool call with its result, and the judge's verdict, next to the live event log. In the terminal, run <code>gantrix logs last</code>.</p>
+      <p class="intro" style="margin-top:22px"><b>Join the meeting.</b> The task page shows the plan as a Gantt chart, and under it the planner, agents and judge talking in turn. Send a note to one agent mid-step, or to everyone to change the plan; finished work is kept.</p>
+      <p class="intro"><b>Nothing is hidden.</b> Each task's Logs page shows every step's full conversation: the instructions, the agent's replies, each tool call with its result, and the judge's verdict, next to the live event log. In the terminal, run <code>gantrix logs last</code>.</p>
     </section>
 
     <section class="block" id="skills">
@@ -227,7 +228,7 @@ of every source next to the notes you take.</pre></div>
     <section class="block" id="team">
       <p class="eyebrow">Built-in team</p>
       <h2>A C-suite of agents in one command</h2>
-      <p class="intro">Optional. <code>gantrix team add</code> installs five agents with their own skills, so one goal can be split across engineering, marketing, sales, security and product.</p>
+      <p class="intro">Optional. <code>gantrix team add</code> installs six agents with their own skills, so one goal can be split across engineering, marketing, sales, security, product and design.</p>
       <div class="table-scroll">
         <table class="prereq">
           <thead><tr><th>Agent</th><th>Does</th></tr></thead>
@@ -237,6 +238,7 @@ of every source next to the notes you take.</pre></div>
             <tr><td><code>cro</code></td><td>Lead lists, cold email and SMS drafts, and one-to-one email you approve</td></tr>
             <tr><td><code>ciso</code></td><td>Threat models, code and dependency audits, tests of systems you own</td></tr>
             <tr><td><code>cpo</code></td><td>PRDs, priorities and milestone timelines with owners and dates</td></tr>
+            <tr><td><code>designer</code></td><td>Design briefs, wireframes, design tokens and accessible HTML/CSS mockups</td></tr>
           </tbody>
         </table>
       </div>
@@ -309,6 +311,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <ul class="safety">
         <li><b>Custom URL and headers.</b> Point a connection at any server and add the headers it needs.</li>
         <li><b>Keys stay in your environment.</b> Write <code>env:OPENAI_API_KEY</code> and the worker reads it when a step runs. The API never returns header values.</li>
+        <li><b>Your Claude Code as an agent.</b> A <code>claude-code</code> connection runs <code>claude -p</code> in the task's folder, with file tools only unless you turn on god mode.</li>
         <li><b>Cloud is labelled.</b> A connection that leaves your machine is marked cloud, so you know where task content goes.</li>
       </ul>
       <div class="code" style="margin-top:22px"><button class="copy" type="button">Copy</button><pre>npm run gantrix -- connections add claude --provider anthropic --api-key-env ANTHROPIC_API_KEY

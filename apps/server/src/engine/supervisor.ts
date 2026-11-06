@@ -1,9 +1,9 @@
 import { type GantrixEvent, isTerminal, type StepStatus, type TaskStatus } from '@gantrix/shared';
 import { Annotation, Command, END, interrupt, START, StateGraph } from '@langchain/langgraph';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { budgetBreach, canReplan } from '../budget.ts';
 import type { Db } from '../db/client.ts';
-import { agents, events, plans, steps, tasks } from '../db/schema.ts';
+import { agents, events, plans, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { readySteps } from '../plan/dag.ts';
 import { enqueueStep } from './commands.ts';
@@ -86,6 +86,39 @@ async function reconcile(deps: EngineDeps, taskId: string): Promise<Outcome> {
   if (orphans.length) await failSteps(deps, taskId, orphans, 'Its agent was deleted.');
 
   const inFlight = current.filter((s) => IN_FLIGHT.has(s.status));
+
+  // A note to the whole team changes the plan: let running steps finish, then replan with it.
+  // It doesn't count against the replan budget, because the user asked for it.
+  const teamNotes = await db
+    .select({ id: taskMessages.id })
+    .from(taskMessages)
+    .where(
+      and(
+        eq(taskMessages.taskId, taskId),
+        isNull(taskMessages.stepId),
+        isNull(taskMessages.planVersion),
+      ),
+    );
+  if (teamNotes.length) {
+    if (inFlight.length) {
+      const onlyApprovals = inFlight.every((s) => s.status === 'awaiting_approval');
+      await setTaskStatus(deps, task, onlyApprovals ? 'awaiting_approval' : 'running');
+      return 'wait';
+    }
+    await db
+      .update(taskMessages)
+      .set({ planVersion: version + 1 })
+      .where(
+        inArray(
+          taskMessages.id,
+          teamNotes.map((n) => n.id),
+        ),
+      );
+    await setTaskStatus(deps, task, 'planning', 'The user added a note');
+    await queues.plan(taskId, version + 1);
+    return 'wait';
+  }
+
   if (current.some((s) => s.status === 'failed')) {
     if (inFlight.length) return 'wait'; // let running steps and open approvals finish first
     const failed = current.filter((s) => s.status === 'failed').map((s) => s.title);
@@ -292,4 +325,14 @@ function resultOf(current: Step[]): string {
     .filter((s) => !used.has(s.key))
     .map((s) => `### ${s.title}\n${s.output ?? ''}`)
     .join('\n\n');
+}
+
+/** Notes the user sent to the whole team that a given plan version reads. */
+export async function teamNotesFor(db: Db, taskId: string, version: number): Promise<string[]> {
+  const rows = await db
+    .select({ text: taskMessages.text })
+    .from(taskMessages)
+    .where(and(eq(taskMessages.taskId, taskId), eq(taskMessages.planVersion, version)))
+    .orderBy(asc(taskMessages.createdAt));
+  return rows.map((r) => r.text);
 }

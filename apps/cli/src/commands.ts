@@ -492,3 +492,35 @@ export async function testConnection(client: Client, name: string, model: string
     );
   else throw new Error(`${model} on ${c.name} failed after ${duration(r.ms)}: ${r.error}`);
 }
+
+// ---- talk to a running task
+
+/** A note to the whole team (the planner replans with it) or to one step's agent. */
+export async function say(
+  client: Client,
+  ref: string,
+  words: string[],
+  o: { to?: string },
+): Promise<void> {
+  const id = await resolveTask(client, ref);
+  let stepId: string | undefined;
+  if (o.to) {
+    const task = await client.get<TaskDetailDto>(`/api/tasks/${id}`);
+    const step = task.steps.find(
+      (s) =>
+        s.status !== 'superseded' && (s.key === o.to || s.id === o.to || s.id.endsWith(o.to ?? '')),
+    );
+    if (!step)
+      throw new Error(`No step "${o.to}". Steps: ${task.steps.map((s) => s.key).join(', ')}.`);
+    stepId = step.id;
+  }
+  await client.post(`/api/tasks/${id}/messages`, {
+    text: words.join(' '),
+    ...(stepId ? { stepId } : {}),
+  });
+  console.log(
+    o.to
+      ? `Sent to ${o.to}; its agent reads it before its next turn.`
+      : 'Sent to the team; the planner replans with it once the running steps finish.',
+  );
+}

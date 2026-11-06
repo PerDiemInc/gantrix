@@ -2,10 +2,18 @@ import { readFile } from 'node:fs/promises';
 import { isTerminal, type StepStatus } from '@gantrix/shared';
 import { type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Command, GraphRecursionError } from '@langchain/langgraph';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { canRetry } from '../budget.ts';
 import type { Db } from '../db/client.ts';
-import { agentSkills, agents, approvals, skills, steps, tasks } from '../db/schema.ts';
+import {
+  agentSkills,
+  agents,
+  approvals,
+  skills,
+  steps,
+  taskMessages,
+  tasks,
+} from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
@@ -86,7 +94,11 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
   try {
     const graph = buildStepAgent({
       model: createChatModel(
-        await resolveModelSpec(db, config, agent),
+        {
+          ...(await resolveModelSpec(db, config, agent)),
+          workspace: task.workspacePath,
+          approveAll: task.approveAll,
+        },
         'worker',
         modelDefaults(config),
       ),
@@ -100,6 +112,38 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
           where: eq(tasks.id, task.id),
         });
         if (!t || isTerminal(t.status)) throw new StepStopped();
+        const pending = await db
+          .select()
+          .from(taskMessages)
+          .where(and(eq(taskMessages.stepId, step.id), isNull(taskMessages.deliveredAt)))
+          .orderBy(asc(taskMessages.createdAt));
+        if (!pending.length) return undefined;
+        return {
+          notes: pending.map(
+            (m) => new HumanMessage(`Note from the user, sent while you work: ${m.text}`),
+          ),
+          delivered: async () => {
+            await db.transaction(async (tx) => {
+              await tx
+                .update(taskMessages)
+                .set({ deliveredAt: new Date() })
+                .where(
+                  inArray(
+                    taskMessages.id,
+                    pending.map((m) => m.id),
+                  ),
+                );
+              for (const m of pending) {
+                await emit(
+                  tx,
+                  task.id,
+                  { type: 'user.message_delivered', messageId: m.id, stepId: step.id },
+                  step.id,
+                );
+              }
+            });
+          },
+        };
       },
       onToolCall: async (tool, args, autoApproved) => {
         const summary = clip(JSON.stringify(args), 200);

@@ -4,6 +4,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import type { UsageMetadata } from '@langchain/core/messages';
 import { ChatOllama } from '@langchain/ollama';
 import { ChatOpenAI } from '@langchain/openai';
+import { ClaudeCodeChatModel } from './claude-code.ts';
 
 export type ModelRole = 'planner' | 'worker' | 'judge';
 
@@ -15,6 +16,9 @@ export interface ModelSpec {
   provider?: ModelProvider;
   /** Already resolved: "env:NAME" values are replaced by the worker's environment. */
   headers?: Record<string, string>;
+  /** Claude Code only: the step's workspace and whether the task is in god mode. */
+  workspace?: string;
+  approveAll?: boolean;
 }
 
 export interface ModelDefaults {
@@ -22,7 +26,7 @@ export interface ModelDefaults {
   ollamaBaseUrl: string;
 }
 
-export const DEFAULT_URLS: Record<Exclude<ModelProvider, 'ollama'>, string> = {
+export const DEFAULT_URLS: Record<'openai' | 'anthropic', string> = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
 };
@@ -73,6 +77,20 @@ export function createChatModel(
   const model = spec.provider ? name : name.replace(/^(openai|ollama)\//, '');
   const { bearer, apiKey, rest } = splitAuth(spec.headers);
 
+  if (provider === 'claude-code') {
+    if (role !== 'worker' || !spec.workspace) {
+      throw new Error(
+        'Claude Code runs agent steps only; the planner and judge need an Ollama, OpenAI or Anthropic model.',
+      );
+    }
+    return new ClaudeCodeChatModel({
+      model: spec.model,
+      workspace: spec.workspace,
+      approveAll: spec.approveAll ?? false,
+      ...(spec.baseUrl ? { bin: spec.baseUrl } : {}),
+      ...retries,
+    });
+  }
   if (provider === 'openai') {
     if (!spec.provider && !spec.baseUrl) {
       throw new Error(`Model "${name}" needs a base URL for its OpenAI-compatible server.`);

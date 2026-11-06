@@ -53,11 +53,24 @@ console.log(
   `Gantrix worker ready: ${config.GANTRIX_LLM_CONCURRENCY} model slots, ${open.length} open tasks.`,
 );
 
+// A model call can hang (a looping generation, a dead server). After this long, stop anyway:
+// BullMQ hands unfinished jobs to the next worker, and steps resume from their checkpoint.
+const SHUTDOWN_GRACE_MS = 20_000;
+
 let stopping = false;
 async function shutdown(signal: string) {
-  if (stopping) return;
+  if (stopping) {
+    console.log(`${signal} again: stopping now.`);
+    process.exit(1);
+  }
   stopping = true;
-  console.log(`${signal}: finishing current jobs…`);
+  console.log(
+    `${signal}: finishing current jobs (up to ${SHUTDOWN_GRACE_MS / 1000} s; press Ctrl+C again to stop now)…`,
+  );
+  setTimeout(() => {
+    console.log('Jobs still running; stopping anyway. They will resume on the next start.');
+    process.exit(0);
+  }, SHUTDOWN_GRACE_MS).unref();
   await Promise.all([tickWorker.close(), workWorker.close()]);
   await queues.close();
   connection.disconnect();

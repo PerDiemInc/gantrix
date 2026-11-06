@@ -41,8 +41,15 @@ export async function startFakeOllama() {
   const calls = { plan: 0, judge: 0, worker: 0 };
   /** Request headers of every /api/chat call, oldest first. */
   const headers: Record<string, string | string[] | undefined>[] = [];
+  /** Every /api/chat request body, oldest first. */
+  const bodies: ChatRequest[] = [];
 
   const server: Server = createServer((req, res) => {
+    if (req.url === '/api/tags') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ models: [{ name: 'fake' }, { name: 'fake-big' }] }));
+      return;
+    }
     if (req.url !== '/api/chat') {
       res.writeHead(404).end();
       return;
@@ -52,6 +59,7 @@ export async function startFakeOllama() {
     req.on('data', (c) => (body += c));
     req.on('end', () => {
       const request = JSON.parse(body) as ChatRequest;
+      bodies.push(request);
       const last = request.messages.filter((m) => m.role === 'user').at(-1)?.content ?? '';
       const props = request.format?.properties ?? {};
       let content = '';
@@ -98,10 +106,12 @@ export async function startFakeOllama() {
     script,
     calls,
     headers,
+    bodies,
     reset() {
       Object.assign(script, defaultScript());
       calls.plan = calls.judge = calls.worker = 0;
       headers.length = 0;
+      bodies.length = 0;
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

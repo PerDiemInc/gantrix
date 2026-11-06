@@ -1,18 +1,112 @@
-import type { AgentDto, SkillDto } from '@gantrix/shared';
+import type { AgentDto, ConnectionDto, ModelSource, SkillDto } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 
-const empty = { name: '', description: '', model: '', maxConcurrency: '1', systemPrompt: '' };
+const empty = {
+  name: '',
+  description: '',
+  model: '',
+  connectionId: '',
+  maxConcurrency: '1',
+  systemPrompt: '',
+};
+const OTHER = '__other__';
+
+/** Where the agent runs, then one of that place's models (or any name typed by hand). */
+function ModelPicker({
+  connectionId,
+  model,
+  onChange,
+}: {
+  connectionId: string;
+  model: string;
+  onChange: (v: { connectionId: string; model: string }) => void;
+}) {
+  const [sources, setSources] = useState<ModelSource[] | null>(null);
+  const [typing, setTyping] = useState(false);
+  const load = (fresh = false) =>
+    api
+      .get<ModelSource[]>(`/api/models${fresh ? '?fresh=true' : ''}`)
+      .then(setSources, () => setSources([]));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load once on mount
+  useEffect(() => void load(), []);
+  const source = sources?.find((s) => (s.connectionId ?? '') === connectionId);
+  const models = source?.models ?? [];
+  const showInput = typing || (source && !models.length) || (model && !models.includes(model));
+  return (
+    <>
+      <label>
+        Runs on
+        <select
+          value={connectionId}
+          onChange={(e) => {
+            setTyping(false);
+            onChange({ connectionId: e.target.value, model: '' });
+          }}
+        >
+          {(
+            sources ?? [
+              { connectionId: null, name: 'Ollama (default)', provider: 'ollama', models: [] },
+            ]
+          ).map((s) => (
+            <option key={s.connectionId ?? ''} value={s.connectionId ?? ''}>
+              {s.name} · {s.provider}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Model{' '}
+        <button type="button" className="link small" onClick={() => void load(true)}>
+          refresh
+        </button>
+        {!showInput ? (
+          <select
+            value={model}
+            onChange={(e) =>
+              e.target.value === OTHER
+                ? setTyping(true)
+                : onChange({ connectionId, model: e.target.value })
+            }
+          >
+            <option value="">
+              {connectionId ? 'Choose a model' : 'Default (GANTRIX_DEFAULT_MODEL)'}
+            </option>
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+            <option value={OTHER}>Other…</option>
+          </select>
+        ) : (
+          <input
+            value={model}
+            onChange={(e) => onChange({ connectionId, model: e.target.value })}
+            placeholder={source?.provider === 'claude-code' ? 'sonnet' : 'model name'}
+          />
+        )}
+        {source?.error && (
+          <span className="muted small">
+            Couldn't list models: {source.error}. Type a name instead.
+          </span>
+        )}
+      </label>
+    </>
+  );
+}
 
 export function AgentsPage() {
   const [agents, setAgents] = useState<AgentDto[]>([]);
   const [skills, setSkills] = useState<SkillDto[]>([]);
+  const [connections, setConnections] = useState<ConnectionDto[]>([]);
   const [form, setForm] = useState(empty);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const load = () => {
     api.get<AgentDto[]>('/api/agents').then(setAgents);
     api.get<SkillDto[]>('/api/skills').then(setSkills);
+    api.get<ConnectionDto[]>('/api/connections').then(setConnections);
   };
   useEffect(load, []);
 
@@ -27,6 +121,7 @@ export function AgentsPage() {
         maxConcurrency: Number(form.maxConcurrency),
         skillIds: [...picked],
         ...(form.model ? { model: form.model } : {}),
+        ...(form.connectionId ? { connectionId: form.connectionId } : {}),
       });
       setForm(empty);
       setPicked(new Set());
@@ -63,7 +158,11 @@ export function AgentsPage() {
               <div className="item-head">
                 <strong>{a.name}</strong>
                 <span className="muted mono small">
-                  {a.model ?? 'default model'} · {a.maxConcurrency} at a time
+                  {a.model ?? 'default model'}
+                  {a.connectionId
+                    ? ` on ${connections.find((c) => c.id === a.connectionId)?.name ?? '…'}`
+                    : ''}{' '}
+                  · {a.maxConcurrency} at a time
                 </span>
                 <button type="button" className="ghost danger small" onClick={() => void remove(a)}>
                   Remove
@@ -111,10 +210,11 @@ export function AgentsPage() {
             placeholder="Finds sources and writes notes"
           />
         </label>
-        <label>
-          Model <span className="muted small">(blank = default)</span>
-          <input value={form.model} onChange={set('model')} placeholder="qwen3:8b" />
-        </label>
+        <ModelPicker
+          connectionId={form.connectionId}
+          model={form.model}
+          onChange={(v) => setForm({ ...form, ...v })}
+        />
         <label>
           Steps at a time
           <input

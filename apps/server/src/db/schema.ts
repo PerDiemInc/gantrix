@@ -194,6 +194,24 @@ export const approvals = pgTable(
   ],
 );
 
+// What the user tells a running task: to one step (delivered before its next model turn) or
+// to the whole team (read by the next plan).
+export const taskMessages = pgTable(
+  'task_messages',
+  {
+    id: id(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    stepId: uuid('step_id').references(() => steps.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    deliveredAt: ts('delivered_at'), // step notes: when the agent got it
+    planVersion: integer('plan_version'), // team notes: the plan that read it
+    createdAt: createdAt(),
+  },
+  (t) => [index('task_messages_task_idx').on(t.taskId, t.createdAt)],
+);
+
 // Append-only audit log; also replays missed live events (SSE Last-Event-ID).
 export const events = pgTable(
   'events',

@@ -78,10 +78,10 @@ connections
 connections
   .command('add <name>')
   .description('save a connection')
-  .requiredOption('-p, --provider <provider>', 'ollama, openai or anthropic')
+  .requiredOption('-p, --provider <provider>', 'ollama, openai, anthropic or claude-code')
   .option(
     '-u, --url <url>',
-    'base URL (default: local Ollama, api.openai.com or api.anthropic.com)',
+    'base URL (default: local Ollama, api.openai.com or api.anthropic.com); for claude-code, the claude binary',
   )
   .option(
     '-H, --header <header...>',
@@ -101,7 +101,7 @@ connections
 const team = program.command('team').description('the built-in executive agents');
 team
   .command('add')
-  .description('install the CTO, CMO, CRO, CISO and CPO agents and their skills')
+  .description('install the CTO, CMO, CRO, CISO, CPO and designer agents and their skills')
   .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
   .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
   .action(run((o) => addTeam(client, o)));
@@ -125,6 +125,11 @@ program
   .description('show a task as a Gantt chart ("last" = most recent)')
   .option('-a, --all', 'include superseded steps from earlier plans')
   .action(run((ref: string, o) => cmd.showTask(client, ref, o)));
+program
+  .command('say <task> <words...>')
+  .description('send a note to a running task: the whole team (replans) or one step with --to')
+  .option('--to <step>', 'the step key, e.g. research_tea')
+  .action(run((ref: string, words: string[], o) => cmd.say(client, ref, words, o)));
 program
   .command('logs <task> [step]')
   .description("show each step's conversation: prompts, replies, tool calls and the judge")

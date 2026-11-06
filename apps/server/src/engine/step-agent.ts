@@ -37,8 +37,12 @@ export interface StepAgentOptions {
   /** God mode: run every tool call without asking. */
   approveAll?: boolean;
   checkpointer: BaseCheckpointSaver;
-  /** Runs before each model turn; throws to stop the step (e.g. the task was cancelled). */
-  beforeTurn: () => Promise<void>;
+  /**
+   * Runs before each model turn; throws to stop the step (e.g. the task was cancelled).
+   * Returns notes from the user to add to the conversation, and a callback that marks them
+   * delivered once the model has answered.
+   */
+  beforeTurn: () => Promise<{ notes: BaseMessage[]; delivered: () => Promise<void> } | undefined>;
   /** Runs once per tool execution, after any approval; used for the step.tool_call event. */
   onToolCall: (tool: string, args: Record<string, unknown>, autoApproved: boolean) => Promise<void>;
 }
@@ -75,8 +79,11 @@ export function buildStepAgent(o: StepAgentOptions) {
   return (
     new StateGraph(StepState)
       .addNode('model', async (s) => {
-        await o.beforeTurn();
-        return { messages: [await model.invoke(s.messages)] };
+        const inbox = await o.beforeTurn();
+        const notes = inbox?.notes ?? [];
+        const reply = await model.invoke([...s.messages, ...notes]);
+        await inbox?.delivered();
+        return { messages: [...notes, reply] };
       })
       // One task per tool call: after an approval LangGraph re-runs only the interrupted call
       // (verified on LangGraph.js 1.7, 2026-11-05).

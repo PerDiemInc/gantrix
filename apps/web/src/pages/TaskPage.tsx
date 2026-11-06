@@ -2,6 +2,7 @@ import { isTerminal, type StepDto, type StreamEvent } from '@gantrix/shared';
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Gantt } from '../components/Gantt.tsx';
+import { Meeting } from '../components/Meeting.tsx';
 import { duration, label, short } from '../format.ts';
 import { useAgents, useNow, useTask } from '../hooks.ts';
 
@@ -52,6 +53,10 @@ export function eventText(e: StreamEvent, keys: Map<string, string>): string {
       return `Goal ${e.passed ? 'met' : 'not met'}: ${e.reason}`;
     case 'budget.exceeded':
       return `Budget exceeded (${e.limit}): ${e.detail}`;
+    case 'user.message':
+      return `You → ${e.stepId ? (keys.get(e.stepId) ?? 'a step') : 'the team'}: ${e.text}`;
+    case 'user.message_delivered':
+      return `${keys.get(e.stepId) ?? 'A step'} read your note`;
   }
 }
 
@@ -144,6 +149,7 @@ export function TaskPage({ id }: { id: string }) {
   const agents = useAgents();
   const [selected, setSelected] = useState<string | null>(null);
   const [showOld, setShowOld] = useState(false);
+  const [raw, setRaw] = useState(false);
   const now = useNow(1000, Boolean(task && !isTerminal(task.status)));
 
   if (error) return <p className="error">{error.message}</p>;
@@ -259,15 +265,25 @@ export function TaskPage({ id }: { id: string }) {
           )}
         </section>
         <section className="card">
-          <h2>Activity</h2>
-          <ol className="activity">
-            {[...events].reverse().map((e) => (
-              <li key={e.id} className={`ev ev-${e.type.replace('.', '-')}`}>
-                <time className="mono">{new Date(e.at).toLocaleTimeString()}</time>
-                <span>{eventText(e, keys)}</span>
-              </li>
-            ))}
-          </ol>
+          <div className="card-head">
+            <h2>{raw ? 'Events' : 'Meeting'}</h2>
+            <label className="toggle">
+              <input type="checkbox" checked={raw} onChange={(e) => setRaw(e.target.checked)} /> raw
+              events
+            </label>
+          </div>
+          {raw ? (
+            <ol className="activity">
+              {[...events].reverse().map((e) => (
+                <li key={e.id} className={`ev ev-${e.type.replace('.', '-')}`}>
+                  <time className="mono">{new Date(e.at).toLocaleTimeString()}</time>
+                  <span>{eventText(e, keys)}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <Meeting task={task} events={events} agentNames={agents} />
+          )}
         </section>
       </div>
 

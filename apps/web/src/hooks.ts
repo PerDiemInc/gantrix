@@ -8,6 +8,7 @@ export type Route =
   | { page: 'logs'; id: string; stepId?: string }
   | { page: 'agents' }
   | { page: 'skills' }
+  | { page: 'connections' }
   | { page: 'approvals' };
 
 function parseHash(hash: string): Route {
@@ -16,7 +17,9 @@ function parseHash(hash: string): Route {
     return stepId ? { page: 'logs', id, stepId } : { page: 'logs', id };
   }
   if (page === 'tasks' && id) return { page: 'task', id };
-  if (page === 'agents' || page === 'skills' || page === 'approvals') return { page };
+  if (page === 'agents' || page === 'skills' || page === 'connections' || page === 'approvals') {
+    return { page };
+  }
   return { page: 'tasks' };
 }
 

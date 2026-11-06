@@ -73,7 +73,8 @@ npm run gantrix -- agents add editor -d "Turns notes into a polished summary" -s
 ```
 
 The planner reads each agent's description to decide who does what, so make it specific.
-You can also do this on the dashboard's Skills and Agents pages.
+You can also do this on the dashboard's Skills and Agents pages. When you add an agent there,
+pick where it runs and then a model from that server's list.
 
 ### 5. Run your first task
 
@@ -90,6 +91,17 @@ npm run gantrix -- files last compare.md    # print one
 ```
 
 Or watch it on the dashboard: Tasks, then the task.
+
+**The task page reads like a meeting.** Under the Gantt chart and the status, the planner, each
+agent, the judge and you talk in turn. You can join in at any time:
+- To one running step: the agent reads your note before its next turn.
+- To everyone: once the running steps finish, the planner replans with your note and keeps the
+  finished work. This replan doesn't use up the replan budget.
+
+```bash
+npm run gantrix -- say last "Also add a price comparison"           # to everyone
+npm run gantrix -- say last --to research_tea "Use sources from 2025" # to one step
+```
 
 To see what each agent was told, what it answered and every tool call it made, open **Logs**
 on the task page, or click "View conversation" on a step. You can also print it in the terminal:
@@ -181,10 +193,10 @@ and install it again.
 
 ## The executive team (optional)
 
-One command adds five ready-made agents, each with its own skill:
+One command adds six ready-made agents, each with its own skill:
 
 ```bash
-npm run gantrix -- team add                 # or: team add --only cto,cpo   (-m <model> for all)
+npm run gantrix -- team add                 # or: team add --only cto,designer   (-m <model> for all)
 npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: write the launch post"
 ```
 
@@ -195,6 +207,7 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
 | `cro` | `exec-cro` | Customer profiles, lead lists from public pages, cold email and SMS drafts, sends email | files, web, outreach |
 | `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
 | `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
+| `designer` | `exec-designer` | Design brief, wireframes, design tokens (W3C JSON + CSS) and HTML/CSS mockups, checked against WCAG 2.2 | files, web |
 
 It's safe to run again: existing agents are left as they are. The skills are plain folders in
 `examples/skills/exec-*`; copy one, edit it, bump its version and install your own.
@@ -296,11 +309,12 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 
 ```
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
-gantrix connections [list | add <name> -p ollama|openai|anthropic [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic|claude-code [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
-gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
+gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
+gantrix say <task> "<note>" [--to <step>]
 gantrix approvals | approve <id> | deny <id>
 ```
 
@@ -340,6 +354,28 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
 | `ollama` | `OLLAMA_BASE_URL` | Ollama, local or behind a proxy |
 | `openai` | `https://api.openai.com/v1` | OpenAI, and OpenAI-compatible servers: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter |
 | `anthropic` | `https://api.anthropic.com` | Anthropic, and Anthropic-compatible gateways |
+| `claude-code` | `claude` on your PATH | Your local Claude Code, run as `claude -p` (agents only) |
+
+### Claude Code as an agent
+
+An agent can use your local [Claude Code](https://claude.com/claude-code) instead of a chat model.
+Each model turn of its step runs `claude -p` inside the task's folder, with your Claude login,
+and Claude Code does the work with its own tools.
+
+```bash
+npm run gantrix -- connections add claude-local --provider claude-code   # -u /path/to/claude if it isn't on PATH
+npm run gantrix -- connections test claude-local sonnet
+npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -m sonnet
+```
+
+- Gantrix can't see or approve the tool calls Claude Code makes inside a run. So by default it
+  gets file tools only (Read, Write, Edit, Glob, Grep), and Bash and web access are blocked.
+  In god mode it also gets Bash, WebFetch and WebSearch.
+- Each run is started without MCP servers and without a saved session. It doesn't get the
+  Gantrix token or database URLs in its environment.
+- The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
+  `GANTRIX_DEFAULT_CONNECTION`.
+- The step's tokens come from Claude Code's own report, and its usage counts against your Claude plan.
 
 **How headers work:**
 - A header value of `env:NAME` (or `Bearer env:NAME`) is read from the worker's environment
