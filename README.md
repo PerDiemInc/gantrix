@@ -171,6 +171,53 @@ Installing a skill copies it to `~/.gantrix/skills/<name>/<version>` and records
 editing your original folder doesn't change what runs. To update a skill, bump its `version`
 and install it again.
 
+## The executive team (optional)
+
+One command adds five ready-made agents, each with its own skill:
+
+```bash
+npm run gantrix -- team add                 # or: team add --only cto,cpo   (-m <model> for all)
+npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: write the launch post"
+```
+
+| Agent | Skill | Does | Tools |
+|---|---|---|---|
+| `cto` | `exec-cto` | Architecture decisions (ADRs), code reviews, build plans, technical risks | files, web, shell |
+| `cmo` | `exec-cmo` | Positioning, campaign plans, launch posts, landing-page copy, SEO briefs | files, web |
+| `cro` | `exec-cro` | Customer profiles, lead lists from public pages, cold email and SMS drafts, sends email | files, web, outreach |
+| `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
+| `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
+
+It's safe to run again: existing agents are left as they are. The skills are plain folders in
+`examples/skills/exec-*`; copy one, edit it, bump its version and install your own.
+
+**Things to know:**
+- Shell commands from the CTO and CISO always wait for your approval.
+- The CISO only tests what the task names as yours. Anything else goes under "Not tested".
+- The skills are written for small local models. Ask for one deliverable per step.
+
+**Sending email from the CRO.** The CRO drafts by default. To let it send one-to-one email from
+your own mailbox:
+
+```bash
+npm run outreach:link                       # makes the gantrix-outreach-mcp command available
+cat > ~/.gantrix/outreach.env <<'ENV'
+SMTP_URL=smtps://you%40example.com:app-password@smtp.example.com:465
+OUTREACH_FROM=Your Name <you@example.com>
+OUTREACH_POSTAL_ADDRESS=Your Company, 1 Main St, City, ST 00000
+ENV
+chmod 600 ~/.gantrix/outreach.env
+```
+
+- Every email waits for your approval, one recipient at a time.
+- Each one gets an unsubscribe line, your postal address and a `List-Unsubscribe` header
+  (US CAN-SPAM). Check the rules where your recipients live, such as GDPR or CASL.
+- `OUTREACH_DAILY_LIMIT` (default 25) caps sends per day.
+- A person gets at most three emails, and never after they're added to the do-not-contact list.
+  That list is `~/.gantrix/outreach/do-not-contact.txt`; one address or `@domain` per line.
+- Every send is logged to `~/.gantrix/outreach/sent.csv`.
+- SMS stays draft-only. Texting people who haven't agreed to it is illegal in the US (TCPA).
+
 ## Images and video (optional)
 
 Agents can create images and short video clips with open models on your own machine. Gantrix
@@ -237,6 +284,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 ```
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [--max-concurrency n] | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
+gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | cancel <task> | files <task> [path]
 gantrix approvals | approve <id> | deny <id>

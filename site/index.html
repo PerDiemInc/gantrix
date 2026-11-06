@@ -37,6 +37,7 @@
       <a class="opt2" href="#start">Get started</a>
       <a class="opt" href="#how">How it works</a>
       <a class="opt" href="#skills">Skills</a>
+      <a class="opt" href="#team">Team</a>
       <a class="opt" href="#media">Media</a>
       <a class="opt" href="#safety">Safety</a>
       <a href="https://github.com/PerDiemInc/gantrix">GitHub</a>
@@ -220,6 +221,31 @@ auto-approve: [web_fetch]
 Fetch only the pages you need. Record the URL
 of every source next to the notes you take.</pre></div>
       </div>
+    </section>
+
+    <section class="block" id="team">
+      <p class="eyebrow">Built-in team</p>
+      <h2>A C-suite of agents in one command</h2>
+      <p class="intro">Optional. <code>gantrix team add</code> installs five agents with their own skills, so one goal can be split across engineering, marketing, sales, security and product.</p>
+      <div class="table-scroll">
+        <table class="prereq">
+          <thead><tr><th>Agent</th><th>Does</th></tr></thead>
+          <tbody>
+            <tr><td><code>cto</code></td><td>Architecture decisions, code reviews, build plans and technical risks</td></tr>
+            <tr><td><code>cmo</code></td><td>Positioning, campaign plans, launch posts and SEO briefs</td></tr>
+            <tr><td><code>cro</code></td><td>Lead lists, cold email and SMS drafts, and one-to-one email you approve</td></tr>
+            <tr><td><code>ciso</code></td><td>Threat models, code and dependency audits, tests of systems you own</td></tr>
+            <tr><td><code>cpo</code></td><td>PRDs, priorities and milestone timelines with owners and dates</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="safety">
+        <li><b>Email waits for you.</b> Every send by the CRO needs your approval, and each one carries an unsubscribe line and your postal address.</li>
+        <li><b>No spam by design.</b> There's a daily cap, at most three emails per person, a do-not-contact list, and SMS stays draft-only.</li>
+        <li><b>Security stays in scope.</b> The CISO tests only what you name as yours, and every shell command asks first.</li>
+      </ul>
+      <div class="code" style="margin-top:22px"><button class="copy" type="button">Copy</button><pre>npm run gantrix -- team add
+npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: write the launch post"</pre></div>
     </section>
 
     <section class="block" id="media">

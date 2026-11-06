@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { createClient } from './client.ts';
 import * as cmd from './commands.ts';
+import { addTeam } from './team.ts';
 
 // Settings come from the environment, falling back to the repo's .env (never overriding).
 try {
@@ -65,6 +66,14 @@ skills
   .command('rm <name[@version]>')
   .description('remove an installed skill')
   .action(run((ref: string) => cmd.removeSkill(client, ref)));
+
+const team = program.command('team').description('the built-in executive agents');
+team
+  .command('add')
+  .description('install the CTO, CMO, CRO, CISO and CPO agents and their skills')
+  .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
+  .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
+  .action(run((o) => addTeam(client, o)));
 
 program
   .command('run <goal...>')
