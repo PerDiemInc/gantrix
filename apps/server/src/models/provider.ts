@@ -1,10 +1,11 @@
-import type { ModelProvider } from '@gantrix/shared';
+import { DEFAULT_HTTP_REQUEST, type HttpRequestConfig, type ModelProvider } from '@gantrix/shared';
 import { ChatAnthropic } from '@langchain/anthropic';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { UsageMetadata } from '@langchain/core/messages';
 import { ChatOllama } from '@langchain/ollama';
 import { ChatOpenAI } from '@langchain/openai';
 import { ClaudeCodeChatModel } from './claude-code.ts';
+import { HttpChatModel } from './http-chat.ts';
 
 export type ModelRole = 'planner' | 'worker' | 'judge';
 
@@ -16,6 +17,8 @@ export interface ModelSpec {
   provider?: ModelProvider;
   /** Already resolved: "env:NAME" values are replaced by the worker's environment. */
   headers?: Record<string, string>;
+  /** Custom HTTP only: how to build the request and read the reply. */
+  request?: HttpRequestConfig | null;
   /** Claude Code only: the step's workspace and whether the task is in god mode. */
   workspace?: string;
   approveAll?: boolean;
@@ -77,6 +80,21 @@ export function createChatModel(
   const model = spec.provider ? name : name.replace(/^(openai|ollama)\//, '');
   const { bearer, apiKey, rest } = splitAuth(spec.headers);
 
+  if (provider === 'http') {
+    if (role !== 'worker') {
+      throw new Error(
+        'Custom HTTP servers run agent steps only; the planner and judge need an Ollama, OpenAI or Anthropic model.',
+      );
+    }
+    if (!spec.baseUrl) throw new Error('A custom HTTP connection needs a URL.');
+    return new HttpChatModel({
+      url: spec.baseUrl,
+      request: { ...DEFAULT_HTTP_REQUEST, ...spec.request },
+      headers: spec.headers ?? {},
+      model: name,
+      ...retries,
+    });
+  }
   if (provider === 'claude-code') {
     if (role !== 'worker' || !spec.workspace) {
       throw new Error(

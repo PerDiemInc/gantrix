@@ -45,6 +45,7 @@ export function maskHeaders(headers: Record<string, string>): Record<string, str
 export function effectiveUrl(c: Pick<Connection, 'provider' | 'baseUrl'>, ollamaUrl: string) {
   if (c.baseUrl) return c.baseUrl;
   if (c.provider === 'claude-code') return 'claude';
+  if (c.provider === 'http') return c.baseUrl ?? '';
   return c.provider === 'ollama' ? ollamaUrl : DEFAULT_URLS[c.provider];
 }
 
@@ -80,6 +81,7 @@ export function toConnectionDto(c: Connection, ollamaUrl: string): ConnectionDto
     effectiveUrl: url,
     headers: maskHeaders(c.headers),
     isLocal: c.provider !== 'claude-code' && isLocalUrl(url),
+    request: c.request ?? null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -90,6 +92,7 @@ export const connectionSpec = (c: Connection, model: string | null): ModelSpec =
   baseUrl: c.baseUrl,
   provider: c.provider,
   headers: resolveHeaders(c.headers),
+  request: c.request,
 });
 
 /**
@@ -120,9 +123,9 @@ export async function resolveModelSpec(
         `GANTRIX_DEFAULT_CONNECTION is "${config.GANTRIX_DEFAULT_CONNECTION}", but no connection has that name.`,
       );
     }
-    if (c.provider === 'claude-code') {
+    if (c.provider === 'claude-code' || c.provider === 'http') {
       throw new Error(
-        "GANTRIX_DEFAULT_CONNECTION can't be a Claude Code connection: the planner and judge need an Ollama, OpenAI or Anthropic model.",
+        "GANTRIX_DEFAULT_CONNECTION can't be a Claude Code or custom HTTP connection: the planner and judge need an Ollama, OpenAI or Anthropic model.",
       );
     }
     return connectionSpec(c, null);

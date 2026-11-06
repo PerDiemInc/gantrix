@@ -30,6 +30,8 @@ export async function listModels(
   const headers = resolveHeaders(rawHeaders);
   const base = url.replace(/\/+$/, '');
   if (provider === 'claude-code') return CLAUDE_CODE_MODELS;
+  // A custom server has no standard model list; the agent form takes a typed name.
+  if (provider === 'http') return [];
   if (provider === 'ollama') {
     const body = (await getJson(`${base}/api/tags`, headers)) as { models?: { name?: string }[] };
     return (body.models ?? []).flatMap((m) => (m.name ? [m.name] : []));

@@ -36,7 +36,8 @@ export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 /**
  * Where a model runs: Ollama, anything that speaks the OpenAI or the Anthropic API, or the
- * local Claude Code CLI (`claude -p`, for agents only).
+ * local Claude Code CLI (`claude -p`, for agents only), or any HTTP server described by a
+ * request template ("http", for agents only).
  */
-export const MODEL_PROVIDERS = ['ollama', 'openai', 'anthropic', 'claude-code'] as const;
+export const MODEL_PROVIDERS = ['ollama', 'openai', 'anthropic', 'claude-code', 'http'] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];

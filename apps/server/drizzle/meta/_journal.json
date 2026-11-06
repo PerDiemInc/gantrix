@@ -50,6 +50,13 @@
       "when": 1793995463513,
       "tag": "0006_agent_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793997362313,
+      "tag": "0007_custom_http",
+      "breakpoints": true
     }
   ]
 }

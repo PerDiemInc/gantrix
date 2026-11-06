@@ -78,7 +78,7 @@ connections
 connections
   .command('add <name>')
   .description('save a connection')
-  .requiredOption('-p, --provider <provider>', 'ollama, openai, anthropic or claude-code')
+  .requiredOption('-p, --provider <provider>', 'ollama, openai, anthropic, http or claude-code')
   .option(
     '-u, --url <url>',
     'base URL (default: local Ollama, api.openai.com or api.anthropic.com); for claude-code, the claude binary',
@@ -88,6 +88,13 @@ connections
     'e.g. "Authorization: Bearer env:MY_KEY" (env:NAME reads the worker environment)',
   )
   .option('--api-key-env <name>', 'read the API key from this environment variable')
+  .option('--method <method>', 'http: POST (default), PUT, PATCH or GET')
+  .option('--content-type <type>', 'http: Content-Type (default application/json)')
+  .option('--body <template>', 'http: body with {{prompt}}, {{system}}, {{model}}, "{{messages}}"')
+  .option(
+    '--reply-path <path>',
+    'http: where the reply is, e.g. choices.0.message.content (default: auto)',
+  )
   .action(run((name: string, o) => cmd.addConnection(client, name, o)));
 connections
   .command('test <name> <model>')

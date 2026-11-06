@@ -1,7 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MODEL_PROVIDERS, type ModelProvider } from '@gantrix/shared';
+import {
+  DEFAULT_HTTP_REQUEST,
+  HTTP_METHODS,
+  MODEL_PROVIDERS,
+  type ModelProvider,
+} from '@gantrix/shared';
 import { HumanMessage } from '@langchain/core/messages';
 import { asc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -10,6 +15,7 @@ import { agents, connections } from '../../db/schema.ts';
 import { modelDefaults } from '../../engine/deps.ts';
 import { clearModelCatalog, modelCatalog } from '../../models/catalog.ts';
 import { connectionSpec, toConnectionDto } from '../../models/connections.ts';
+import { callHttp, listPaths } from '../../models/http-request.ts';
 import { createChatModel } from '../../models/provider.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
@@ -33,18 +39,54 @@ const Fields = z.object({
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'name must be lowercase letters, digits and dashes'),
   provider: z.enum(MODEL_PROVIDERS),
-  // For claude-code: the path of the claude binary, if it isn't on PATH.
-  baseUrl: z.union([z.url({ protocol: /^https?$/ }), z.string().regex(/^\/[^\0]+$/)]).nullable(),
+  // http(s) URL (custom HTTP may contain {{model}} or {{prompt}}); for claude-code, the
+  // path of the claude binary if it isn't on PATH.
+  baseUrl: z
+    .union([
+      z.string().regex(/^https?:\/\/[^\s]+$/, 'an http(s) URL'),
+      z.string().regex(/^\/[^\0]+$/),
+    ])
+    .nullable(),
   headers: Headers,
+  request: z
+    .object({
+      method: z.enum(HTTP_METHODS).default('POST'),
+      contentType: z
+        .string()
+        .regex(/^[\w.+-]+\/[\w.+-]+(;\s*[\w-]+=[\w.-]+)*$/, 'a content type like application/json')
+        .default('application/json'),
+      bodyTemplate: z.string().max(20_000).default(DEFAULT_HTTP_REQUEST.bodyTemplate),
+      replyPath: z
+        .string()
+        .max(200)
+        .regex(/^[\w.-]*$/, 'a dotted path like choices.0.message.content')
+        .default(''),
+    })
+    .nullable(),
 });
-const Create = Fields.partial({ baseUrl: true, headers: true });
+const Create = Fields.partial({ baseUrl: true, headers: true, request: true });
 const Update = Fields.partial();
-const TestBody = z.object({ model: z.string().min(1).max(200) });
+const TestBody = z.object({
+  model: z.string().min(1).max(200),
+  // Custom HTTP: what {{prompt}} is in the test call.
+  prompt: z.string().min(1).max(2_000).default('Reply with the single word: OK'),
+});
+
+const pathsOf = (raw: string) => {
+  try {
+    return listPaths(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+};
 
 /** A path is only a valid base URL for claude-code, where it names the binary. */
 function checkUrl(provider: ModelProvider, baseUrl: string | null | undefined) {
   if (baseUrl && provider !== 'claude-code' && !/^https?:\/\//.test(baseUrl)) {
     throw new HttpError(400, 'baseUrl must be an http(s) URL.');
+  }
+  if (provider === 'http' && !baseUrl) {
+    throw new HttpError(400, 'A custom HTTP connection needs its URL in baseUrl.');
   }
 }
 
@@ -79,7 +121,12 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
     }
     const [row] = await db
       .insert(connections)
-      .values({ ...body, baseUrl: body.baseUrl ?? null, headers: body.headers ?? {} })
+      .values({
+        ...body,
+        baseUrl: body.baseUrl ?? null,
+        headers: body.headers ?? {},
+        request: body.provider === 'http' ? (body.request ?? DEFAULT_HTTP_REQUEST) : null,
+      })
       .returning();
     if (!row) throw new HttpError(500, 'Connection insert returned no row.');
     clearModelCatalog();
@@ -89,7 +136,10 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
   app.patch('/api/connections/:id', async (request) => {
     const current = await get(parse(IdParams, request.params).id);
     const body = parse(Update, request.body);
-    checkUrl(body.provider ?? current.provider, body.baseUrl);
+    checkUrl(
+      body.provider ?? current.provider,
+      body.baseUrl === undefined ? current.baseUrl : body.baseUrl,
+    );
     // Headers are replaced as a set; "hidden" keeps the saved value of that header.
     const headers = body.headers
       ? Object.fromEntries(
@@ -103,7 +153,17 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
       : undefined;
     const [row] = await db
       .update(connections)
-      .set({ ...body, ...(headers ? { headers } : {}), updatedAt: new Date() })
+      .set({
+        ...body,
+        ...(headers ? { headers } : {}),
+        // Request settings only mean something for custom HTTP.
+        ...((body.provider ?? current.provider) === 'http'
+          ? body.request !== undefined
+            ? { request: body.request ?? DEFAULT_HTTP_REQUEST }
+            : {}
+          : { request: null }),
+        updatedAt: new Date(),
+      })
       .where(eq(connections.id, current.id))
       .returning();
     if (!row) throw notFound('Connection');
@@ -135,8 +195,42 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
   // Sends one short prompt, so you know the URL, key and model name work before a task runs.
   app.post('/api/connections/:id/test', async (request) => {
     const c = await get(parse(IdParams, request.params).id);
-    const { model } = parse(TestBody, request.body);
+    const { model, prompt } = parse(TestBody, request.body);
     const started = Date.now();
+    // Custom HTTP: one real call with the template, showing the request and raw response, so
+    // the body template and reply path can be checked.
+    if (c.provider === 'http') {
+      const spec = connectionSpec(c, model);
+      const vars = {
+        prompt,
+        system: '',
+        model,
+        messages: [{ role: 'user' as const, content: prompt }],
+      };
+      try {
+        const r = await callHttp(
+          c.baseUrl ?? '',
+          { ...DEFAULT_HTTP_REQUEST, ...c.request },
+          spec.headers ?? {},
+          vars,
+          AbortSignal.timeout(30_000),
+        );
+        return {
+          ok: true,
+          reply: r.reply.slice(0, 500),
+          ms: Date.now() - started,
+          http: { ...r, paths: pathsOf(r.raw) },
+        };
+      } catch (error) {
+        const result = (error as { result?: unknown }).result;
+        return {
+          ok: false,
+          error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+          ms: Date.now() - started,
+          ...(result ? { http: result } : {}),
+        };
+      }
+    }
     // Claude Code needs a folder to work in; give it an empty one that is removed afterwards.
     const scratch =
       c.provider === 'claude-code' ? await mkdtemp(join(tmpdir(), 'gantrix-test-')) : null;
