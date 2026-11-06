@@ -15,6 +15,20 @@
       "when": 1793920173133,
       "tag": "0001_approvals_interrupt_and_replan_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793981567220,
+      "tag": "0002_god_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793981999426,
+      "tag": "0003_model_connections",
+      "breakpoints": true
     }
   ]
 }

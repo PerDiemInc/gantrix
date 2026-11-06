@@ -7,6 +7,7 @@ import { canRetry } from '../budget.ts';
 import type { Db } from '../db/client.ts';
 import { agentSkills, agents, approvals, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
+import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
@@ -22,6 +23,7 @@ import {
   MAX_MODEL_TURNS,
   summarize,
 } from './step-agent.ts';
+import { stepThreadId } from './threads.ts';
 
 type Task = typeof tasks.$inferSelect;
 type Step = typeof steps.$inferSelect;
@@ -84,12 +86,13 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
   try {
     const graph = buildStepAgent({
       model: createChatModel(
-        { model: agent.model, baseUrl: agent.modelBaseUrl },
+        await resolveModelSpec(db, config, agent),
         'worker',
         modelDefaults(config),
       ),
       tools: [...builtinTools(toolkit.builtinTools, task.workspacePath), ...mcp.tools],
       autoApprove: toolkit.autoApprove,
+      approveAll: task.approveAll,
       checkpointer,
       beforeTurn: async () => {
         const t = await db.query.tasks.findFirst({
@@ -98,18 +101,24 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
         });
         if (!t || isTerminal(t.status)) throw new StepStopped();
       },
-      onToolCall: async (tool, args) => {
+      onToolCall: async (tool, args, autoApproved) => {
         const summary = clip(JSON.stringify(args), 200);
         await emit(
           db,
           task.id,
-          { type: 'step.tool_call', stepId: step.id, tool, summary },
+          {
+            type: 'step.tool_call',
+            stepId: step.id,
+            tool,
+            summary,
+            ...(autoApproved ? { autoApproved } : {}),
+          },
           step.id,
         );
       },
     });
     const run: RunConfig = {
-      configurable: { thread_id: `step-${step.id}-${step.attempt}` },
+      configurable: { thread_id: stepThreadId(step.id, step.attempt) },
       recursionLimit: MAX_MODEL_TURNS * 2 + 1,
     };
     const before = await graph.getState(run);
@@ -133,7 +142,11 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
 
     await setStep(db, task.id, step, 'judging', {});
     const workspaceFiles = await describeWorkspace(task.workspacePath, after.values.messages ?? []);
-    const judge = createChatModel({ model: null, baseUrl: null }, 'judge', modelDefaults(config));
+    const judge = createChatModel(
+      await resolveModelSpec(db, config, null),
+      'judge',
+      modelDefaults(config),
+    );
     const verdict = await judgeStep(judge, {
       title: step.title,
       acceptance: step.acceptance,

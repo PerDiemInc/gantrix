@@ -34,11 +34,13 @@ export interface StepAgentOptions {
   model: BaseChatModel;
   tools: StructuredToolInterface[];
   autoApprove: ReadonlySet<string>;
+  /** God mode: run every tool call without asking. */
+  approveAll?: boolean;
   checkpointer: BaseCheckpointSaver;
   /** Runs before each model turn; throws to stop the step (e.g. the task was cancelled). */
   beforeTurn: () => Promise<void>;
   /** Runs once per tool execution, after any approval; used for the step.tool_call event. */
-  onToolCall: (tool: string, args: Record<string, unknown>) => Promise<void>;
+  onToolCall: (tool: string, args: Record<string, unknown>, autoApproved: boolean) => Promise<void>;
 }
 
 export function buildStepAgent(o: StepAgentOptions) {
@@ -50,7 +52,8 @@ export function buildStepAgent(o: StepAgentOptions) {
     if (!tool) {
       return `Error: unknown tool "${call.name}". Available: ${[...byName.keys()].join(', ')}.`;
     }
-    if (requiresApproval(call.name, o.autoApprove)) {
+    const gated = requiresApproval(call.name, o.autoApprove);
+    if (gated && !o.approveAll) {
       // Everything above this line re-runs on resume, so it must have no side effects.
       const decision = interrupt<ApprovalRequest, ApprovalDecision>({
         tool: call.name,
@@ -60,7 +63,7 @@ export function buildStepAgent(o: StepAgentOptions) {
         return 'The user denied this tool call. Continue without it, or say what you need.';
       }
     }
-    await o.onToolCall(call.name, call.args);
+    await o.onToolCall(call.name, call.args, gated);
     try {
       const result = await tool.invoke(call.args);
       return typeof result === 'string' ? result : JSON.stringify(result);

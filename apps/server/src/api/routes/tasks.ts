@@ -1,12 +1,15 @@
 import { readFile, stat } from 'node:fs/promises';
-import type { Budget } from '@gantrix/shared';
+import type { Budget, StepConversationDto } from '@gantrix/shared';
+import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { approvals, events, plans, steps, tasks } from '../../db/schema.ts';
 import { cancelTask, createTask } from '../../engine/commands.ts';
+import { stepThreadId } from '../../engine/threads.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
+import { toConversation } from '../conversation.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
@@ -27,6 +30,7 @@ const CreateTask = z.object({
     })
     .partial()
     .optional(),
+  approveAll: z.boolean().optional(),
 });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 const EventsPage = z.object({
@@ -34,6 +38,7 @@ const EventsPage = z.object({
   limit: z.coerce.number().int().min(1).max(1_000).default(500),
 });
 const FileQuery = z.object({ path: z.string().min(1) });
+const StepParams = z.object({ id: z.uuid(), stepId: z.uuid() });
 
 export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const { db } = deps;
@@ -69,7 +74,11 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
     const budget = Object.fromEntries(
       Object.entries(input.budget ?? {}).filter(([, v]) => v !== undefined),
     ) as Partial<Budget>;
-    const task = await createTask(deps, { goal: input.goal, budget });
+    const task = await createTask(deps, {
+      goal: input.goal,
+      budget,
+      ...(input.approveAll === undefined ? {} : { approveAll: input.approveAll }),
+    });
     return reply.code(201).send(task);
   });
 
@@ -87,6 +96,30 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.post('/api/tasks/:id/cancel', async (request) => {
     const task = await getTask(parse(IdParams, request.params).id);
     return { cancelled: await cancelTask(deps, task.id) };
+  });
+
+  app.get('/api/tasks/:id/steps/:stepId/conversation', async (request) => {
+    const { id, stepId } = parse(StepParams, request.params);
+    // Scoped by task as well as step, so a step id from another task is a 404.
+    const step = await db.query.steps.findFirst({
+      where: and(eq(steps.id, stepId), eq(steps.taskId, id)),
+    });
+    if (!step) throw notFound('Step');
+    const attempts: StepConversationDto['attempts'] = [];
+    for (let attempt = 1; attempt <= step.attempt; attempt++) {
+      const tuple = await deps.checkpointer.getTuple({
+        configurable: { thread_id: stepThreadId(step.id, attempt), checkpoint_ns: '' },
+      });
+      const messages = (tuple?.checkpoint.channel_values.messages ?? []) as BaseMessage[];
+      if (messages.length) attempts.push({ attempt, messages: toConversation(messages) });
+    }
+    const dto: StepConversationDto = {
+      stepId: step.id,
+      key: step.key,
+      title: step.title,
+      attempts,
+    };
+    return dto;
   });
 
   app.get('/api/tasks/:id/events', async (request) => {

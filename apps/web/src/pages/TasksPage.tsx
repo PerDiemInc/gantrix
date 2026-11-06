@@ -7,6 +7,7 @@ import { go, useLive } from '../hooks.ts';
 function NewTask() {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('');
+  const [approveAll, setApproveAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (e: FormEvent) => {
@@ -15,7 +16,11 @@ function NewTask() {
     setError('');
     try {
       const budget = minutes ? { maxMinutes: Number(minutes) } : {};
-      const task = await api.post<TaskDto>('/api/tasks', { goal, budget });
+      const task = await api.post<TaskDto>('/api/tasks', {
+        goal,
+        budget,
+        ...(approveAll ? { approveAll: true } : {}),
+      });
       go(`/tasks/${task.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -45,10 +50,27 @@ function NewTask() {
           />
           min
         </label>
+        <label
+          className="inline god-mode"
+          title="Every tool call, including shell, runs without asking"
+        >
+          <input
+            type="checkbox"
+            checked={approveAll}
+            onChange={(e) => setApproveAll(e.target.checked)}
+          />
+          ⚡ God mode
+        </label>
         <button type="submit" className="primary" disabled={busy || !goal.trim()}>
           {busy ? 'Starting…' : 'Start'}
         </button>
       </div>
+      {approveAll && (
+        <p className="error">
+          God mode: every tool call runs without asking, including shell commands, web requests and
+          emails. Use it only for goals and skills you trust.
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
     </form>
   );

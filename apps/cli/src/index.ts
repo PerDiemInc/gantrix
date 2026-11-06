@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { createClient } from './client.ts';
 import * as cmd from './commands.ts';
+import { addTeam } from './team.ts';
 
 // Settings come from the environment, falling back to the repo's .env (never overriding).
 try {
@@ -46,6 +47,7 @@ agents
   .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
   .option('--prompt <text>', 'extra system prompt')
+  .option('-c, --connection <name>', 'a saved model connection (see gantrix connections)')
   .action(run((name: string, o) => cmd.addAgent(client, name, o)));
 agents
   .command('rm <name>')
@@ -66,12 +68,51 @@ skills
   .description('remove an installed skill')
   .action(run((ref: string) => cmd.removeSkill(client, ref)));
 
+const connections = program
+  .command('connections')
+  .description('model servers: Ollama, OpenAI, Anthropic or compatible, local or cloud');
+connections
+  .command('list', { isDefault: true })
+  .description('list connections')
+  .action(run(() => cmd.listConnections(client)));
+connections
+  .command('add <name>')
+  .description('save a connection')
+  .requiredOption('-p, --provider <provider>', 'ollama, openai or anthropic')
+  .option(
+    '-u, --url <url>',
+    'base URL (default: local Ollama, api.openai.com or api.anthropic.com)',
+  )
+  .option(
+    '-H, --header <header...>',
+    'e.g. "Authorization: Bearer env:MY_KEY" (env:NAME reads the worker environment)',
+  )
+  .option('--api-key-env <name>', 'read the API key from this environment variable')
+  .action(run((name: string, o) => cmd.addConnection(client, name, o)));
+connections
+  .command('test <name> <model>')
+  .description('send one short prompt through a connection')
+  .action(run((name: string, model: string) => cmd.testConnection(client, name, model)));
+connections
+  .command('rm <name>')
+  .description('remove a connection no agent uses')
+  .action(run((name: string) => cmd.removeConnection(client, name)));
+
+const team = program.command('team').description('the built-in executive agents');
+team
+  .command('add')
+  .description('install the CTO, CMO, CRO, CISO and CPO agents and their skills')
+  .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
+  .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
+  .action(run((o) => addTeam(client, o)));
+
 program
   .command('run <goal...>')
   .description('start a task and follow it live')
   .option('--max-minutes <n>', 'time budget')
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
+  .option('--approve-all', 'god mode: run every tool call, including shell, without asking')
   .option('--detach', "don't follow the task")
   .action(run((goal: string[], o) => cmd.runTask(client, goal.join(' '), o)));
 program
@@ -84,6 +125,11 @@ program
   .description('show a task as a Gantt chart ("last" = most recent)')
   .option('-a, --all', 'include superseded steps from earlier plans')
   .action(run((ref: string, o) => cmd.showTask(client, ref, o)));
+program
+  .command('logs <task> [step]')
+  .description("show each step's conversation: prompts, replies, tool calls and the judge")
+  .option('--full', 'show system prompts, thinking and long text in full')
+  .action(run((ref: string, step: string | undefined, o) => cmd.logs(client, ref, step, o)));
 program
   .command('tail <task>')
   .description('follow a task live and answer approvals')

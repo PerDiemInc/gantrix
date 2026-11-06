@@ -5,6 +5,7 @@ import type { EventHub } from './event-hub.ts';
 import { HttpError } from './http.ts';
 import { agentRoutes } from './routes/agents.ts';
 import { approvalRoutes } from './routes/approvals.ts';
+import { connectionRoutes } from './routes/connections.ts';
 import { skillRoutes } from './routes/skills.ts';
 import { streamRoutes } from './routes/stream.ts';
 import { taskRoutes } from './routes/tasks.ts';
@@ -50,6 +51,7 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
 
   app.get('/api/health', async () => ({ ok: true }));
   agentRoutes(app, deps);
+  connectionRoutes(app, deps);
   skillRoutes(app, deps);
   taskRoutes(app, deps);
   approvalRoutes(app, deps);

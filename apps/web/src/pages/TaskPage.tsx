@@ -34,7 +34,7 @@ function Meter({
   );
 }
 
-function eventText(e: StreamEvent, keys: Map<string, string>): string {
+export function eventText(e: StreamEvent, keys: Map<string, string>): string {
   switch (e.type) {
     case 'task.status':
       return `Task ${label(e.status)}${e.reason ? ` — ${e.reason}` : ''}`;
@@ -43,7 +43,7 @@ function eventText(e: StreamEvent, keys: Map<string, string>): string {
     case 'step.status':
       return `${e.key} ${label(e.status)}${e.attempt > 1 ? ` (try ${e.attempt})` : ''}`;
     case 'step.tool_call':
-      return `${keys.get(e.stepId) ?? 'step'} → ${e.tool} ${e.summary}`;
+      return `${keys.get(e.stepId) ?? 'step'} → ${e.tool} ${e.summary}${e.autoApproved ? ' ⚡ auto-approved' : ''}`;
     case 'approval.requested':
       return `${keys.get(e.stepId) ?? 'A step'} asks to run ${e.tool}`;
     case 'approval.decided':
@@ -60,6 +60,9 @@ function StepPanel({ step, agentName }: { step: StepDto; agentName: string }) {
     <div className="panel">
       <div className="panel-head">
         <h3>{step.title}</h3>
+        <a className="small" href={`#/tasks/${step.taskId}/logs/${step.id}`}>
+          View conversation →
+        </a>
         <span className={`pill s-${step.status}`}>{label(step.status)}</span>
       </div>
       <dl className="facts">
@@ -171,6 +174,14 @@ export function TaskPage({ id }: { id: string }) {
           <h1>{task.goal}</h1>
         </div>
         <div className="task-actions">
+          <a className="ghost button" href={`#/tasks/${task.id}/logs`}>
+            Logs
+          </a>
+          {task.approveAll && (
+            <span className="pill big god-mode" title="Tool calls run without asking">
+              ⚡ God mode
+            </span>
+          )}
           <span className={`pill big s-${task.status}`}>{label(task.status)}</span>
           {!isTerminal(task.status) && (
             <button
