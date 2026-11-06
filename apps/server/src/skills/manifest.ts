@@ -25,6 +25,7 @@ const FrontmatterSchema = z.object({
         command: z.string().min(1),
         args: z.array(z.string()).default([]),
         env: z.record(z.string(), z.string()).optional(),
+        'timeout-seconds': z.number().int().min(1).max(7200).optional(),
       }),
     )
     .default({}),
@@ -61,7 +62,12 @@ export function parseSkillFile(text: string): ParsedSkill {
   }
   const mcpServers: Record<string, McpServerConfig> = {};
   for (const [name, s] of Object.entries(fm['mcp-servers'])) {
-    mcpServers[name] = { command: s.command, args: s.args, ...(s.env ? { env: s.env } : {}) };
+    mcpServers[name] = {
+      command: s.command,
+      args: s.args,
+      ...(s.env ? { env: s.env } : {}),
+      ...(s['timeout-seconds'] ? { timeoutSeconds: s['timeout-seconds'] } : {}),
+    };
   }
   return {
     name: fm.name,

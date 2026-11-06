@@ -44,6 +44,18 @@ describe('SKILL.md', () => {
     expect(skill.version).toBe('0.0.0');
   });
 
+  it('reads an optional per-server tool timeout and rejects bad values', () => {
+    const md = (t: string) =>
+      `---\nname: x\ndescription: y\nmcp-servers:\n  media: { command: c, timeout-seconds: ${t} }\n---\n`;
+    expect(parseSkillFile(md('1800')).manifest.mcpServers.media?.timeoutSeconds).toBe(1800);
+    expect(
+      parseSkillFile('---\nname: x\ndescription: y\nmcp-servers:\n  media: { command: c }\n---\n')
+        .manifest.mcpServers.media,
+    ).not.toHaveProperty('timeoutSeconds');
+    for (const bad of ['0', '7201', '2.5', '"soon"'])
+      expect(() => parseSkillFile(md(bad))).toThrow();
+  });
+
   it('rejects unknown tools, bad names and underscores in MCP server names', () => {
     expect(() => parseSkillFile('---\nname: x\ndescription: y\ntools: [rm_rf]\n---\n')).toThrow(
       /Unknown built-in tools: rm_rf/,

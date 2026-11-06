@@ -1,0 +1,17 @@
+{
+  "name": "@gantrix/media-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that generates images and video with local open models (LTX Desktop, ComfyUI).",
+  "bin": {
+    "gantrix-media-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  }
+}
