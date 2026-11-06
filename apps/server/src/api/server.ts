@@ -23,6 +23,8 @@ const pgCode = (error: unknown): string | undefined => {
 
 export function buildServer(deps: ApiDeps, token: string, logger = true) {
   const app = Fastify({
+    // The live-event streams never end on their own; without this, close() waits forever.
+    forceCloseConnections: true,
     // Log paths without query strings, so nothing sensitive in a URL reaches the logs.
     logger: logger && {
       serializers: {

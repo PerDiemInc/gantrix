@@ -33,6 +33,12 @@ export const TEAM = [
       "CISO: security. Threat models, code and dependency audits, config checks and authorized testing of the user's own systems, with a fix plan.",
   },
   {
+    name: 'designer',
+    skill: 'exec-designer',
+    description:
+      'Product designer: UI and UX. Design briefs, wireframes, design tokens and static HTML/CSS mockups, reviewed for accessibility and usability.',
+  },
+  {
     name: 'cpo',
     skill: 'exec-cpo',
     description:

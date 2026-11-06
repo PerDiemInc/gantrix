@@ -101,7 +101,7 @@ connections
 const team = program.command('team').description('the built-in executive agents');
 team
   .command('add')
-  .description('install the CTO, CMO, CRO, CISO and CPO agents and their skills')
+  .description('install the CTO, CMO, CRO, CISO, CPO and designer agents and their skills')
   .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
   .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
   .action(run((o) => addTeam(client, o)));

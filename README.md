@@ -181,10 +181,10 @@ and install it again.
 
 ## The executive team (optional)
 
-One command adds five ready-made agents, each with its own skill:
+One command adds six ready-made agents, each with its own skill:
 
 ```bash
-npm run gantrix -- team add                 # or: team add --only cto,cpo   (-m <model> for all)
+npm run gantrix -- team add                 # or: team add --only cto,designer   (-m <model> for all)
 npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: write the launch post"
 ```
 
@@ -195,6 +195,7 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
 | `cro` | `exec-cro` | Customer profiles, lead lists from public pages, cold email and SMS drafts, sends email | files, web, outreach |
 | `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
 | `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
+| `designer` | `exec-designer` | Design brief, wireframes, design tokens (W3C JSON + CSS) and HTML/CSS mockups, checked against WCAG 2.2 | files, web |
 
 It's safe to run again: existing agents are left as they are. The skills are plain folders in
 `examples/skills/exec-*`; copy one, edit it, bump its version and install your own.
@@ -298,7 +299,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
 gantrix connections [list | add <name> -p ollama|openai|anthropic [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
-gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
+gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix approvals | approve <id> | deny <id>
