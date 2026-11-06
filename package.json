@@ -10,6 +10,7 @@
     "apps/*"
   ],
   "scripts": {
+    "setup": "node scripts/setup.ts",
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
     "db:migrate": "npm run db:migrate -w @gantrix/server",
@@ -21,7 +22,8 @@
     "test": "vitest run --project unit",
     "test:e2e": "vitest run --project e2e",
     "gantrix": "node apps/cli/src/index.ts",
-    "build:web": "npm run build -w @gantrix/web"
+    "build:web": "npm run build -w @gantrix/web",
+    "token": "node -e \"process.loadEnvFile('.env'); console.log(process.env.GANTRIX_TOKEN)\""
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.5",
