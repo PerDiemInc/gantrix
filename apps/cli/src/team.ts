@@ -10,37 +10,37 @@ const SKILLS_DIR = fileURLToPath(new URL('../../../examples/skills/', import.met
 export const TEAM = [
   {
     name: 'cto',
-    skill: 'exec-cto',
+    skills: ['exec-cto'],
     description:
       'CTO: technology and engineering. Architecture decisions, code reviews, build plans and estimates, technical risks. Can run shell commands with approval.',
   },
   {
     name: 'cmo',
-    skill: 'exec-cmo',
+    skills: ['exec-cmo'],
     description:
       'CMO: marketing. Positioning, messaging, campaign plans, launch posts, landing-page copy, SEO briefs and competitor comparisons.',
   },
   {
     name: 'cro',
-    skill: 'exec-cro',
+    skills: ['exec-cro'],
     description:
       'CRO: sales and revenue. Ideal-customer profiles, lead lists from public sources, personal cold email and SMS drafts, sends one-to-one email with approval.',
   },
   {
     name: 'ciso',
-    skill: 'exec-ciso',
+    skills: ['exec-ciso'],
     description:
       "CISO: security. Threat models, code and dependency audits, config checks and authorized testing of the user's own systems, with a fix plan.",
   },
   {
     name: 'designer',
-    skill: 'exec-designer',
+    skills: ['exec-designer', 'google-slides'],
     description:
-      'Product designer: UI and UX. Design briefs, wireframes, design tokens and static HTML/CSS mockups, reviewed for accessibility and usability.',
+      'Designer: mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and slide decks in Google Slides. Briefs, wireframes, design tokens and HTML/CSS mockups, checked for accessibility.',
   },
   {
     name: 'cpo',
-    skill: 'exec-cpo',
+    skills: ['exec-cpo'],
     description:
       'CPO and project manager: product specs (PRDs), priorities, roadmaps, milestone timelines with owners and dates, risks and status updates. Keeps the team aligned.',
   },
@@ -72,28 +72,57 @@ export async function addTeam(
   ]);
 
   for (const m of members) {
-    const folder = `${dir}${dir.endsWith('/') ? '' : '/'}${m.skill}`;
-    const version = await skillVersion(folder);
-    let skill = skills.find((s) => s.name === m.skill && s.version === version);
-    if (!skill) skill = await client.post<SkillDto>('/api/skills', { path: folder });
+    const ids: string[] = [];
+    const labels: string[] = [];
+    for (const name of m.skills) {
+      const folder = `${dir}${dir.endsWith('/') ? '' : '/'}${name}`;
+      const version = await skillVersion(folder);
+      let skill = skills.find((s) => s.name === name && s.version === version);
+      if (!skill) {
+        skill = await client.post<SkillDto>('/api/skills', { path: folder });
+        skills.push(skill);
+      }
+      ids.push(skill.id);
+      labels.push(`${name} ${version}`);
+    }
 
-    if (agents.some((a) => a.name === m.name)) {
-      console.log(`${paint('gray', '·')} ${m.name} already exists; left as is.`);
+    const existing = agents.find((a) => a.name === m.name);
+    if (existing) {
+      // Move a team agent to the newest team skills, but only if its skills are still ours.
+      const ours = existing.skills.every((s) => (m.skills as readonly string[]).includes(s.name));
+      const current = existing.skills
+        .map((s) => s.id)
+        .sort()
+        .join();
+      if (ours && current !== [...ids].sort().join()) {
+        await client.patch<AgentDto>(`/api/agents/${existing.id}`, { skillIds: ids });
+        console.log(`${paint('green', '↑')} ${m.name} now uses ${labels.join(', ')}`);
+      } else {
+        console.log(`${paint('gray', '·')} ${m.name} already exists; left as is.`);
+      }
       continue;
     }
     await client.post<AgentDto>('/api/agents', {
       name: m.name,
       description: m.description,
-      skillIds: [skill.id],
+      skillIds: ids,
       ...(o.model ? { model: o.model } : {}),
     });
-    console.log(`${paint('green', '✔')} ${paint('bold', m.name)} with ${m.skill} ${version}`);
+    console.log(`${paint('green', '✔')} ${paint('bold', m.name)} with ${labels.join(', ')}`);
   }
   if (members.some((m) => m.name === 'cro')) {
     console.log(
       paint(
         'gray',
         'The CRO sends email only after you set up ~/.gantrix/outreach.env and run `npm run outreach:link`; see the README.',
+      ),
+    );
+  }
+  if (members.some((m) => m.name === 'designer')) {
+    console.log(
+      paint(
+        'gray',
+        'The designer builds Google Slides decks after `npm run slides:link` and `npm run slides:auth`; see the README.',
       ),
     );
   }

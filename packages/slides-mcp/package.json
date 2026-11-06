@@ -1,0 +1,17 @@
+{
+  "name": "@gantrix/slides-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server that builds Google Slides decks through the Slides API, with access only to the decks it creates (drive.file).",
+  "bin": {
+    "gantrix-slides-mcp": "./src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  }
+}

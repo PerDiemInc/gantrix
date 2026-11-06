@@ -26,6 +26,8 @@
     "token": "node -e \"process.loadEnvFile('.env'); console.log(process.env.GANTRIX_TOKEN)\"",
     "media:link": "npm link -w @gantrix/media-mcp",
     "outreach:link": "npm link -w @gantrix/outreach-mcp",
+    "slides:link": "npm link -w @gantrix/slides-mcp",
+    "slides:auth": "node packages/slides-mcp/src/main.ts auth",
     "comfyui:setup": "bash scripts/setup-comfyui.sh"
   },
   "devDependencies": {

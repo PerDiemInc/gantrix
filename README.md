@@ -207,15 +207,36 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
 | `cro` | `exec-cro` | Customer profiles, lead lists from public pages, cold email and SMS drafts, sends email | files, web, outreach |
 | `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
 | `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
-| `designer` | `exec-designer` | Design brief, wireframes, design tokens (W3C JSON + CSS) and HTML/CSS mockups, checked against WCAG 2.2 | files, web |
+| `designer` | `exec-designer`, `google-slides` | Mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and Google Slides decks: brief, wireframes, design tokens, HTML/CSS mockups and print files, checked against WCAG 2.2 | files, web, Google Slides |
 
-It's safe to run again: existing agents are left as they are. The skills are plain folders in
+It's safe to run again. Team agents you haven't changed move to the newest team skills; any
+other existing agent is left as it is. The skills are plain folders in
 `examples/skills/exec-*`; copy one, edit it, bump its version and install your own.
 
 **Things to know:**
 - Shell commands from the CTO and CISO always wait for your approval.
 - The CISO only tests what the task names as yours. Anything else goes under "Not tested".
 - The skills are written for small local models. Ask for one deliverable per step.
+
+**Slide decks in Google Slides.** The designer builds decks in your Google Drive. Set it up once:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), enable the **Google Slides API**.
+   Then create an OAuth client of type **Desktop app** and download its JSON.
+2. Save that file as `~/.gantrix/google/oauth-client.json`.
+3. Run these, and sign in with the link they print:
+
+```bash
+npm run slides:link     # makes the gantrix-slides-mcp command available
+npm run slides:auth
+```
+
+Gantrix asks Google only for `drive.file` access. It can see and edit the decks it creates,
+never the rest of your Drive. The sign-in token is saved in `~/.gantrix/google/token.json`
+(chmod 600). Creating a deck asks for your approval; adding slides to it doesn't. Until you
+connect it, the designer writes the deck as an outline file instead.
+
+Business cards and flyers come out as print-ready HTML with bleed: open them in a browser, then
+Print → Save as PDF with no margins.
 
 **Sending email from the CRO.** The CRO drafts by default. To let it send one-to-one email from
 your own mailbox:
