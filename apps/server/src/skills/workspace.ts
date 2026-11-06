@@ -1,4 +1,4 @@
-import { mkdir, realpath, stat } from 'node:fs/promises';
+import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 /** An error the model caused and can fix; returned to it as text instead of failing the step. */
@@ -41,4 +41,36 @@ export async function asToolResult(run: () => Promise<string>): Promise<string> 
   } catch (error) {
     return `Error: ${error instanceof Error ? error.message : String(error)}`;
   }
+}
+
+export interface WalkEntry {
+  path: string; // relative, "/"-separated
+  kind: 'file' | 'dir' | 'link';
+}
+
+/**
+ * Lists a folder recursively without ever following symlinks (fs.readdir's recursive mode
+ * does follow them). Skips entries named in `skip` and stops after `limit` entries.
+ */
+export async function walk(
+  root: string,
+  skip: ReadonlySet<string>,
+  limit = Number.POSITIVE_INFINITY,
+): Promise<WalkEntry[]> {
+  const out: WalkEntry[] = [];
+  const queue = [''];
+  while (queue.length && out.length < limit) {
+    const rel = queue.shift() ?? '';
+    for (const e of await readdir(join(root, rel), { withFileTypes: true })) {
+      if (skip.has(e.name)) continue;
+      const path = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isSymbolicLink()) out.push({ path, kind: 'link' });
+      else if (e.isDirectory()) {
+        out.push({ path, kind: 'dir' });
+        queue.push(path);
+      } else if (e.isFile()) out.push({ path, kind: 'file' });
+      if (out.length >= limit) break;
+    }
+  }
+  return out;
 }

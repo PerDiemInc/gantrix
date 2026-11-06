@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readdir, readFile } from 'node:fs/promises';
+import { cp, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import type { McpServerConfig } from '@gantrix/shared';
 import { type ParsedSkill, parseSkillFile } from './manifest.ts';
-import { pathExists } from './workspace.ts';
+import { pathExists, walk } from './workspace.ts';
 
 const SKIP = new Set(['.git', 'node_modules', '.DS_Store']);
 const skipped = (root: string, path: string) =>
@@ -11,15 +11,10 @@ const skipped = (root: string, path: string) =>
     .split(sep)
     .some((part) => SKIP.has(part));
 
-async function listEntries(dir: string) {
-  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-  return entries.filter((e) => !skipped(dir, join(e.parentPath, e.name)));
-}
-
 export async function checksumDir(dir: string): Promise<string> {
-  const files = (await listEntries(dir))
-    .filter((e) => e.isFile())
-    .map((e) => relative(dir, join(e.parentPath, e.name)))
+  const files = (await walk(dir, SKIP))
+    .filter((e) => e.kind === 'file')
+    .map((e) => e.path)
     .sort();
   const hash = createHash('sha256');
   for (const file of files) {
@@ -43,10 +38,10 @@ export interface InstalledSkill extends ParsedSkill {
  */
 export async function installSkill(sourceDir: string, skillsDir: string): Promise<InstalledSkill> {
   const parsed = parseSkillFile(await readFile(join(sourceDir, 'SKILL.md'), 'utf8'));
-  const links = (await listEntries(sourceDir)).filter((e) => e.isSymbolicLink());
+  const links = (await walk(sourceDir, SKIP)).filter((e) => e.kind === 'link');
   if (links.length) {
     throw new Error(
-      `Skill folders can't contain symlinks: ${links.map((e) => e.name).join(', ')}.`,
+      `Skill folders can't contain symlinks: ${links.map((e) => e.path).join(', ')}.`,
     );
   }
   const dest = join(skillsDir, parsed.name, parsed.version);

@@ -1,8 +1,8 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { asToolResult, resolveInWorkspace, ToolError } from '../workspace.ts';
+import { asToolResult, resolveInWorkspace, ToolError, walk } from '../workspace.ts';
 
 const MAX_READ_BYTES = 256 * 1024;
 const MAX_WRITE_BYTES = 1024 * 1024;
@@ -56,22 +56,15 @@ export function fileTools(workspace: string) {
     ({ path }) =>
       asToolResult(async () => {
         const dir = await resolveInWorkspace(workspace, path ?? '.');
-        const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-        // Show symlinks but never list through them; they may point outside the workspace.
-        const links = entries
-          .filter((e) => e.isSymbolicLink())
-          .map((e) => relative(dir, join(e.parentPath, e.name)));
-        const lines: string[] = [];
-        for (const e of entries) {
-          const rel = relative(dir, join(e.parentPath, e.name));
-          if (rel.split('/').some((part) => SKIP_DIRS.has(part))) continue;
-          if (links.some((link) => rel.startsWith(`${link}/`))) continue;
-          lines.push(e.isSymbolicLink() ? `${rel}@` : e.isDirectory() ? `${rel}/` : rel);
-          if (lines.length >= MAX_LIST_ENTRIES) {
-            lines.push(`[stopped at ${MAX_LIST_ENTRIES} entries]`);
-            break;
-          }
-        }
+        // Symlinks are shown (name@) but never followed; they may point outside the workspace.
+        const entries = await walk(dir, SKIP_DIRS, MAX_LIST_ENTRIES + 1);
+        const lines = entries
+          .slice(0, MAX_LIST_ENTRIES)
+          .map((e) =>
+            e.kind === 'link' ? `${e.path}@` : e.kind === 'dir' ? `${e.path}/` : e.path,
+          );
+        if (entries.length > MAX_LIST_ENTRIES)
+          lines.push(`[stopped at ${MAX_LIST_ENTRIES} entries]`);
         return lines.length ? lines.sort().join('\n') : '(empty)';
       }),
     {
