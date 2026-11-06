@@ -70,7 +70,7 @@ function WorkingNow({
 }: {
   task: TaskDetailDto;
   events: StreamEvent[];
-  agents: Map<string, { name: string }>;
+  agents: Map<string, { name: string; avatar?: string | null }>;
   now: number;
   onMessage: (stepId: string) => void;
 }) {
@@ -86,7 +86,12 @@ function WorkingNow({
           const since = s.startedAt ?? s.queuedAt;
           return (
             <li key={s.id} className="worker">
-              <Avatar name={name} state={stateOf(s.status)} size={36} />
+              <Avatar
+                name={name}
+                avatar={s.agentId ? agents.get(s.agentId)?.avatar : null}
+                state={stateOf(s.status)}
+                size={36}
+              />
               <div className="worker-main">
                 <div className="worker-head">
                   <b>{name}</b>

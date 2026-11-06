@@ -227,6 +227,9 @@ export function Meeting({
   onTarget: (stepId: string) => void;
 }) {
   const lines = meetingLines(events, task, agentNames);
+  const avatarOf = new Map(
+    [...agentNames.values()].map((a) => [a.name, (a as { avatar?: string | null }).avatar ?? null]),
+  );
   const end = useRef<HTMLLIElement>(null);
   // Follow the conversation as it grows, like a chat.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when a line arrives
@@ -241,7 +244,7 @@ export function Meeting({
         {lines.map((l) => (
           <li key={l.id} className={`line line-${l.speaker}${l.aside ? ' aside' : ''}`}>
             {l.speaker === 'agent' ? (
-              <Avatar name={l.name} size={32} />
+              <Avatar name={l.name} avatar={avatarOf.get(l.name)} size={32} />
             ) : (
               <span className={`speaker speaker-${l.speaker}`} aria-hidden="true">
                 <Icon name={SPEAKER_ICON[l.speaker]} size={16} />

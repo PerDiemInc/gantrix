@@ -63,6 +63,8 @@ export const agents = pgTable(
       onDelete: 'restrict',
     }),
     maxConcurrency: integer('max_concurrency').notNull().default(1), // enforced by the supervisor
+    // "preset:<id>", "initials", or a small image as a data URL; null → a preset picked by name.
+    avatar: text('avatar'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },

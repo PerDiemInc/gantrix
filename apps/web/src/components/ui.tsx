@@ -1,5 +1,6 @@
 import type { StepStatus, StreamEvent, TaskListItem, TaskStatus } from '@gantrix/shared';
 import { label } from '../format.ts';
+import { avatarChoice, PresetAvatar } from './AgentAvatar.tsx';
 import { Icon, STATUS_ICON } from './Icon.tsx';
 
 /** Status as an icon and words; the colour only reinforces it. */
@@ -32,23 +33,29 @@ export type AgentState = keyof typeof STATE_LABEL;
 
 export function Avatar({
   name,
+  avatar,
   state,
   size = 32,
 }: {
   name: string;
+  /** The agent's saved avatar; null or missing → its default. */
+  avatar?: string | null | undefined;
   state?: AgentState;
   size?: number;
 }) {
   const text = state ? `${name}, ${STATE_LABEL[state]}` : name;
+  const choice = avatarChoice(name, avatar);
   return (
     <span
-      className={`avatar tone-${tone(name)}${state ? ` state-${state}` : ''}`}
+      className={`avatar tone-${tone(name)}${choice.kind !== 'initials' ? ' pic' : ''}${state ? ` state-${state}` : ''}`}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.36) }}
       role="img"
       aria-label={text}
       title={text}
     >
-      {name.slice(0, 2).toUpperCase()}
+      {choice.kind === 'preset' && <PresetAvatar id={choice.id} size={size} />}
+      {choice.kind === 'image' && <img src={choice.src} alt="" width={size} height={size} />}
+      {choice.kind === 'initials' && name.slice(0, 2).toUpperCase()}
     </span>
   );
 }

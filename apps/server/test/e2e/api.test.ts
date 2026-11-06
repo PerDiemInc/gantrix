@@ -204,6 +204,25 @@ describe('api', () => {
     );
   });
 
+  it('saves an agent avatar: a built-in, initials, or a small PNG/JPEG/WebP, never SVG', async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/agents',
+      headers: auth,
+      payload: { name: 'pic', avatar: 'preset:gant-glasses' },
+    });
+    expect(created.json().avatar).toBe('preset:gant-glasses');
+    const id = created.json().id;
+    const patch = (avatar: unknown) =>
+      app.inject({ method: 'PATCH', url: `/api/agents/${id}`, headers: auth, payload: { avatar } });
+    expect((await patch('data:image/png;base64,iVBORw0KGgo=')).statusCode).toBe(200);
+    expect((await patch('initials')).json().avatar).toBe('initials');
+    expect((await patch(null)).json().avatar).toBeNull();
+    expect((await patch('data:image/svg+xml;base64,PHN2Zz4=')).statusCode).toBe(400);
+    expect((await patch(`data:image/png;base64,${'A'.repeat(200_001)}`)).statusCode).toBe(400);
+    expect((await patch('https://example.com/a.png')).statusCode).toBe(400);
+  });
+
   it('creates a task with a merged budget and returns its detail', async () => {
     const res = await app.inject({
       method: 'POST',
