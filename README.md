@@ -297,7 +297,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 
 ```
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
-gantrix connections [list | add <name> -p ollama|openai|anthropic [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic|claude-code [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
@@ -341,6 +341,28 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
 | `ollama` | `OLLAMA_BASE_URL` | Ollama, local or behind a proxy |
 | `openai` | `https://api.openai.com/v1` | OpenAI, and OpenAI-compatible servers: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter |
 | `anthropic` | `https://api.anthropic.com` | Anthropic, and Anthropic-compatible gateways |
+| `claude-code` | `claude` on your PATH | Your local Claude Code, run as `claude -p` (agents only) |
+
+### Claude Code as an agent
+
+An agent can use your local [Claude Code](https://claude.com/claude-code) instead of a chat model.
+Each model turn of its step runs `claude -p` inside the task's folder, with your Claude login,
+and Claude Code does the work with its own tools.
+
+```bash
+npm run gantrix -- connections add claude-local --provider claude-code   # -u /path/to/claude if it isn't on PATH
+npm run gantrix -- connections test claude-local sonnet
+npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -m sonnet
+```
+
+- Gantrix can't see or approve the tool calls Claude Code makes inside a run. So by default it
+  gets file tools only (Read, Write, Edit, Glob, Grep), and Bash and web access are blocked.
+  In god mode it also gets Bash, WebFetch and WebSearch.
+- Each run is started without MCP servers and without a saved session. It doesn't get the
+  Gantrix token or database URLs in its environment.
+- The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
+  `GANTRIX_DEFAULT_CONNECTION`.
+- The step's tokens come from Claude Code's own report, and its usage counts against your Claude plan.
 
 **How headers work:**
 - A header value of `env:NAME` (or `Bearer env:NAME`) is read from the worker's environment

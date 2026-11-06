@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { agents, approvals, connections, events, steps } from '../../src/db/schema.ts';
@@ -157,6 +158,31 @@ describe('engine', () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(new Set(sent)).toEqual(new Set(['secret-123']));
     delete process.env.GX_E2E_HEADER;
+  });
+
+  it('runs a step with local Claude Code and judges its result', async () => {
+    await e.addAgent('coder');
+    const [conn] = await e.db
+      .insert(connections)
+      .values({
+        name: 'claude-local',
+        provider: 'claude-code',
+        baseUrl: fileURLToPath(new URL('../fixtures/fake-claude.mjs', import.meta.url)),
+      })
+      .returning();
+    await e.db.update(agents).set({ connectionId: conn!.id }).where(eq(agents.name, 'coder'));
+    e.fake.script.plan = () => ({ steps: [step('notes', 'coder')] });
+    const task = await createTask(e.deps, { goal: 'Write notes with Claude Code' });
+    const done = await e.waitFor(task.id);
+
+    expect(done.status).toBe('succeeded');
+    const [notes] = await stepsOf(task.id);
+    expect(notes).toMatchObject({ status: 'succeeded', output: 'Wrote claude-notes.md.' });
+    expect(notes?.tokensUsed).toBe(125 + 15); // Claude Code, then the judge
+    expect(await readFile(join(done.workspacePath, 'claude-notes.md'), 'utf8')).toContain(
+      'Claude Code',
+    );
+    expect(e.fake.calls.worker).toBe(0); // the fake Ollama only planned and judged
   });
 
   it('tells the agent when an approval is denied', async () => {

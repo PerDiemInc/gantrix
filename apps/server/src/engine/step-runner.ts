@@ -86,7 +86,11 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
   try {
     const graph = buildStepAgent({
       model: createChatModel(
-        await resolveModelSpec(db, config, agent),
+        {
+          ...(await resolveModelSpec(db, config, agent)),
+          workspace: task.workspacePath,
+          approveAll: task.approveAll,
+        },
         'worker',
         modelDefaults(config),
       ),

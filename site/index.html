@@ -310,6 +310,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <ul class="safety">
         <li><b>Custom URL and headers.</b> Point a connection at any server and add the headers it needs.</li>
         <li><b>Keys stay in your environment.</b> Write <code>env:OPENAI_API_KEY</code> and the worker reads it when a step runs. The API never returns header values.</li>
+        <li><b>Your Claude Code as an agent.</b> A <code>claude-code</code> connection runs <code>claude -p</code> in the task's folder, with file tools only unless you turn on god mode.</li>
         <li><b>Cloud is labelled.</b> A connection that leaves your machine is marked cloud, so you know where task content goes.</li>
       </ul>
       <div class="code" style="margin-top:22px"><button class="copy" type="button">Copy</button><pre>npm run gantrix -- connections add claude --provider anthropic --api-key-env ANTHROPIC_API_KEY

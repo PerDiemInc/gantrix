@@ -1,4 +1,7 @@
-import { MODEL_PROVIDERS } from '@gantrix/shared';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { MODEL_PROVIDERS, type ModelProvider } from '@gantrix/shared';
 import { HumanMessage } from '@langchain/core/messages';
 import { asc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -29,12 +32,20 @@ const Fields = z.object({
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'name must be lowercase letters, digits and dashes'),
   provider: z.enum(MODEL_PROVIDERS),
-  baseUrl: z.url({ protocol: /^https?$/ }).nullable(),
+  // For claude-code: the path of the claude binary, if it isn't on PATH.
+  baseUrl: z.union([z.url({ protocol: /^https?$/ }), z.string().regex(/^\/[^\0]+$/)]).nullable(),
   headers: Headers,
 });
 const Create = Fields.partial({ baseUrl: true, headers: true });
 const Update = Fields.partial();
 const TestBody = z.object({ model: z.string().min(1).max(200) });
+
+/** A path is only a valid base URL for claude-code, where it names the binary. */
+function checkUrl(provider: ModelProvider, baseUrl: string | null | undefined) {
+  if (baseUrl && provider !== 'claude-code' && !/^https?:\/\//.test(baseUrl)) {
+    throw new HttpError(400, 'baseUrl must be an http(s) URL.');
+  }
+}
 
 export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps): void {
   const dto = (c: typeof connections.$inferSelect) => toConnectionDto(c, config.OLLAMA_BASE_URL);
@@ -54,6 +65,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
 
   app.post('/api/connections', async (request, reply) => {
     const body = parse(Create, request.body);
+    checkUrl(body.provider, body.baseUrl);
     if (Object.values(body.headers ?? {}).includes(KEEP)) {
       throw new HttpError(400, `"${KEEP}" isn't a header value; give the value or env:NAME.`);
     }
@@ -68,6 +80,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
   app.patch('/api/connections/:id', async (request) => {
     const current = await get(parse(IdParams, request.params).id);
     const body = parse(Update, request.body);
+    checkUrl(body.provider ?? current.provider, body.baseUrl);
     // Headers are replaced as a set; "hidden" keeps the saved value of that header.
     const headers = body.headers
       ? Object.fromEntries(
@@ -113,10 +126,18 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
     const c = await get(parse(IdParams, request.params).id);
     const { model } = parse(TestBody, request.body);
     const started = Date.now();
+    // Claude Code needs a folder to work in; give it an empty one that is removed afterwards.
+    const scratch =
+      c.provider === 'claude-code' ? await mkdtemp(join(tmpdir(), 'gantrix-test-')) : null;
     try {
-      const chat = createChatModel(connectionSpec(c, model), 'planner', modelDefaults(config), 0);
+      const chat = createChatModel(
+        { ...connectionSpec(c, model), ...(scratch ? { workspace: scratch } : {}) },
+        scratch ? 'worker' : 'planner',
+        modelDefaults(config),
+        0,
+      );
       const reply = await chat.invoke([new HumanMessage('Reply with the single word: OK')], {
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(scratch ? 120_000 : 30_000),
       });
       const text =
         typeof reply.content === 'string' ? reply.content : JSON.stringify(reply.content);
@@ -127,6 +148,8 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
         error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
         ms: Date.now() - started,
       };
+    } finally {
+      if (scratch) await rm(scratch, { recursive: true, force: true });
     }
   });
 }

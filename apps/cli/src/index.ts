@@ -78,10 +78,10 @@ connections
 connections
   .command('add <name>')
   .description('save a connection')
-  .requiredOption('-p, --provider <provider>', 'ollama, openai or anthropic')
+  .requiredOption('-p, --provider <provider>', 'ollama, openai, anthropic or claude-code')
   .option(
     '-u, --url <url>',
-    'base URL (default: local Ollama, api.openai.com or api.anthropic.com)',
+    'base URL (default: local Ollama, api.openai.com or api.anthropic.com); for claude-code, the claude binary',
   )
   .option(
     '-H, --header <header...>',

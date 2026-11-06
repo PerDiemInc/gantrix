@@ -44,6 +44,7 @@ export function maskHeaders(headers: Record<string, string>): Record<string, str
 
 export function effectiveUrl(c: Pick<Connection, 'provider' | 'baseUrl'>, ollamaUrl: string) {
   if (c.baseUrl) return c.baseUrl;
+  if (c.provider === 'claude-code') return 'claude';
   return c.provider === 'ollama' ? ollamaUrl : DEFAULT_URLS[c.provider];
 }
 
@@ -70,6 +71,7 @@ export function isLocalUrl(url: string): boolean {
 
 export function toConnectionDto(c: Connection, ollamaUrl: string): ConnectionDto {
   const url = effectiveUrl(c, ollamaUrl);
+  // Claude Code runs here but sends the prompts to Anthropic.
   return {
     id: c.id,
     name: c.name,
@@ -77,7 +79,7 @@ export function toConnectionDto(c: Connection, ollamaUrl: string): ConnectionDto
     baseUrl: c.baseUrl,
     effectiveUrl: url,
     headers: maskHeaders(c.headers),
-    isLocal: isLocalUrl(url),
+    isLocal: c.provider !== 'claude-code' && isLocalUrl(url),
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -116,6 +118,11 @@ export async function resolveModelSpec(
     if (!c) {
       throw new Error(
         `GANTRIX_DEFAULT_CONNECTION is "${config.GANTRIX_DEFAULT_CONNECTION}", but no connection has that name.`,
+      );
+    }
+    if (c.provider === 'claude-code') {
+      throw new Error(
+        "GANTRIX_DEFAULT_CONNECTION can't be a Claude Code connection: the planner and judge need an Ollama, OpenAI or Anthropic model.",
       );
     }
     return connectionSpec(c, null);
