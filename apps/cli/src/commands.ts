@@ -330,7 +330,12 @@ export async function listApprovals(client: Client): Promise<void> {
     );
     console.log(`  ${JSON.stringify(a.args)}`);
   }
-  console.log(paint('gray', '\nDecide with: gantrix approve <id>  or  gantrix deny <id>'));
+  console.log(
+    paint(
+      'gray',
+      '\nDecide with: gantrix approve <id> | gantrix deny <id>. Answer a question with: gantrix answer <id> "…"',
+    ),
+  );
 }
 
 async function pendingId(client: Client, ref: string): Promise<string> {

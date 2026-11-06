@@ -1,7 +1,13 @@
 import { homedir } from 'node:os';
 import { z } from 'zod';
 
-const path = z.string().transform((p) => (p.startsWith('~/') ? `${homedir()}${p.slice(1)}` : p));
+// The default goes through the transform too: in Zod 4, .default() on a transformed schema
+// would return the raw "~/..." string, which then became a folder literally named "~".
+const path = (fallback: string) =>
+  z
+    .string()
+    .default(fallback)
+    .transform((p) => (p.startsWith('~/') ? `${homedir()}${p.slice(1)}` : p));
 const positiveInt = (fallback: number) => z.coerce.number().int().positive().default(fallback);
 
 const ConfigSchema = z.object({
@@ -16,10 +22,10 @@ const ConfigSchema = z.object({
   // A saved connection (by name) for the planner, judges and agents without their own model.
   GANTRIX_DEFAULT_CONNECTION: z.string().min(1).optional(),
   GANTRIX_LLM_CONCURRENCY: positiveInt(2),
-  GANTRIX_WORKSPACES_DIR: path.default('~/.gantrix/workspaces'),
-  GANTRIX_SKILLS_DIR: path.default('~/.gantrix/skills'),
+  GANTRIX_WORKSPACES_DIR: path('~/.gantrix/workspaces'),
+  GANTRIX_SKILLS_DIR: path('~/.gantrix/skills'),
   // deploy_site publishes here, and the preview server serves it on its own port.
-  GANTRIX_SITES_DIR: path.default('~/.gantrix/sites'),
+  GANTRIX_SITES_DIR: path('~/.gantrix/sites'),
   GANTRIX_PREVIEW_PORT: z.coerce.number().int().min(1).max(65535).default(4702),
   GANTRIX_MAX_STEP_ATTEMPTS: positiveInt(3),
   GANTRIX_MAX_REPLANS: positiveInt(5),
