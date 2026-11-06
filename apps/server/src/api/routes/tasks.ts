@@ -1,5 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
-import type { Budget, StepConversationDto } from '@gantrix/shared';
+import type { Budget, StepConversationDto, StreamEvent, TaskListItem } from '@gantrix/shared';
 import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -64,12 +64,69 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
           .where(and(inArray(steps.taskId, ids), ne(steps.status, 'superseded')))
           .groupBy(steps.taskId, steps.status)
       : [];
-    return rows.map((t) => ({
-      ...t,
-      stepCounts: Object.fromEntries(
-        counts.filter((c) => c.taskId === t.id).map((c) => [c.status, c.n]),
-      ),
-    }));
+    const [current, pending, latest] = ids.length
+      ? await Promise.all([
+          db
+            .select({
+              id: steps.id,
+              taskId: steps.taskId,
+              key: steps.key,
+              title: steps.title,
+              agentId: steps.agentId,
+              status: steps.status,
+            })
+            .from(steps)
+            .where(and(inArray(steps.taskId, ids), ne(steps.status, 'superseded')))
+            .orderBy(asc(steps.id)),
+          db
+            .select({ taskId: approvals.taskId, n: sql<number>`count(*)::int` })
+            .from(approvals)
+            .where(and(inArray(approvals.taskId, ids), eq(approvals.status, 'pending')))
+            .groupBy(approvals.taskId),
+          // The newest event per project; uses events_task_id_idx (task_id, id).
+          db
+            .selectDistinctOn([events.taskId])
+            .from(events)
+            .where(inArray(events.taskId, ids))
+            .orderBy(events.taskId, desc(events.id)),
+        ])
+      : [[], [], []];
+    const ACTIVE = new Set(['running', 'judging', 'awaiting_approval', 'queued']);
+    const stateOf = (statuses: string[]): TaskListItem['team'][number]['state'] => {
+      if (statuses.some((s) => s === 'running' || s === 'judging')) return 'working';
+      if (statuses.includes('awaiting_approval')) return 'waiting';
+      if (statuses.includes('queued')) return 'queued';
+      if (statuses.length && statuses.every((s) => s === 'succeeded')) return 'done';
+      return 'idle';
+    };
+    return rows.map((t): TaskListItem => {
+      const mine = current.filter((s) => s.taskId === t.id);
+      const agentIds = [...new Set(mine.flatMap((s) => (s.agentId ? [s.agentId] : [])))];
+      const ev = latest.find((e) => e.taskId === t.id);
+      return {
+        ...t,
+        createdAt: t.createdAt.toISOString(),
+        startedAt: t.startedAt?.toISOString() ?? null,
+        finishedAt: t.finishedAt?.toISOString() ?? null,
+        stepCounts: Object.fromEntries(
+          counts.filter((c) => c.taskId === t.id).map((c) => [c.status, c.n]),
+        ),
+        team: agentIds.map((agentId) => ({
+          agentId,
+          state: stateOf(mine.filter((s) => s.agentId === agentId).map((s) => s.status)),
+        })),
+        active: mine.filter((s) => ACTIVE.has(s.status)).map(({ taskId: _, ...s }) => s),
+        pendingApprovals: pending.find((p) => p.taskId === t.id)?.n ?? 0,
+        lastEvent: ev
+          ? ({
+              ...ev.payload,
+              id: ev.id,
+              taskId: ev.taskId,
+              at: ev.createdAt.toISOString(),
+            } as StreamEvent)
+          : null,
+      };
+    });
   });
 
   app.post('/api/tasks', async (request, reply) => {

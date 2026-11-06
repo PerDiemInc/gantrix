@@ -2,6 +2,8 @@ import { isTerminal, type StreamEvent, type TaskDetailDto } from '@gantrix/share
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { label } from '../format.ts';
+import { Icon, type IconName } from './Icon.tsx';
+import { Avatar } from './ui.tsx';
 
 type Speaker = 'planner' | 'agent' | 'judge' | 'you' | 'system';
 
@@ -84,14 +86,14 @@ export function meetingLines(
             e,
             'judge',
             'Judge',
-            `✔ ${e.key}${s?.judgeReason && s.attempt === e.attempt ? `: ${s.judgeReason}` : ''}`,
+            `Passed ${e.key}${s?.judgeReason && s.attempt === e.attempt ? `: ${s.judgeReason}` : ''}`,
           );
         } else if (e.status === 'failed') {
           say(
             e,
             'judge',
             'Judge',
-            `✖ ${e.key}${s?.judgeReason || s?.error ? `: ${s?.judgeReason || s?.error}` : ''}`,
+            `Failed ${e.key}${s?.judgeReason || s?.error ? `: ${s?.judgeReason || s?.error}` : ''}`,
           );
         }
         break;
@@ -101,7 +103,7 @@ export function meetingLines(
           e,
           'agent',
           who(e.stepId),
-          `→ ${e.tool} ${e.summary}${e.autoApproved ? ' ⚡' : ''}`,
+          `${e.tool} ${clip(e.summary, 140)}${e.autoApproved ? ' (auto-approved)' : ''}`,
           true,
         );
         break;
@@ -118,7 +120,7 @@ export function meetingLines(
         say(e, 'system', 'Gantrix', `Budget exceeded (${e.limit}): ${e.detail}`);
         break;
       case 'user.message':
-        say(e, 'you', e.stepId ? `You → ${who(e.stepId)}` : 'You → everyone', e.text);
+        say(e, 'you', e.stepId ? `You to ${who(e.stepId)}` : 'You to everyone', e.text);
         break;
       case 'user.message_delivered':
         say(e, 'agent', who(e.stepId), 'Read your note.', true);
@@ -133,17 +135,22 @@ const OPEN_STEP = new Set(['pending', 'queued', 'running', 'judging', 'awaiting_
 function Composer({
   task,
   agentNames,
+  to,
+  setTo,
 }: {
   task: TaskDetailDto;
   agentNames: Map<string, { name: string }>;
+  to: string;
+  setTo: (stepId: string) => void;
 }) {
   const [text, setText] = useState('');
-  const [to, setTo] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const open = task.steps.filter((s) => OPEN_STEP.has(s.status));
   if (isTerminal(task.status)) {
-    return <p className="muted small">The task has finished. Start a new task to keep going.</p>;
+    return (
+      <p className="muted small">This project has finished. Start a new project to keep going.</p>
+    );
   }
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -159,8 +166,11 @@ function Composer({
   };
   return (
     <form className="composer" onSubmit={(e) => void send(e)}>
-      <select value={to} onChange={(e) => setTo(e.target.value)} aria-label="Send to">
-        <option value="">Everyone (replans after running steps)</option>
+      <label className="sr-only" htmlFor="chat-to">
+        Send to
+      </label>
+      <select id="chat-to" value={to} onChange={(e) => setTo(e.target.value)}>
+        <option value="">Everyone (the plan changes after running tasks finish)</option>
         {open.map((s) => (
           <option key={s.id} value={s.id}>
             {(s.agentId && agentNames.get(s.agentId)?.name) || 'agent'} · {s.key} ({label(s.status)}
@@ -168,7 +178,11 @@ function Composer({
           </option>
         ))}
       </select>
+      <label className="sr-only" htmlFor="chat-text">
+        Message
+      </label>
       <textarea
+        id="chat-text"
         rows={2}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -181,39 +195,58 @@ function Composer({
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send(e);
         }}
       />
-      <button type="submit" className="primary" disabled={busy || !text.trim()}>
-        {busy ? 'Sending…' : 'Send'}
-      </button>
+      <div className="composer-foot">
+        <span className="muted small">Ctrl or Cmd + Enter sends</span>
+        <button type="submit" className="primary" disabled={busy || !text.trim()}>
+          <Icon name="send" size={14} /> {busy ? 'Sending…' : 'Send'}
+        </button>
+      </div>
       {error && <p className="error">{error}</p>}
     </form>
   );
 }
 
+const SPEAKER_ICON: Record<Exclude<Speaker, 'agent'>, IconName> = {
+  planner: 'list',
+  judge: 'gavel',
+  you: 'chat',
+  system: 'dot',
+};
+
 export function Meeting({
   task,
   events,
   agentNames,
+  target,
+  onTarget,
 }: {
   task: TaskDetailDto;
   events: StreamEvent[];
   agentNames: Map<string, { name: string }>;
+  target: string;
+  onTarget: (stepId: string) => void;
 }) {
   const lines = meetingLines(events, task, agentNames);
   const end = useRef<HTMLLIElement>(null);
   // Follow the conversation as it grows, like a chat.
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when a line arrives
-  useEffect(() => end.current?.scrollIntoView({ block: 'nearest' }), [lines.length]);
+  useEffect(() => {
+    // Braces matter: scrollIntoView returns a Promise in current Chrome, and React would treat a
+    // returned value as the effect's cleanup function.
+    void end.current?.scrollIntoView({ block: 'nearest' });
+  }, [lines.length]);
   return (
     <div className="meeting">
-      <ol className="meeting-lines">
+      <ol className="meeting-lines" aria-live="polite" aria-relevant="additions">
         {lines.map((l) => (
           <li key={l.id} className={`line line-${l.speaker}${l.aside ? ' aside' : ''}`}>
-            <span className="avatar" aria-hidden="true">
-              {l.name
-                .replace(/^You.*/, 'You')
-                .slice(0, 2)
-                .toUpperCase()}
-            </span>
+            {l.speaker === 'agent' ? (
+              <Avatar name={l.name} size={32} />
+            ) : (
+              <span className={`speaker speaker-${l.speaker}`} aria-hidden="true">
+                <Icon name={SPEAKER_ICON[l.speaker]} size={16} />
+              </span>
+            )}
             <div className="bubble">
               <div className="line-head">
                 <b>{l.name}</b>
@@ -225,7 +258,7 @@ export function Meeting({
         ))}
         <li ref={end} className="line-end" />
       </ol>
-      <Composer task={task} agentNames={agentNames} />
+      <Composer task={task} agentNames={agentNames} to={target} setTo={onTarget} />
     </div>
   );
 }

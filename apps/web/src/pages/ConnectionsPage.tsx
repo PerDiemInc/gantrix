@@ -33,7 +33,7 @@ function TestButton({ c }: { c: ConnectionDto }) {
       `/api/connections/${c.id}/test`,
       { model },
     );
-    setResult(r.ok ? `✔ "${r.reply}" in ${r.ms} ms` : `✖ ${r.error}`);
+    setResult(r.ok ? `OK: "${r.reply}" in ${r.ms} ms` : `Failed: ${r.error}`);
     setBusy(false);
   };
   return (
@@ -47,7 +47,9 @@ function TestButton({ c }: { c: ConnectionDto }) {
       >
         {busy ? 'Testing…' : 'Test'}
       </button>
-      {result && <span className={result.startsWith('✔') ? 'small' : 'error small'}>{result}</span>}
+      {result && (
+        <span className={result.startsWith('OK') ? 'small' : 'error small'}>{result}</span>
+      )}
     </div>
   );
 }

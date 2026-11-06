@@ -1,14 +1,15 @@
 import type { ApprovalListItem } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, api, getToken, setToken, subscribe } from './api.ts';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { useRoute } from './hooks.ts';
 import { AgentsPage } from './pages/AgentsPage.tsx';
 import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
 import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
+import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
-import { TaskPage } from './pages/TaskPage.tsx';
-import { TasksPage } from './pages/TasksPage.tsx';
+import { ProjectPage } from './pages/TaskPage.tsx';
 
 function TokenGate({ onSaved, rejected }: { onSaved: () => void; rejected: boolean }) {
   const [value, setValue] = useState('');
@@ -65,17 +66,17 @@ export function App() {
   if (state === 'checking') return null;
 
   const nav = [
-    ['tasks', 'Tasks'],
+    ['projects', 'Projects'],
     ['agents', 'Agents'],
     ['skills', 'Skills'],
     ['connections', 'Connections'],
     ['approvals', 'Approvals'],
   ] as const;
-  const current = route.page === 'task' || route.page === 'logs' ? 'tasks' : route.page;
+  const current = route.page === 'project' || route.page === 'logs' ? 'projects' : route.page;
   return (
     <>
       <nav className="top">
-        <a href="#/tasks" className="brand">
+        <a href="#/projects" className="brand">
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
             <rect x="1" y="3" width="9" height="3" rx="1" className="b1" />
             <rect x="5" y="7" width="10" height="3" rx="1" className="b2" />
@@ -101,15 +102,17 @@ export function App() {
         </button>
       </nav>
       <main>
-        {route.page === 'tasks' && <TasksPage />}
-        {route.page === 'task' && <TaskPage id={route.id} />}
-        {route.page === 'logs' && (
-          <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />
-        )}
-        {route.page === 'agents' && <AgentsPage />}
-        {route.page === 'skills' && <SkillsPage />}
-        {route.page === 'connections' && <ConnectionsPage />}
-        {route.page === 'approvals' && <ApprovalsPage />}
+        <ErrorBoundary resetKey={location.hash}>
+          {route.page === 'projects' && <ProjectsPage />}
+          {route.page === 'project' && <ProjectPage id={route.id} />}
+          {route.page === 'logs' && (
+            <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />
+          )}
+          {route.page === 'agents' && <AgentsPage />}
+          {route.page === 'skills' && <SkillsPage />}
+          {route.page === 'connections' && <ConnectionsPage />}
+          {route.page === 'approvals' && <ApprovalsPage />}
+        </ErrorBoundary>
       </main>
     </>
   );

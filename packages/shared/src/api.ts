@@ -52,6 +52,13 @@ export interface TaskDto {
 
 export interface TaskListItem extends TaskDto {
   stepCounts: Partial<Record<StepStatus, number>>;
+  /** Every agent with a task in the current plan, and what it is doing now. */
+  team: { agentId: string; state: 'working' | 'waiting' | 'queued' | 'done' | 'idle' }[];
+  /** Tasks running, being judged, waiting for approval or queued, oldest first. */
+  active: { id: string; key: string; title: string; agentId: string | null; status: StepStatus }[];
+  pendingApprovals: number;
+  /** The newest event, for the "now" line on the project card. */
+  lastEvent: StreamEvent | null;
 }
 
 export interface PlanDto {

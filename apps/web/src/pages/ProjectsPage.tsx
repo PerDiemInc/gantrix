@@ -1,0 +1,262 @@
+import { isTerminal, type TaskDto, type TaskListItem } from '@gantrix/shared';
+import { type FormEvent, useState } from 'react';
+import { api } from '../api.ts';
+import { Icon } from '../components/Icon.tsx';
+import { Avatar, nowText, StatusPill, TaskProgress } from '../components/ui.tsx';
+import { ago, duration, label } from '../format.ts';
+import { go, useAgents, useLive } from '../hooks.ts';
+
+function NewProject({ onClose }: { onClose: () => void }) {
+  const [goal, setGoal] = useState('');
+  const [minutes, setMinutes] = useState('');
+  const [approveAll, setApproveAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const task = await api.post<TaskDto>('/api/tasks', {
+        goal,
+        budget: minutes ? { maxMinutes: Number(minutes) } : {},
+        ...(approveAll ? { approveAll: true } : {}),
+      });
+      go(`/projects/${task.id}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="card new-project" onSubmit={(e) => void submit(e)}>
+      <div className="card-head">
+        <h2>New project</h2>
+        <button type="button" className="ghost small" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <label>
+        Goal
+        <textarea
+          value={goal}
+          onChange={(e) => setGoal(e.target.value)}
+          placeholder="Plan the v2 launch: a PRD, a build estimate, a launch post and a deck"
+          rows={3}
+          required
+          // biome-ignore lint/a11y/noAutofocus: the form opens because the user asked for it
+          autoFocus
+        />
+        <span className="muted small">
+          The planner splits it into tasks and gives each one to the agent that fits.
+        </span>
+      </label>
+      <div className="row-actions">
+        <label className="inline">
+          Time budget
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            placeholder="60"
+          />
+          min
+        </label>
+        <label className="inline god-mode">
+          <input
+            type="checkbox"
+            checked={approveAll}
+            onChange={(e) => setApproveAll(e.target.checked)}
+          />
+          <Icon name="bolt" />
+          God mode
+        </label>
+        <button type="submit" className="primary" disabled={busy || !goal.trim()}>
+          {busy ? 'Starting…' : 'Start project'}
+        </button>
+      </div>
+      {approveAll && (
+        <p className="warning" role="note">
+          <Icon name="alert" /> Every tool call runs without asking, including shell commands, web
+          requests and emails. Use it only for goals and skills you trust.
+        </p>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+function ProjectCard({ p, agents }: { p: TaskListItem; agents: Map<string, { name: string }> }) {
+  const name = (agentId: string | null) => (agentId && agents.get(agentId)?.name) || 'agent';
+  const stepAgent = new Map(p.active.map((s) => [s.id, name(s.agentId)]));
+  const live = !isTerminal(p.status);
+  const end = p.finishedAt ? Date.parse(p.finishedAt) : Date.now();
+  const working = p.active.filter((s) => s.status !== 'queued');
+  const queued = p.active.filter((s) => s.status === 'queued');
+  return (
+    <li className={`project${p.pendingApprovals ? ' needs-you' : ''}`}>
+      <a className="project-link" href={`#/projects/${p.id}`}>
+        <div className="project-head">
+          <StatusPill status={p.status} />
+          {p.approveAll && (
+            <span className="pill god" title="Tool calls run without asking">
+              <Icon name="bolt" size={12} />
+              god mode
+            </span>
+          )}
+          <span className="muted small push">{ago(p.createdAt)}</span>
+        </div>
+        <h3 className="project-goal" title={p.goal}>
+          {p.goal}
+        </h3>
+        <TaskProgress counts={p.stepCounts} />
+        {p.team.length > 0 && (
+          <ul className="team" aria-label="Agents on this project">
+            {p.team.map((t) => (
+              <li key={t.agentId}>
+                <Avatar name={name(t.agentId)} state={t.state} size={28} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="now" aria-live="off">
+          <span className="now-label">{live ? 'Now' : 'Last'}</span>
+          {working.length ? (
+            <ul>
+              {working.slice(0, 3).map((s) => (
+                <li key={s.id}>
+                  <b>{name(s.agentId)}</b>{' '}
+                  {s.status === 'awaiting_approval' ? 'waits for you on' : label(s.status)}{' '}
+                  <span className="mono">{s.key}</span>
+                </li>
+              ))}
+              {working.length > 3 && <li className="muted">and {working.length - 3} more</li>}
+            </ul>
+          ) : queued.length ? (
+            <p>
+              Up next: <b>{name(queued[0]?.agentId ?? null)}</b> on{' '}
+              <span className="mono">{queued[0]?.key}</span>
+              {queued.length > 1 ? ` and ${queued.length - 1} more` : ''}
+            </p>
+          ) : (
+            <p>{nowText(p.lastEvent, (id) => stepAgent.get(id) ?? 'An agent')}</p>
+          )}
+        </div>
+        <div className="project-foot muted small">
+          <span>
+            <Icon name="clock" size={12} /> {duration(end - Date.parse(p.startedAt ?? p.createdAt))}
+          </span>
+          <span className="num">{p.tokensUsed.toLocaleString()} tokens</span>
+        </div>
+      </a>
+      {p.pendingApprovals > 0 && (
+        <a className="needs-you-bar" href={`#/projects/${p.id}`}>
+          <Icon name="hand" size={14} />
+          {p.pendingApprovals === 1
+            ? 'An agent needs your approval'
+            : `${p.pendingApprovals} approvals wait for you`}
+        </a>
+      )}
+    </li>
+  );
+}
+
+type Filter = 'all' | 'active' | 'you' | 'done';
+
+export function ProjectsPage() {
+  const { data, error } = useLive(
+    () => api.get<TaskListItem[]>('/api/tasks?limit=100'),
+    '/api/stream',
+    [],
+  );
+  const agents = useAgents();
+  const [creating, setCreating] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const all = data ?? [];
+  const active = all.filter((p) => !isTerminal(p.status));
+  const you = all.filter((p) => p.pendingApprovals > 0 || p.status === 'needs_attention');
+  const done = all.filter((p) => isTerminal(p.status));
+  const shown = { all, active, you, done }[filter];
+  const tabs: [Filter, string, number][] = [
+    ['all', 'All', all.length],
+    ['active', 'Running', active.length],
+    ['you', 'Needs you', you.length],
+    ['done', 'Finished', done.length],
+  ];
+
+  return (
+    <div className="stack">
+      <header className="page-head">
+        <div>
+          <h1>Projects</h1>
+          <p className="muted">
+            Each project is a goal your agents work on together. Open one to follow it and steer it.
+          </p>
+        </div>
+        {!creating && (
+          <button type="button" className="primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" /> New project
+          </button>
+        )}
+      </header>
+
+      {creating && <NewProject onClose={() => setCreating(false)} />}
+
+      <div className="segmented" role="tablist" aria-label="Filter projects">
+        {tabs.map(([key, text, n]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={filter === key}
+            className={filter === key ? 'active' : ''}
+            onClick={() => setFilter(key)}
+          >
+            {text} <span className="count num">{n}</span>
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <p className="error" role="alert">
+          {error.message}
+        </p>
+      )}
+      {!data && !error && (
+        <ul className="projects" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="project skeleton" />
+          ))}
+        </ul>
+      )}
+      {data && !all.length && (
+        <section className="card empty">
+          <img src="/gant.svg" alt="" width="96" height="78" />
+          <h2>No projects yet</h2>
+          <p className="muted">
+            Add agents with skills, or run <code>npm run gantrix -- team add</code> for a ready-made
+            team. Then start your first project.
+          </p>
+          <button type="button" className="primary" onClick={() => setCreating(true)}>
+            <Icon name="plus" /> New project
+          </button>
+        </section>
+      )}
+      {data && all.length > 0 && !shown.length && <p className="muted">Nothing here right now.</p>}
+      {shown.length > 0 && (
+        <ul className="projects">
+          {shown.map((p) => (
+            <ProjectCard key={p.id} p={p} agents={agents} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
