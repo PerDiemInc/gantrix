@@ -1,12 +1,14 @@
 import { CATALOG, findModel, licenseWarning, type MediaKind, type ModelInfo } from './registry.ts';
+import type { VideoQuality } from './types.ts';
 
 export interface MediaConfig {
   models: ModelInfo[];
   defaults: Partial<Record<MediaKind, string>>;
-  ltxUrl?: string;
-  ltxToken?: string;
   comfyUrl: string;
-  busyWaitMs: number;
+  /** Free ComfyUI's models from RAM after each job (MEDIA_UNLOAD_AFTER, default true). */
+  unloadAfter: boolean;
+  /** Default video quality (MEDIA_VIDEO_QUALITY): fast, standard or high. */
+  videoQuality: VideoQuality;
 }
 
 /** Reads the skill's MCP env. Fails fast with the list of known models if an id is unknown. */
@@ -48,16 +50,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): MediaConfig {
     const chosen = wanted ?? enabled[0]?.id;
     if (chosen) defaults[kind] = chosen;
   }
-  const waitMinutes = Number(env.MEDIA_BUSY_WAIT_MINUTES ?? 30);
-  if (!Number.isFinite(waitMinutes) || waitMinutes < 0) {
-    throw new Error('MEDIA_BUSY_WAIT_MINUTES must be a number of minutes.');
+  const unload = (env.MEDIA_UNLOAD_AFTER ?? 'true').toLowerCase();
+  if (!['true', 'false'].includes(unload))
+    throw new Error('MEDIA_UNLOAD_AFTER must be true or false.');
+  const quality = (env.MEDIA_VIDEO_QUALITY ?? 'standard').toLowerCase();
+  if (quality !== 'fast' && quality !== 'standard' && quality !== 'high') {
+    throw new Error('MEDIA_VIDEO_QUALITY must be fast, standard or high.');
   }
   return {
     models,
     defaults,
-    ...(env.LTX_URL ? { ltxUrl: env.LTX_URL.replace(/\/$/, '') } : {}),
-    ...(env.LTX_TOKEN ? { ltxToken: env.LTX_TOKEN } : {}),
     comfyUrl: (env.COMFYUI_URL ?? 'http://127.0.0.1:8188').replace(/\/$/, ''),
-    busyWaitMs: waitMinutes * 60_000,
+    unloadAfter: unload === 'true',
+    videoQuality: quality,
   };
 }

@@ -1,5 +1,5 @@
 export type MediaKind = 'image' | 'video';
-export type ProviderId = 'ltx-desktop' | 'comfyui';
+export type ProviderId = 'comfyui';
 
 export interface ModelInfo {
   id: string;
@@ -15,31 +15,20 @@ export interface ModelInfo {
   licenseUrl: string;
 }
 
-/** Every model Gantrix knows how to run, with its licence shown to agents. */
+/**
+ * Every model Gantrix knows how to run, all through a local ComfyUI. Both are Apache-2.0 today;
+ * a non-OSI model added here gets the warning and needs MEDIA_ACCEPT_LICENSES to be enabled.
+ */
 export const CATALOG: readonly ModelInfo[] = [
   {
     id: 'z-image-turbo',
     kind: 'image',
-    provider: 'ltx-desktop',
+    provider: 'comfyui',
     license: 'Apache-2.0',
     osiOpenSource: true,
     inputs: ['text', 'image'],
-    notes:
-      'Stills up to 2048 px. About 50 s for 1024x1024 on an M5 Pro, first call (model load included).',
+    notes: 'Z-Image-Turbo, 8 steps. Stills up to 2048 px.',
     licenseUrl: 'https://huggingface.co/Tongyi-MAI/Z-Image-Turbo',
-  },
-  {
-    id: 'ltx-2.5',
-    kind: 'video',
-    provider: 'ltx-desktop',
-    license: 'LTX-2 Community License',
-    osiOpenSource: false,
-    inputs: ['text', 'image'],
-    notes:
-      'Clips of 2-20 s, with sound. On an M5 Pro a 4 s 720p clip took about 4.5 min from an image and 6 min from text.',
-    usageLimit:
-      'Free for organisations under $10M annual revenue; above that you need a paid licence from Lightricks. It also restricts products that compete with Lightricks.',
-    licenseUrl: 'https://static.lightricks.com/legal/ltx-2-open-weights-license-0.X.pdf',
   },
   {
     id: 'wan-2.2-5b',
@@ -48,7 +37,8 @@ export const CATALOG: readonly ModelInfo[] = [
     license: 'Apache-2.0',
     osiOpenSource: true,
     inputs: ['text', 'image'],
-    notes: 'Wan2.2-TI2V-5B through a local ComfyUI.',
+    notes:
+      'Wan2.2-TI2V-5B, 24 fps, no sound. A 2 s clip on a 48 GB M5 Pro: fast 640x352 ~1.5 min, standard 832x480 ~3.5 min, high 1280x704 ~12 min.',
     licenseUrl: 'https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B',
   },
 ];

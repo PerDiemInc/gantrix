@@ -25,7 +25,10 @@ export interface VideoRequest {
   camera: string;
   seed?: number;
   negativePrompt?: string;
+  quality: VideoQuality;
 }
+
+export type VideoQuality = 'fast' | 'standard' | 'high';
 
 export interface ImageResult {
   width: number;
