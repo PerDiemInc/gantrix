@@ -7,6 +7,7 @@ import {
 } from '@gantrix/shared';
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import { FilePreview, previewKind } from '../components/FilePreview.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
@@ -186,18 +187,11 @@ export function StepPanel({ step, agentName }: { step: StepDto; agentName: strin
 
 export function Files({ taskId, version }: { taskId: string; version: number }) {
   const [files, setFiles] = useState<string[]>([]);
-  const [open, setOpen] = useState<{ path: string; text: string } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: refresh when the task changes
   useEffect(() => {
     api.get<{ files: string[] }>(`/api/tasks/${taskId}/files`).then((r) => setFiles(r.files));
   }, [taskId, version]);
-  const show = async (path: string) =>
-    setOpen({
-      path,
-      text: await api.get<string>(
-        `/api/tasks/${taskId}/files/content?path=${encodeURIComponent(path)}`,
-      ),
-    });
   if (!files.length) return <p className="muted">No files yet.</p>;
   return (
     <div className="files">
@@ -209,16 +203,17 @@ export function Files({ taskId, version }: { taskId: string; version: number }) 
             ) : (
               <button
                 type="button"
-                className={`link mono ${open?.path === f ? 'active' : ''}`}
-                onClick={() => void show(f)}
+                className={`link mono ${open === f ? 'active' : ''}`}
+                aria-pressed={open === f}
+                onClick={() => setOpen(open === f ? null : f)}
               >
-                {f}
+                <Icon name={previewKind(f) === 'text' ? 'file' : 'play'} size={12} /> {f}
               </button>
             )}
           </li>
         ))}
       </ul>
-      {open && <pre className="output">{open.text}</pre>}
+      {open && <FilePreview taskId={taskId} path={open} />}
     </div>
   );
 }

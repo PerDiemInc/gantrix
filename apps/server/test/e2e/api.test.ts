@@ -185,6 +185,25 @@ describe('api', () => {
     });
   });
 
+  it('returns workspace images as base64 for previews, and nothing else', async () => {
+    const task = await createTask(e.deps, { goal: 'Preview files' });
+    const { writeFile } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    await writeFile(join(task.workspacePath, 'dot.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await writeFile(join(task.workspacePath, 'notes.md'), '# Hi');
+    const url = (path: string, enc = '') =>
+      `/api/tasks/${task.id}/files/content?path=${path}${enc ? `&encoding=${enc}` : ''}`;
+    const img = await app.inject({ url: url('dot.png', 'base64'), headers: auth });
+    expect(img.json()).toEqual({ mime: 'image/png', base64: 'iVBORw==' });
+    expect((await app.inject({ url: url('notes.md', 'base64'), headers: auth })).statusCode).toBe(
+      415,
+    );
+    expect((await app.inject({ url: url('notes.md'), headers: auth })).body).toBe('# Hi');
+    expect((await app.inject({ url: url('../x.png', 'base64'), headers: auth })).statusCode).toBe(
+      400,
+    );
+  });
+
   it('creates a task with a merged budget and returns its detail', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -1446,3 +1446,35 @@ a.button.ghost {
   align-items: center;
   gap: 8px;
 }
+
+/* file previews */
+.preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.small-seg button {
+  padding: 4px 10px;
+  min-height: 32px;
+}
+.preview-frame {
+  width: 100%;
+  height: min(70dvh, 720px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+.preview-image {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  justify-self: start;
+}
