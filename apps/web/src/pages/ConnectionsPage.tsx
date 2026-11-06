@@ -185,8 +185,8 @@ export function ConnectionsPage() {
         )}
         {form.provider === 'claude-code' && (
           <p className="muted small">
-            Runs claude -p in each task's folder with your Claude login. It gets file tools only,
-            plus the shell and the web in god mode.
+            Runs claude -p in each project's folder with your Claude login. It gets file tools, plus
+            the shell and the web unless the project asks first.
           </p>
         )}
         <button type="submit" className="primary">

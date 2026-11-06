@@ -221,7 +221,7 @@ other existing agent is left as it is. The skills are plain folders in
 `examples/skills/exec-*`; copy one, edit it, bump its version and install your own.
 
 **Things to know:**
-- Shell commands from the CTO and CISO always wait for your approval.
+- The CTO and CISO can run shell commands. Use "Ask me before risky tools" to approve each one.
 - The CISO only tests what the task names as yours. Anything else goes under "Not tested".
 - The skills are written for small local models. Ask for one deliverable per step.
 
@@ -239,7 +239,7 @@ npm run slides:auth
 
 Gantrix asks Google only for `drive.file` access. It can see and edit the decks it creates,
 never the rest of your Drive. The sign-in token is saved in `~/.gantrix/google/token.json`
-(chmod 600). Creating a deck asks for your approval; adding slides to it doesn't. Until you
+(chmod 600). Until you
 connect it, the designer writes the deck as an outline file instead.
 
 Business cards and flyers come out as print-ready HTML with bleed: open them in a browser, then
@@ -258,7 +258,8 @@ ENV
 chmod 600 ~/.gantrix/outreach.env
 ```
 
-- Every email waits for your approval, one recipient at a time.
+- Emails go out without asking unless the project asks first. Then each one waits for your
+  approval, one recipient at a time.
 - Each one gets an unsubscribe line, your postal address and a `List-Unsubscribe` header
   (US CAN-SPAM). Check the rules where your recipients live, such as GDPR or CASL.
 - `OUTREACH_DAILY_LIMIT` (default 25) caps sends per day.
@@ -292,7 +293,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 **How it works:**
 - The skills start the `gantrix-media-mcp` server. It gives agents `generate_image`,
   `generate_video` and `list_media_models`, and saves the files in the task's folder.
-- Images run without asking. Each video clip asks for your approval, because it takes minutes.
+- Image and video calls run without asking unless the project asks first. A video clip takes minutes.
 - You choose the models per skill with `MEDIA_MODELS`. The agent picks among them per call.
 
 **Settings** (in a skill's `mcp-servers` → `env`):
@@ -317,16 +318,16 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 
 ## Approvals and safety
 
-- When a step needs approval, only that step pauses. Decide on the dashboard's Approvals page,
-  in `gantrix tail <task>` (it asks `Approve? [y/N]`), or with `gantrix approve <id>` /
-  `gantrix deny <id>`.
-- **God mode** skips every approval for one task: `gantrix run --approve-all "…"`, or tick
-  ⚡ God mode on the dashboard. Shell commands, web requests, MCP tools and emails then run
-  without asking. Each such call is still logged and marked ⚡ auto-approved. To make it the
-  default for every task, set `GANTRIX_APPROVE_ALL=true`. It's off by default; use it only with
-  goals and skills you trust.
-- **`shell` is not sandboxed.** It can do anything your user account can. Read every command
-  before you approve it.
+- **By default, agents don't ask.** Every tool call runs without an approval, including shell
+  commands, web requests, MCP tools and the CRO's emails. Each call is still logged, so you can
+  see it in the chat and on the Logs page.
+- **Turn approvals on for a project** with "Ask me before risky tools" on the dashboard, or
+  `gantrix run --ask "…"`. Then shell, web, MCP and email calls wait for you, and only that step
+  pauses. Decide with the Approve and Deny buttons on the project page, on the Approvals page,
+  in `gantrix tail <task>`, or with `gantrix approve <id>` / `gantrix deny <id>`.
+- To make every new project ask first, set `GANTRIX_APPROVE_ALL=false`.
+- **`shell` is not sandboxed.** It can do anything your user account can. Without approvals,
+  give agents shell only for goals and skills you trust.
 - Web pages and MCP results can contain text that tries to steer the agent. Approval is where
   you catch that.
 - The API listens on `127.0.0.1` only and needs the token on every request.
@@ -340,7 +341,7 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connectio
 gantrix connections [list | add <name> -p ollama|openai|anthropic|claude-code [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
-gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
+gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
 gantrix approvals | approve <id> | deny <id>
@@ -396,9 +397,9 @@ npm run gantrix -- connections test claude-local sonnet
 npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -m sonnet
 ```
 
-- Gantrix can't see or approve the tool calls Claude Code makes inside a run. So by default it
-  gets file tools only (Read, Write, Edit, Glob, Grep), and Bash and web access are blocked.
-  In god mode it also gets Bash, WebFetch and WebSearch.
+- Gantrix can't see or approve the tool calls Claude Code makes inside a run. On projects that
+  don't ask first (the default), it gets file tools plus Bash, WebFetch and WebSearch. On
+  projects that ask first, it gets file tools only (Read, Write, Edit, Glob, Grep).
 - Each run is started without MCP servers and without a saved session. It doesn't get the
   Gantrix token or database URLs in its environment.
 - The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
@@ -433,7 +434,7 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `GANTRIX_LLM_CONCURRENCY` | `2` | Model calls at once per worker |
 | `GANTRIX_WORKSPACES_DIR`, `GANTRIX_SKILLS_DIR` | `~/.gantrix/…` | Where task files and skills live |
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |
-| `GANTRIX_APPROVE_ALL` | `false` | God mode for every new task (tool calls run without asking) |
+| `GANTRIX_APPROVE_ALL` | `true` | Tool calls run without asking; `false` makes every new project ask first |
 
 ## Development
 

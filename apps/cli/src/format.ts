@@ -99,7 +99,7 @@ export function describeEvent(e: StreamEvent, stepKeys: Map<string, string>): st
     case 'step.status':
       return `${at} ${stepIcon(e.status)} ${e.key} ${e.status.replace('_', ' ')}${e.attempt > 1 ? ` (try ${e.attempt})` : ''}`;
     case 'step.tool_call':
-      return `${at}   ${paint('gray', `↳ ${stepKeys.get(e.stepId) ?? 'step'}: ${e.tool} ${e.summary}`)}${e.autoApproved ? paint('red', ' ⚡ auto-approved') : ''}`;
+      return `${at}   ${paint('gray', `↳ ${stepKeys.get(e.stepId) ?? 'step'}: ${e.tool} ${e.summary}`)}${e.autoApproved ? paint('gray', ' (no approval needed)') : ''}`;
     case 'approval.requested':
       return `${at} ${paint('yellow', `✋ ${stepKeys.get(e.stepId) ?? 'a step'} wants to run ${e.tool}`)}`;
     case 'approval.decided':

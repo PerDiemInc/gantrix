@@ -103,7 +103,7 @@ export function meetingLines(
           e,
           'agent',
           who(e.stepId),
-          `${e.tool} ${clip(e.summary, 140)}${e.autoApproved ? ' (auto-approved)' : ''}`,
+          `${e.tool} ${clip(e.summary, 140)}${e.autoApproved ? '' : ''}`,
           true,
         );
         break;

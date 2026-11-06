@@ -22,8 +22,9 @@ const ConfigSchema = z.object({
   GANTRIX_MAX_REPLANS: positiveInt(5),
   GANTRIX_MAX_TOKENS: positiveInt(200_000),
   GANTRIX_MAX_MINUTES: positiveInt(60),
-  // God mode for every new task unless the request says otherwise. Off by default.
-  GANTRIX_APPROVE_ALL: z.stringbool().default(false),
+  // Tool calls run without asking unless a task turns approvals on ("ask first"). Set false
+  // to make every new task ask before shell, web, MCP and email tools.
+  GANTRIX_APPROVE_ALL: z.stringbool().default(true),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises';
+import { extname } from 'node:path';
 import type { Budget, StepConversationDto, StreamEvent, TaskListItem } from '@gantrix/shared';
 import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
@@ -14,6 +15,16 @@ import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
 const MAX_FILE_BYTES = 256 * 1024;
+// Images for previews come as base64 JSON; they're bigger than text files.
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+};
 
 const CreateTask = z.object({
   goal: z.string().trim().min(1).max(4_000),
@@ -37,7 +48,10 @@ const EventsPage = z.object({
   after: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(1_000).default(500),
 });
-const FileQuery = z.object({ path: z.string().min(1) });
+const FileQuery = z.object({
+  path: z.string().min(1),
+  encoding: z.enum(['text', 'base64']).default('text'),
+});
 const StepParams = z.object({ id: z.uuid(), stepId: z.uuid() });
 const MessageBody = z.object({
   text: z.string().trim().min(1).max(4_000),
@@ -228,12 +242,20 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
 
   app.get('/api/tasks/:id/files/content', async (request, reply) => {
     const task = await getTask(parse(IdParams, request.params).id);
-    const { path } = parse(FileQuery, request.query);
+    const { path, encoding } = parse(FileQuery, request.query);
     const file = await resolveInWorkspace(task.workspacePath, path).catch((error: Error) => {
       throw new HttpError(400, error.message);
     });
     const info = await stat(file).catch(() => null);
     if (!info?.isFile()) throw notFound('File');
+    if (encoding === 'base64') {
+      const mime = IMAGE_TYPES[extname(file).toLowerCase()];
+      if (!mime) throw new HttpError(415, 'Only images can be fetched as base64.');
+      if (info.size > MAX_IMAGE_BYTES) {
+        throw new HttpError(413, `Image is larger than ${MAX_IMAGE_BYTES} bytes.`);
+      }
+      return { mime, base64: (await readFile(file)).toString('base64') };
+    }
     if (info.size > MAX_FILE_BYTES)
       throw new HttpError(413, `File is larger than ${MAX_FILE_BYTES} bytes.`);
     return reply.type('text/plain; charset=utf-8').send(await readFile(file, 'utf8'));

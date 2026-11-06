@@ -55,6 +55,8 @@ export async function startEngine() {
     REDIS_URL,
     OLLAMA_BASE_URL: fake.url,
     GANTRIX_DEFAULT_MODEL: 'fake',
+    // The engine tests exercise approvals, so new tasks ask unless a test says otherwise.
+    GANTRIX_APPROVE_ALL: 'false',
     GANTRIX_TOKEN: 't'.repeat(32),
     GANTRIX_WORKSPACES_DIR: join(dir, 'workspaces'),
     GANTRIX_SKILLS_DIR: join(dir, 'skills'),
