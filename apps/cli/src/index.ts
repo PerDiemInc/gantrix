@@ -112,7 +112,11 @@ program
   .option('--max-minutes <n>', 'time budget')
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
-  .option('--approve-all', 'god mode: run every tool call, including shell, without asking')
+  .option('--ask', 'ask before shell, web, MCP and email tools (approvals on)')
+  .option(
+    '--approve-all',
+    'run every tool call without asking (the default unless the server says otherwise)',
+  )
   .option('--detach', "don't follow the task")
   .action(run((goal: string[], o) => cmd.runTask(client, goal.join(' '), o)));
 program

@@ -104,7 +104,7 @@
     <div class="facts">
       <div><b>Parallel by default</b><span>Steps start the moment their dependencies finish.</span></div>
       <div><b>Checked, then retried</b><span>A judge reviews each step; rejected work retries with feedback.</span></div>
-      <div><b>You approve the risky part</b><span>Shell and web calls pause until you say yes.</span></div>
+      <div><b>Approvals when you want them</b><span>Agents run on their own; turn on Ask first and risky calls wait for you.</span></div>
       <div><b>Local and open source</b><span>Ollama, Postgres, Valkey. MIT licensed.</span></div>
     </div>
 
@@ -235,7 +235,7 @@ of every source next to the notes you take.</pre></div>
           <tbody>
             <tr><td><code>cto</code></td><td>Architecture decisions, code reviews, build plans and technical risks</td></tr>
             <tr><td><code>cmo</code></td><td>Positioning, campaign plans, launch posts and SEO briefs</td></tr>
-            <tr><td><code>cro</code></td><td>Lead lists, cold email and SMS drafts, and one-to-one email you approve</td></tr>
+            <tr><td><code>cro</code></td><td>Lead lists, cold email and SMS drafts, and one-to-one email</td></tr>
             <tr><td><code>ciso</code></td><td>Threat models, code and dependency audits, tests of systems you own</td></tr>
             <tr><td><code>cpo</code></td><td>PRDs, priorities and milestone timelines with owners and dates</td></tr>
             <tr><td><code>designer</code></td><td>Mobile apps, websites, dashboards, marketing materials, business cards and Google Slides decks</td></tr>
@@ -243,7 +243,7 @@ of every source next to the notes you take.</pre></div>
         </table>
       </div>
       <ul class="safety">
-        <li><b>Email waits for you.</b> Every send by the CRO needs your approval, and each one carries an unsubscribe line and your postal address.</li>
+        <li><b>Email with guardrails.</b> Every CRO email carries an unsubscribe line and your postal address. Turn on Ask first to approve each send.</li>
         <li><b>No spam by design.</b> There's a daily cap, at most three emails per person, a do-not-contact list, and SMS stays draft-only.</li>
         <li><b>Decks land in Google Slides.</b> The designer builds them in your Drive with access only to the decks it creates.</li>
         <li><b>Security stays in scope.</b> The CISO tests only what you name as yours, and every shell command asks first.</li>
@@ -269,7 +269,7 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
           </div>
           <ul class="safety">
             <li><b>You choose the models</b> per skill; agents pick among them per call.</li>
-            <li><b>Video asks first.</b> Each clip takes minutes, so it waits for your approval.</li>
+            <li><b>Video takes minutes.</b> A 2 s clip renders in about 3.5 minutes at standard quality.</li>
             <li><b>RAM is freed after every job.</b> Models unload when nothing is generating.</li>
             <li><b>Not open source? You'll know.</b> Any such model shows a warning with its usage limits and stays off until you opt in.</li>
           </ul>
@@ -292,9 +292,9 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <h2>You stay in the loop</h2>
       <div class="two">
         <ul class="safety">
-          <li><b>Only the step that needs you pauses.</b> Approve or deny on the dashboard, in <code>gantrix tail</code>, or with <code>gantrix approve</code>. The rest of the plan keeps running.</li>
-          <li><b>Shell isn't sandboxed.</b> It can do anything your user account can, so it always asks, and no skill can turn that off; only you can, with god mode. Read every command before you approve it.</li>
-          <li><b>God mode when you want it.</b> <code>--approve-all</code> or the ⚡ toggle lets one task run every tool without asking. It's off by default, and every auto-approved call is still logged.</li>
+          <li><b>Approvals when you want them.</b> Agents run every tool on their own by default. Turn on Ask me before risky tools, or use <code>--ask</code>, and shell, web, MCP and email calls wait; only that step pauses.</li>
+          <li><b>Shell isn't sandboxed.</b> It can do anything your user account can. Without approvals, give agents shell only for goals and skills you trust.</li>
+          <li><b>Everything is logged.</b> Every tool call shows in the project's chat and Logs page, approved or not.</li>
           <li><b>Web pages can talk back.</b> Fetched text can try to steer an agent. Approval is where you catch it.</li>
         </ul>
         <ul class="safety">
@@ -312,7 +312,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <ul class="safety">
         <li><b>Custom URL and headers.</b> Point a connection at any server and add the headers it needs.</li>
         <li><b>Keys stay in your environment.</b> Write <code>env:OPENAI_API_KEY</code> and the worker reads it when a step runs. The API never returns header values.</li>
-        <li><b>Your Claude Code as an agent.</b> A <code>claude-code</code> connection runs <code>claude -p</code> in the task's folder, with file tools only unless you turn on god mode.</li>
+        <li><b>Your Claude Code as an agent.</b> A <code>claude-code</code> connection runs <code>claude -p</code> in the project's folder; on projects that ask first it gets file tools only.</li>
         <li><b>Cloud is labelled.</b> A connection that leaves your machine is marked cloud, so you know where task content goes.</li>
       </ul>
       <div class="code" style="margin-top:22px"><button class="copy" type="button">Copy</button><pre>npm run gantrix -- connections add claude --provider anthropic --api-key-env ANTHROPIC_API_KEY

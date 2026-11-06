@@ -177,6 +177,7 @@ export async function runTask(
     maxTokens?: string;
     maxReplans?: string;
     approveAll?: boolean;
+    ask?: boolean;
     detach?: boolean;
   },
 ): Promise<void> {
@@ -185,17 +186,21 @@ export async function runTask(
     ...(o.maxTokens ? { maxTokens: Number(o.maxTokens) } : {}),
     ...(o.maxReplans ? { maxReplans: Number(o.maxReplans) } : {}),
   };
+  if (o.ask && o.approveAll) throw new Error('Use --ask or --approve-all, not both.');
   const task = await client.post<TaskDto>('/api/tasks', {
     goal,
     budget,
-    ...(o.approveAll ? { approveAll: true } : {}),
+    ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });
   console.log(`Task ${paint('bold', short(task.id))} created. Workspace: ${task.workspacePath}`);
-  if (task.approveAll) {
-    console.log(
-      paint('red', '⚡ God mode: every tool call, including shell, runs without asking.'),
-    );
-  }
+  console.log(
+    task.approveAll
+      ? paint(
+          'gray',
+          'Tools run without asking. Add --ask to approve shell, web, MCP and email calls.',
+        )
+      : paint('yellow', 'Ask first: shell, web, MCP and email calls wait for your approval.'),
+  );
   if (!o.detach) await tail(client, task.id);
 }
 

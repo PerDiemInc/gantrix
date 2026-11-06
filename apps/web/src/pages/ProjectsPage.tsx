@@ -9,7 +9,8 @@ import { go, useAgents, useLive } from '../hooks.ts';
 function NewProject({ onClose }: { onClose: () => void }) {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('');
-  const [approveAll, setApproveAll] = useState(false);
+  // Approvals are off by default; "Ask first" turns them on for this project.
+  const [askFirst, setAskFirst] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (e: FormEvent) => {
@@ -20,7 +21,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
       const task = await api.post<TaskDto>('/api/tasks', {
         goal,
         budget: minutes ? { maxMinutes: Number(minutes) } : {},
-        ...(approveAll ? { approveAll: true } : {}),
+        approveAll: !askFirst,
       });
       go(`/projects/${task.id}`);
     } catch (err) {
@@ -64,25 +65,25 @@ function NewProject({ onClose }: { onClose: () => void }) {
           />
           min
         </label>
-        <label className="inline god-mode">
+        <label className="inline switch" title="Shell, web, MCP and email tools wait for your OK">
           <input
             type="checkbox"
-            checked={approveAll}
-            onChange={(e) => setApproveAll(e.target.checked)}
+            role="switch"
+            checked={askFirst}
+            onChange={(e) => setAskFirst(e.target.checked)}
           />
-          <Icon name="bolt" />
-          God mode
+          <Icon name="hand" />
+          Ask me before risky tools
         </label>
         <button type="submit" className="primary" disabled={busy || !goal.trim()}>
           {busy ? 'Starting…' : 'Start project'}
         </button>
       </div>
-      {approveAll && (
-        <p className="warning" role="note">
-          <Icon name="alert" /> Every tool call runs without asking, including shell commands, web
-          requests and emails. Use it only for goals and skills you trust.
-        </p>
-      )}
+      <p className="muted small" role="note">
+        {askFirst
+          ? 'Shell commands, web requests, MCP tools and emails wait for your approval on this project.'
+          : 'Agents run every tool without asking, including shell commands (not sandboxed) and emails. Turn on "Ask me" to approve them one by one.'}
+      </p>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -104,10 +105,10 @@ function ProjectCard({ p, agents }: { p: TaskListItem; agents: Map<string, { nam
       <a className="project-link" href={`#/projects/${p.id}`}>
         <div className="project-head">
           <StatusPill status={p.status} />
-          {p.approveAll && (
-            <span className="pill god" title="Tool calls run without asking">
-              <Icon name="bolt" size={12} />
-              god mode
+          {!p.approveAll && (
+            <span className="pill ask" title="Risky tool calls wait for your approval">
+              <Icon name="hand" size={12} />
+              asks first
             </span>
           )}
           <span className="muted small push">{ago(p.createdAt)}</span>

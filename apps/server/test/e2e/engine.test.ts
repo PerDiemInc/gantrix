@@ -132,9 +132,11 @@ describe('engine', () => {
     ]);
   });
 
-  it('still asks when god mode is off by default', async () => {
+  it("uses the server default when a task doesn't say", async () => {
     const t = await createTask(e.deps, { goal: 'Default task' });
-    expect(t.approveAll).toBe(false);
+    expect(t.approveAll).toBe(false); // the harness sets GANTRIX_APPROVE_ALL=false
+    const t2 = await createTask(e.deps, { goal: 'Ask off', approveAll: true });
+    expect(t2.approveAll).toBe(true);
   });
 
   it("sends an agent's connection headers, reading env: values from the environment", async () => {

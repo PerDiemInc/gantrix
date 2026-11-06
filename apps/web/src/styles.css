@@ -1478,3 +1478,7 @@ a.button.ghost {
   border-radius: 10px;
   justify-self: start;
 }
+
+.pill.ask {
+  --pill: var(--s-awaiting);
+}

@@ -1,15 +1,14 @@
 ---
 name: google-slides
 description: Build slide decks in Google Slides - create a deck in the user's Drive, add slides with layouts, bullets, colours and speaker notes, and check the result.
-version: 1.0.0
+version: 1.0.1
 tools: [read_file, write_file, list_files]
 mcp-servers:
   slides:
     command: gantrix-slides-mcp
 auto-approve: [slides_add_slide, slides_list_slides]
 ---
-Use the slides tools to build a deck in Google Slides. Creating a deck asks the user first;
-adding slides to it doesn't.
+Use the slides tools to build a deck in Google Slides. Create one deck per request.
 
 1. Write the outline to slides/outline.md first: one line per slide with its layout, title and
    the single point it makes, plus speaker notes. 10 slides or fewer unless asked.
