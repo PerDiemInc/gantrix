@@ -10,36 +10,42 @@ const SKILLS_DIR = fileURLToPath(new URL('../../../examples/skills/', import.met
 export const TEAM = [
   {
     name: 'cto',
+    avatar: 'preset:gant-glasses',
     skills: ['exec-cto'],
     description:
       'CTO: technology and engineering. Architecture decisions, code reviews, build plans and estimates, technical risks. Can run shell commands with approval.',
   },
   {
     name: 'cmo',
+    avatar: 'preset:gant-headset',
     skills: ['exec-cmo'],
     description:
       'CMO: marketing. Positioning, messaging, campaign plans, launch posts, landing-page copy, SEO briefs and competitor comparisons.',
   },
   {
     name: 'cro',
+    avatar: 'preset:gant-crown',
     skills: ['exec-cro'],
     description:
       'CRO: sales and revenue. Ideal-customer profiles, lead lists from public sources, personal cold email and SMS drafts, sends one-to-one email with approval.',
   },
   {
     name: 'ciso',
+    avatar: 'preset:gant-shield',
     skills: ['exec-ciso'],
     description:
       "CISO: security. Threat models, code and dependency audits, config checks and authorized testing of the user's own systems, with a fix plan.",
   },
   {
     name: 'designer',
+    avatar: 'preset:gant-beret',
     skills: ['exec-designer', 'google-slides'],
     description:
       'Designer: mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and slide decks in Google Slides. Briefs, wireframes, design tokens and HTML/CSS mockups, checked for accessibility.',
   },
   {
     name: 'cpo',
+    avatar: 'preset:gant-antenna',
     skills: ['exec-cpo'],
     description:
       'CPO and project manager: product specs (PRDs), priorities, roadmaps, milestone timelines with owners and dates, risks and status updates. Keeps the team aligned.',
@@ -106,6 +112,7 @@ export async function addTeam(
       name: m.name,
       description: m.description,
       skillIds: ids,
+      avatar: m.avatar,
       ...(o.model ? { model: o.model } : {}),
     });
     console.log(`${paint('green', '✔')} ${paint('bold', m.name)} with ${labels.join(', ')}`);

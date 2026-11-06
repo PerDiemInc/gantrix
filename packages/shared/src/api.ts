@@ -19,6 +19,8 @@ export interface AgentDto {
   modelBaseUrl: string | null;
   /** A saved model connection; null = the default (Ollama, or GANTRIX_DEFAULT_CONNECTION). */
   connectionId: string | null;
+  /** "preset:<id>", "initials", a data:image URL, or null for the default picked by name. */
+  avatar: string | null;
   maxConcurrency: number;
   createdAt: string;
   updatedAt: string;

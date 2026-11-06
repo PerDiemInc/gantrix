@@ -5,6 +5,20 @@ import { agentSkills, agents, skills } from '../../db/schema.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
+// Uploaded avatars are resized to 128px in the browser; 200 KB is plenty and keeps rows small.
+const MAX_AVATAR_CHARS = 200_000;
+const Avatar = z.union([
+  z.string().regex(/^preset:[a-z0-9-]{1,32}$/, 'a built-in avatar like preset:gant-blue'),
+  z.literal('initials'),
+  z
+    .string()
+    .max(MAX_AVATAR_CHARS, 'the image is too large; use one under 150 KB')
+    .regex(
+      /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/,
+      'a PNG, JPEG or WebP image',
+    ),
+]);
+
 const AgentFields = z.object({
   name: z
     .string()
@@ -14,6 +28,7 @@ const AgentFields = z.object({
   model: z.string().min(1).nullable(), // null → GANTRIX_DEFAULT_MODEL
   modelBaseUrl: z.url().nullable(), // null → OLLAMA_BASE_URL
   connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
+  avatar: Avatar.nullable(),
   maxConcurrency: z.number().int().min(1).max(16),
   skillIds: z.array(z.uuid()).max(32),
 });

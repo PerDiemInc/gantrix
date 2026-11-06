@@ -69,6 +69,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
           <input
             type="checkbox"
             role="switch"
+            aria-checked={askFirst}
             checked={askFirst}
             onChange={(e) => setAskFirst(e.target.checked)}
           />
@@ -93,7 +94,13 @@ function NewProject({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ProjectCard({ p, agents }: { p: TaskListItem; agents: Map<string, { name: string }> }) {
+function ProjectCard({
+  p,
+  agents,
+}: {
+  p: TaskListItem;
+  agents: Map<string, { name: string; avatar?: string | null }>;
+}) {
   const name = (agentId: string | null) => (agentId && agents.get(agentId)?.name) || 'agent';
   const stepAgent = new Map(p.active.map((s) => [s.id, name(s.agentId)]));
   const live = !isTerminal(p.status);
@@ -121,7 +128,12 @@ function ProjectCard({ p, agents }: { p: TaskListItem; agents: Map<string, { nam
           <ul className="team" aria-label="Agents on this project">
             {p.team.map((t) => (
               <li key={t.agentId}>
-                <Avatar name={name(t.agentId)} state={t.state} size={28} />
+                <Avatar
+                  name={name(t.agentId)}
+                  avatar={agents.get(t.agentId)?.avatar}
+                  state={t.state}
+                  size={28}
+                />
               </li>
             ))}
           </ul>

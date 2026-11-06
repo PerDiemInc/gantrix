@@ -1,6 +1,7 @@
 import type { AgentDto, ConnectionDto, ModelSource, SkillDto } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import { AvatarPicker } from '../components/AvatarPicker.tsx';
 
 const empty = {
   name: '',
@@ -156,6 +157,7 @@ export function AgentsPage() {
           {agents.map((a) => (
             <li key={a.id} className="item">
               <div className="item-head">
+                <AvatarPicker agent={a} onSaved={load} />
                 <strong>{a.name}</strong>
                 <span className="muted mono small">
                   {a.model ?? 'default model'}

@@ -43,6 +43,13 @@
       "when": 1793982972836,
       "tag": "0005_task_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793995463513,
+      "tag": "0006_agent_avatar",
+      "breakpoints": true
     }
   ]
 }

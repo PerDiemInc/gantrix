@@ -1482,3 +1482,91 @@ a.button.ghost {
 .pill.ask {
   --pill: var(--s-awaiting);
 }
+
+/* avatars with a picture: the picture fills the circle */
+.avatar.pic {
+  background: transparent;
+  overflow: hidden;
+  padding: 0;
+}
+.avatar.pic img,
+.avatar.pic .avatar-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* avatar picker on the Agents page */
+.avatar-picker {
+  position: relative;
+}
+.avatar-button {
+  position: relative;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 50%;
+  min-height: 44px;
+}
+.avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.avatar-panel {
+  margin: 0;
+  min-width: 0;
+  position: absolute;
+  z-index: 20;
+  top: 52px;
+  left: 0;
+  width: min(320px, 80vw);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(29 26 51 / 0.16);
+}
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.avatar-option {
+  padding: 2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: transparent;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+}
+.avatar-option.selected {
+  border-color: var(--primary);
+}
+label.upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+}
+label.upload:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
