@@ -2,6 +2,7 @@ import { isTerminal } from '@gantrix/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
+import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
 import { judgeGoal } from './judge.ts';
@@ -51,7 +52,7 @@ async function runGoalJob(
     .where(and(eq(steps.taskId, task.id), eq(steps.status, 'succeeded')))
     .orderBy(steps.id);
   const judge = createChatModel(
-    { model: null, baseUrl: null },
+    await resolveModelSpec(db, deps.config, null),
     'judge',
     modelDefaults(deps.config),
   );

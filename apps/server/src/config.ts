@@ -13,6 +13,8 @@ const ConfigSchema = z.object({
   GANTRIX_TOKEN: z.string().min(32, 'GANTRIX_TOKEN must be at least 32 characters').optional(),
   OLLAMA_BASE_URL: z.url().default('http://127.0.0.1:11434'),
   GANTRIX_DEFAULT_MODEL: z.string().min(1).default('qwen3:8b'),
+  // A saved connection (by name) for the planner, judges and agents without their own model.
+  GANTRIX_DEFAULT_CONNECTION: z.string().min(1).optional(),
   GANTRIX_LLM_CONCURRENCY: positiveInt(2),
   GANTRIX_WORKSPACES_DIR: path.default('~/.gantrix/workspaces'),
   GANTRIX_SKILLS_DIR: path.default('~/.gantrix/skills'),

@@ -13,6 +13,7 @@ const AgentFields = z.object({
   systemPrompt: z.string().max(20_000),
   model: z.string().min(1).nullable(), // null → GANTRIX_DEFAULT_MODEL
   modelBaseUrl: z.url().nullable(), // null → OLLAMA_BASE_URL
+  connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
   maxConcurrency: z.number().int().min(1).max(16),
   skillIds: z.array(z.uuid()).max(32),
 });

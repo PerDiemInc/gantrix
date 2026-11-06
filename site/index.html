@@ -302,6 +302,20 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       </div>
     </section>
 
+    <section class="block" id="models">
+      <p class="eyebrow">Models</p>
+      <h2>Local by default. Any model when you want it.</h2>
+      <p class="intro">Agents run on Ollama out of the box. Save a connection to give any agent OpenAI, Anthropic, or anything that speaks their APIs: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter or your own gateway. Each agent can use a different one.</p>
+      <ul class="safety">
+        <li><b>Custom URL and headers.</b> Point a connection at any server and add the headers it needs.</li>
+        <li><b>Keys stay in your environment.</b> Write <code>env:OPENAI_API_KEY</code> and the worker reads it when a step runs. The API never returns header values.</li>
+        <li><b>Cloud is labelled.</b> A connection that leaves your machine is marked cloud, so you know where task content goes.</li>
+      </ul>
+      <div class="code" style="margin-top:22px"><button class="copy" type="button">Copy</button><pre>npm run gantrix -- connections add claude --provider anthropic --api-key-env ANTHROPIC_API_KEY
+npm run gantrix -- connections test claude claude-sonnet-5-5
+npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonnet-5-5</pre></div>
+    </section>
+
     <section class="block" id="stack">
       <p class="eyebrow">Built with</p>
       <h2>Open source, top to bottom</h2>

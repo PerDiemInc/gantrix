@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline/promises';
 import {
   type AgentDto,
   type ApprovalListItem,
+  type ConnectionDto,
   isTerminal,
   type SkillDto,
   type StepConversationDto,
@@ -64,9 +65,11 @@ export async function addAgent(
     maxConcurrency?: string;
     skills?: string;
     prompt?: string;
+    connection?: string;
   },
 ): Promise<void> {
   const skillIds = o.skills ? await skillIdsByName(client, o.skills.split(',')) : [];
+  const connectionId = o.connection ? (await connectionByName(client, o.connection)).id : undefined;
   const agent = await client.post<AgentDto>('/api/agents', {
     name,
     skillIds,
@@ -75,6 +78,7 @@ export async function addAgent(
     ...(o.baseUrl ? { modelBaseUrl: o.baseUrl } : {}),
     ...(o.maxConcurrency ? { maxConcurrency: Number(o.maxConcurrency) } : {}),
     ...(o.prompt ? { systemPrompt: o.prompt } : {}),
+    ...(connectionId ? { connectionId } : {}),
   });
   console.log(`Added agent ${paint('bold', agent.name)} with ${agent.skills.length} skill(s).`);
 }
@@ -392,3 +396,99 @@ const indent = (t: string) =>
     .split('\n')
     .map((l) => `    ${l}`)
     .join('\n');
+
+// ---- connections
+
+async function connectionByName(client: Client, name: string): Promise<ConnectionDto> {
+  const c = (await client.get<ConnectionDto[]>('/api/connections')).find((x) => x.name === name);
+  if (!c)
+    throw new Error(
+      `No connection named "${name}". Add one: gantrix connections add ${name} --provider …`,
+    );
+  return c;
+}
+
+/** "Name: value" → [name, value]. */
+function parseHeader(raw: string): [string, string] {
+  const i = raw.indexOf(':');
+  if (i < 1) throw new Error(`Header "${raw}" should look like "Name: value".`);
+  return [raw.slice(0, i).trim(), raw.slice(i + 1).trim()];
+}
+
+const KEY_HEADER = {
+  openai: 'Authorization',
+  anthropic: 'x-api-key',
+  ollama: 'Authorization',
+} as const;
+
+export async function listConnections(client: Client): Promise<void> {
+  const list = await client.get<ConnectionDto[]>('/api/connections');
+  if (!list.length) {
+    return console.log(
+      'No connections. Agents use Ollama. Add one: gantrix connections add openai --provider openai --api-key-env OPENAI_API_KEY',
+    );
+  }
+  console.log(
+    table([
+      ['NAME', 'PROVIDER', 'URL', 'HEADERS', 'WHERE'].map((h) => paint('bold', h)),
+      ...list.map((c) => [
+        c.name,
+        c.provider,
+        c.effectiveUrl,
+        Object.entries(c.headers)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ') || paint('gray', 'none'),
+        c.isLocal ? paint('green', 'local') : paint('yellow', 'cloud'),
+      ]),
+    ]),
+  );
+}
+
+export async function addConnection(
+  client: Client,
+  name: string,
+  o: { provider: string; url?: string; header?: string[]; apiKeyEnv?: string },
+): Promise<void> {
+  const headers = Object.fromEntries((o.header ?? []).map(parseHeader));
+  if (o.apiKeyEnv) {
+    const provider = o.provider as keyof typeof KEY_HEADER;
+    const header = KEY_HEADER[provider] ?? 'Authorization';
+    headers[header] =
+      header === 'Authorization' ? `Bearer env:${o.apiKeyEnv}` : `env:${o.apiKeyEnv}`;
+  }
+  const c = await client.post<ConnectionDto>('/api/connections', {
+    name,
+    provider: o.provider,
+    ...(o.url ? { baseUrl: o.url } : {}),
+    headers,
+  });
+  console.log(`Added connection ${paint('bold', c.name)} → ${c.provider} at ${c.effectiveUrl}.`);
+  if (!c.isLocal) {
+    console.log(
+      paint(
+        'yellow',
+        `⚠ Cloud: prompts and task content go to ${new URL(c.effectiveUrl).host}, and its usage costs apply.`,
+      ),
+    );
+  }
+  console.log(paint('gray', `Check it: gantrix connections test ${c.name} <model>`));
+}
+
+export async function removeConnection(client: Client, name: string): Promise<void> {
+  const c = await connectionByName(client, name);
+  await client.del(`/api/connections/${c.id}`);
+  console.log(`Removed connection ${name}.`);
+}
+
+export async function testConnection(client: Client, name: string, model: string): Promise<void> {
+  const c = await connectionByName(client, name);
+  const r = await client.post<{ ok: boolean; reply?: string; error?: string; ms: number }>(
+    `/api/connections/${c.id}/test`,
+    { model },
+  );
+  if (r.ok)
+    console.log(
+      `${paint('green', '✔')} ${model} on ${c.name} replied "${r.reply}" in ${duration(r.ms)}.`,
+    );
+  else throw new Error(`${model} on ${c.name} failed after ${duration(r.ms)}: ${r.error}`);
+}

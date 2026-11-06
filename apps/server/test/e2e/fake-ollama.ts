@@ -39,12 +39,15 @@ export const defaultScript = (): Script => ({
 export async function startFakeOllama() {
   const script: Script = defaultScript();
   const calls = { plan: 0, judge: 0, worker: 0 };
+  /** Request headers of every /api/chat call, oldest first. */
+  const headers: Record<string, string | string[] | undefined>[] = [];
 
   const server: Server = createServer((req, res) => {
     if (req.url !== '/api/chat') {
       res.writeHead(404).end();
       return;
     }
+    headers.push(req.headers);
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
@@ -94,9 +97,11 @@ export async function startFakeOllama() {
     url: `http://127.0.0.1:${port}`,
     script,
     calls,
+    headers,
     reset() {
       Object.assign(script, defaultScript());
       calls.plan = calls.judge = calls.worker = 0;
+      headers.length = 0;
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };

@@ -47,6 +47,7 @@ agents
   .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
   .option('--prompt <text>', 'extra system prompt')
+  .option('-c, --connection <name>', 'a saved model connection (see gantrix connections)')
   .action(run((name: string, o) => cmd.addAgent(client, name, o)));
 agents
   .command('rm <name>')
@@ -66,6 +67,36 @@ skills
   .command('rm <name[@version]>')
   .description('remove an installed skill')
   .action(run((ref: string) => cmd.removeSkill(client, ref)));
+
+const connections = program
+  .command('connections')
+  .description('model servers: Ollama, OpenAI, Anthropic or compatible, local or cloud');
+connections
+  .command('list', { isDefault: true })
+  .description('list connections')
+  .action(run(() => cmd.listConnections(client)));
+connections
+  .command('add <name>')
+  .description('save a connection')
+  .requiredOption('-p, --provider <provider>', 'ollama, openai or anthropic')
+  .option(
+    '-u, --url <url>',
+    'base URL (default: local Ollama, api.openai.com or api.anthropic.com)',
+  )
+  .option(
+    '-H, --header <header...>',
+    'e.g. "Authorization: Bearer env:MY_KEY" (env:NAME reads the worker environment)',
+  )
+  .option('--api-key-env <name>', 'read the API key from this environment variable')
+  .action(run((name: string, o) => cmd.addConnection(client, name, o)));
+connections
+  .command('test <name> <model>')
+  .description('send one short prompt through a connection')
+  .action(run((name: string, model: string) => cmd.testConnection(client, name, model)));
+connections
+  .command('rm <name>')
+  .description('remove a connection no agent uses')
+  .action(run((name: string) => cmd.removeConnection(client, name)));
 
 const team = program.command('team').description('the built-in executive agents');
 team

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { approvals, events, steps } from '../../src/db/schema.ts';
+import { agents, approvals, connections, events, steps } from '../../src/db/schema.ts';
 import { cancelTask, createTask, decideApproval } from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
@@ -134,6 +134,29 @@ describe('engine', () => {
   it('still asks when god mode is off by default', async () => {
     const t = await createTask(e.deps, { goal: 'Default task' });
     expect(t.approveAll).toBe(false);
+  });
+
+  it("sends an agent's connection headers, reading env: values from the environment", async () => {
+    process.env.GX_E2E_HEADER = 'secret-123';
+    await e.addAgent('writer');
+    const [conn] = await e.db
+      .insert(connections)
+      .values({
+        name: 'proxy',
+        provider: 'ollama',
+        baseUrl: e.fake.url,
+        headers: { 'X-Gantrix-Test': 'env:GX_E2E_HEADER' },
+      })
+      .returning();
+    await e.db.update(agents).set({ connectionId: conn!.id }).where(eq(agents.name, 'writer'));
+    e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+    const task = await createTask(e.deps, { goal: 'Write notes' });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    // The worker's calls carry the header; the planner and judge (default model) don't.
+    const sent = e.fake.headers.map((h) => h['x-gantrix-test']).filter(Boolean);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(new Set(sent)).toEqual(new Set(['secret-123']));
+    delete process.env.GX_E2E_HEADER;
   });
 
   it('tells the agent when an approval is denied', async () => {

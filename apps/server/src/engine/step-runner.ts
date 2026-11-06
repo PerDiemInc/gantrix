@@ -7,6 +7,7 @@ import { canRetry } from '../budget.ts';
 import type { Db } from '../db/client.ts';
 import { agentSkills, agents, approvals, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
+import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
@@ -85,7 +86,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
   try {
     const graph = buildStepAgent({
       model: createChatModel(
-        { model: agent.model, baseUrl: agent.modelBaseUrl },
+        await resolveModelSpec(db, config, agent),
         'worker',
         modelDefaults(config),
       ),
@@ -141,7 +142,11 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
 
     await setStep(db, task.id, step, 'judging', {});
     const workspaceFiles = await describeWorkspace(task.workspacePath, after.values.messages ?? []);
-    const judge = createChatModel({ model: null, baseUrl: null }, 'judge', modelDefaults(config));
+    const judge = createChatModel(
+      await resolveModelSpec(db, config, null),
+      'judge',
+      modelDefaults(config),
+    );
     const verdict = await judgeStep(judge, {
       title: step.title,
       acceptance: step.acceptance,

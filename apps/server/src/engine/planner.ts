@@ -1,6 +1,7 @@
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import { agentSkills, agents, plans, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
+import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel, tokensUsed } from '../models/provider.ts';
 import { validatePlan } from '../plan/dag.ts';
 import { type Plan, PlanSchema } from '../plan/schema.ts';
@@ -48,7 +49,7 @@ export async function runPlanJob(
   const why = await whyReplan(deps, task.id, job.version, all);
 
   const model = createChatModel(
-    { model: null, baseUrl: null },
+    await resolveModelSpec(db, deps.config, null),
     'planner',
     modelDefaults(deps.config),
   ).withStructuredOutput(PlanSchema, { name: 'plan', includeRaw: true });

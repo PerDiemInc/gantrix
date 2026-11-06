@@ -33,3 +33,7 @@ export type StepStatus = (typeof STEP_STATUSES)[number];
 
 export const APPROVAL_STATUSES = ['pending', 'approved', 'denied'] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+/** Where a model runs: Ollama, anything that speaks the OpenAI or the Anthropic API. */
+export const MODEL_PROVIDERS = ['ollama', 'openai', 'anthropic'] as const;
+export type ModelProvider = (typeof MODEL_PROVIDERS)[number];

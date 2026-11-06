@@ -1,5 +1,5 @@
 import type { GantrixEvent } from './events.ts';
-import type { ApprovalStatus, StepStatus, TaskStatus } from './status.ts';
+import type { ApprovalStatus, ModelProvider, StepStatus, TaskStatus } from './status.ts';
 import type { Budget, SkillManifest } from './types.ts';
 
 /** JSON shapes of the HTTP API, shared by the CLI and the web app. Dates are ISO strings. */
@@ -17,6 +17,8 @@ export interface AgentDto {
   systemPrompt: string;
   model: string | null;
   modelBaseUrl: string | null;
+  /** A saved model connection; null = the default (Ollama, or GANTRIX_DEFAULT_CONNECTION). */
+  connectionId: string | null;
   maxConcurrency: number;
   createdAt: string;
   updatedAt: string;
@@ -128,4 +130,21 @@ export interface StepConversationDto {
   title: string;
   /** One entry per attempt, oldest first; a retry starts a fresh conversation. */
   attempts: { attempt: number; messages: ConversationMessage[] }[];
+}
+
+/** A saved way to reach a model server. Header values are never returned, only their source. */
+export interface ConnectionDto {
+  id: string;
+  name: string;
+  provider: ModelProvider;
+  /** null = the provider's default (local Ollama, api.openai.com or api.anthropic.com). */
+  baseUrl: string | null;
+  /** The URL the worker actually calls. */
+  effectiveUrl: string;
+  /** Header name → "env:NAME" (read from the worker's environment) or "hidden" (saved value). */
+  headers: Record<string, string>;
+  /** False when prompts and task content leave this machine. */
+  isLocal: boolean;
+  createdAt: string;
+  updatedAt: string;
 }

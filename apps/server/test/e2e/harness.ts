@@ -138,7 +138,7 @@ export async function startEngine() {
 
   async function reset() {
     fake.reset();
-    await db.execute('truncate tasks, agents, skills cascade');
+    await db.execute('truncate tasks, agents, skills, connections cascade');
     await rm(config.GANTRIX_SKILLS_DIR, { recursive: true, force: true });
   }
 

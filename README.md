@@ -295,7 +295,8 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 ## CLI
 
 ```
-gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [--max-concurrency n] | rm <name>]
+gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
@@ -315,6 +316,44 @@ URL for any OpenAI-compatible server (vLLM, llama.cpp, LM Studio).
 Small models tend to plan steps one after another and sometimes reject good work. A larger model
 plans more parallel steps and judges more accurately.
 
+### Connections: OpenAI, Anthropic, any URL, local or cloud
+
+A connection saves where a model server is and how to log in to it. Give an agent one with
+`--connection`, and its `--model` is then that server's model name.
+
+```bash
+# Cloud APIs; the key is read from the worker's environment (.env), never stored.
+npm run gantrix -- connections add openai --provider openai --api-key-env OPENAI_API_KEY
+npm run gantrix -- connections add claude --provider anthropic --api-key-env ANTHROPIC_API_KEY
+
+# Anything local or custom: a URL plus any headers.
+npm run gantrix -- connections add lmstudio --provider openai --url http://127.0.0.1:1234/v1
+npm run gantrix -- connections add gateway --provider anthropic --url https://llm.internal.example \
+  -H "Authorization: Bearer env:GATEWAY_TOKEN" -H "X-Team: research"
+
+npm run gantrix -- connections test claude claude-sonnet-5-5     # sends one short prompt
+npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonnet-5-5
+```
+
+| Provider | Default URL | Works with |
+|---|---|---|
+| `ollama` | `OLLAMA_BASE_URL` | Ollama, local or behind a proxy |
+| `openai` | `https://api.openai.com/v1` | OpenAI, and OpenAI-compatible servers: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter |
+| `anthropic` | `https://api.anthropic.com` | Anthropic, and Anthropic-compatible gateways |
+
+**How headers work:**
+- A header value of `env:NAME` (or `Bearer env:NAME`) is read from the worker's environment
+  when a step runs. Put the key in `.env` and restart the API and worker.
+- Any other value is saved in your local database and never returned by the API.
+- `Authorization: Bearer …` and `x-api-key` go to each SDK's key setting. Without either, the
+  SDKs read `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` themselves.
+
+**Using a connection for everything.** To have the planner and judge use a connection too, set
+`GANTRIX_DEFAULT_CONNECTION=<name>` and `GANTRIX_DEFAULT_MODEL=<that server's model>`.
+
+A connection whose URL isn't on this machine or your network is marked **cloud**. Prompts and
+task content then go to that service, and its prices apply.
+
 ## Configuration
 
 All settings are environment variables in `.env`; see [`.env.example`](.env.example).
@@ -326,6 +365,7 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `GANTRIX_HOST`, `GANTRIX_PORT` | `127.0.0.1`, `4700` | API address |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Default model server |
 | `GANTRIX_DEFAULT_MODEL` | `qwen3:8b` | Planner, judge and default agent model |
+| `GANTRIX_DEFAULT_CONNECTION` | unset (Ollama) | A saved connection for the planner, judge and agents without their own |
 | `GANTRIX_LLM_CONCURRENCY` | `2` | Model calls at once per worker |
 | `GANTRIX_WORKSPACES_DIR`, `GANTRIX_SKILLS_DIR` | `~/.gantrix/…` | Where task files and skills live |
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |

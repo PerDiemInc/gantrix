@@ -2,6 +2,8 @@ import {
   APPROVAL_STATUSES,
   type ApprovalStatus,
   type Budget,
+  MODEL_PROVIDERS,
+  type ModelProvider,
   type SkillManifest,
   STEP_STATUSES,
   type StepStatus,
@@ -32,6 +34,21 @@ const createdAt = () => ts('created_at').notNull().defaultNow();
 const oneOf = (column: string, values: readonly string[]) =>
   sql.raw(`${column} in (${values.map((v) => `'${v}'`).join(', ')})`);
 
+export const connections = pgTable(
+  'connections',
+  {
+    id: id(),
+    name: text('name').notNull().unique(),
+    provider: text('provider').$type<ModelProvider>().notNull(),
+    baseUrl: text('base_url'), // null → the provider's default URL
+    // Header name → literal value or "env:NAME". Literal values never leave the API.
+    headers: jsonb('headers').$type<Record<string, string>>().notNull().default({}),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  () => [check('connections_provider_valid', oneOf('provider', MODEL_PROVIDERS))],
+);
+
 export const agents = pgTable(
   'agents',
   {
@@ -41,6 +58,10 @@ export const agents = pgTable(
     systemPrompt: text('system_prompt').notNull().default(''),
     model: text('model'), // null → GANTRIX_DEFAULT_MODEL
     modelBaseUrl: text('model_base_url'), // null → OLLAMA_BASE_URL
+    // Wins over modelBaseUrl. Restrict: remove the connection from agents before deleting it.
+    connectionId: uuid('connection_id').references(() => connections.id, {
+      onDelete: 'restrict',
+    }),
     maxConcurrency: integer('max_concurrency').notNull().default(1), // enforced by the supervisor
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
