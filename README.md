@@ -236,3 +236,7 @@ Layout: `apps/server` (API, engine, worker), `apps/cli`, `apps/web` (dashboard),
 ## License
 
 MIT
+
+---
+
+<p align="center">Powered by <a href="https://tryperdiem.com"><b>Per Diem</b></a></p>

@@ -317,6 +317,14 @@ footer img { width: 34px; vertical-align: middle; margin-right: 8px; }
 :root[data-theme="dark"] .mascot, :root[data-theme="dark"] .brand img, :root[data-theme="dark"] footer img {
   filter: drop-shadow(2px 0 0 #fff6df) drop-shadow(-2px 0 0 #fff6df) drop-shadow(0 2px 0 #fff6df) drop-shadow(0 -2px 0 #fff6df);
 }
+footer .wrap { align-items: center; }
+.powered {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
+  border: 3px solid var(--edge); box-shadow: 3px 3px 0 var(--drop); background: var(--wait);
+  color: #1d1a33; text-decoration: none; font-weight: 500; transform: rotate(-2deg);
+}
+.powered b { font: 400 16px/1 var(--font-display); letter-spacing: 0.3px; }
+.powered:hover { transform: rotate(0deg) translate(-1px, -1px); box-shadow: 4px 4px 0 var(--drop); }
 </style>
 </head>
 <body>
@@ -553,6 +561,7 @@ of every source next to the notes you take.</pre></div>
 <footer>
   <div class="wrap">
     <span><img src="assets/logo.svg" alt="" width="34" height="28">Gantrix · MIT license</span>
+    <a class="powered" href="https://tryperdiem.com">Powered by <b>Per Diem</b></a>
     <a href="https://github.com/PerDiemInc/gantrix">github.com/PerDiemInc/gantrix</a>
   </div>
 </footer>
