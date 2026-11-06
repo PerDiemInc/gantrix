@@ -452,7 +452,16 @@ export async function listConnections(client: Client): Promise<void> {
 export async function addConnection(
   client: Client,
   name: string,
-  o: { provider: string; url?: string; header?: string[]; apiKeyEnv?: string },
+  o: {
+    provider: string;
+    url?: string;
+    header?: string[];
+    apiKeyEnv?: string;
+    method?: string;
+    contentType?: string;
+    body?: string;
+    replyPath?: string;
+  },
 ): Promise<void> {
   const headers = Object.fromEntries((o.header ?? []).map(parseHeader));
   if (o.apiKeyEnv) {
@@ -466,6 +475,16 @@ export async function addConnection(
     provider: o.provider,
     ...(o.url ? { baseUrl: o.url } : {}),
     headers,
+    ...(o.provider === 'http'
+      ? {
+          request: {
+            ...(o.method ? { method: o.method.toUpperCase() } : {}),
+            ...(o.contentType ? { contentType: o.contentType } : {}),
+            ...(o.body ? { bodyTemplate: o.body } : {}),
+            ...(o.replyPath ? { replyPath: o.replyPath } : {}),
+          },
+        }
+      : {}),
   });
   console.log(`Added connection ${paint('bold', c.name)} → ${c.provider} at ${c.effectiveUrl}.`);
   if (!c.isLocal) {

@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
@@ -221,6 +223,94 @@ describe('api', () => {
     expect((await patch('data:image/svg+xml;base64,PHN2Zz4=')).statusCode).toBe(400);
     expect((await patch(`data:image/png;base64,${'A'.repeat(200_001)}`)).statusCode).toBe(400);
     expect((await patch('https://example.com/a.png')).statusCode).toBe(400);
+  });
+
+  it('tests and edits a custom HTTP connection, showing the request and response', async () => {
+    const server = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        if (req.headers.authorization !== 'Bearer secret-1') {
+          res.writeHead(401).end('{"error":"no"}');
+          return;
+        }
+        const { q } = JSON.parse(raw);
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ result: { answer: `echo: ${q}` } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/gen`;
+    try {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/connections',
+        headers: auth,
+        payload: {
+          name: 'mine',
+          provider: 'http',
+          baseUrl: url,
+          headers: { Authorization: 'Bearer secret-1', 'X-Team': 'a' },
+          request: {
+            method: 'PUT',
+            bodyTemplate: '{"q": "{{prompt}}"}',
+            replyPath: 'result.wrong',
+          },
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      const conn = created.json();
+      expect(conn).toMatchObject({
+        provider: 'http',
+        effectiveUrl: url,
+        isLocal: true,
+        headers: { Authorization: 'hidden', 'X-Team': 'hidden' },
+        request: { method: 'PUT', contentType: 'application/json', replyPath: 'result.wrong' },
+      });
+      const test = () =>
+        app
+          .inject({
+            method: 'POST',
+            url: `/api/connections/${conn.id}/test`,
+            headers: auth,
+            payload: { model: 'x', prompt: 'ping' },
+          })
+          .then((r) => r.json());
+      const wrong = await test();
+      expect(wrong.ok).toBe(false);
+      expect(wrong.error).toContain('result.answer');
+
+      // Edit: fix the reply path, change the method, keep the saved Authorization ("hidden").
+      const patched = await app.inject({
+        method: 'PATCH',
+        url: `/api/connections/${conn.id}`,
+        headers: auth,
+        payload: {
+          headers: { Authorization: 'hidden', 'X-Team': 'b' },
+          request: {
+            method: 'POST',
+            bodyTemplate: '{"q": "{{prompt}}"}',
+            replyPath: 'result.answer',
+          },
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      const ok = await test();
+      expect(ok).toMatchObject({ ok: true, reply: 'echo: ping' });
+      expect(ok.http.request).toMatchObject({
+        method: 'POST',
+        body: '{"q": "ping"}',
+        headers: {
+          'content-type': 'application/json',
+          Authorization: 'hidden',
+          'X-Team': 'hidden',
+        },
+      });
+      expect(ok.http.paths).toEqual(['result.answer']);
+      expect(JSON.stringify(ok)).not.toContain('secret-1');
+    } finally {
+      server.close();
+    }
   });
 
   it('creates a task with a merged budget and returns its detail', async () => {

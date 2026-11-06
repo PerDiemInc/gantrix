@@ -339,7 +339,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 
 ```
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
-gantrix connections [list | add <name> -p ollama|openai|anthropic|claude-code [-u url] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
@@ -385,6 +385,42 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
 | `openai` | `https://api.openai.com/v1` | OpenAI, and OpenAI-compatible servers: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter |
 | `anthropic` | `https://api.anthropic.com` | Anthropic, and Anthropic-compatible gateways |
 | `claude-code` | `claude` on your PATH | Your local Claude Code, run as `claude -p` (agents only) |
+| `http` | the URL you give | Any HTTP server: you set the method, Content-Type, body and where the reply is (agents only) |
+
+### Any HTTP server
+
+For an API that isn't OpenAI-, Anthropic- or Ollama-compatible, describe the request yourself.
+On the dashboard's Connections page, choose **Custom HTTP server**. Or use the CLI:
+
+```bash
+npm run gantrix -- connections add mine --provider http \
+  --url "https://api.example.com/v1/generate/{{model}}" --method POST \
+  -H "Authorization: Bearer env:MINE_API_KEY" -H "X-Team: research" \
+  --body '{"input": {"text": "{{prompt}}"}, "options": {"max_tokens": 1024}}' \
+  --reply-path data.outputs.0.text
+npm run gantrix -- connections test mine my-model
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| URL | (required) | `http://` or `https://`; may contain `{{model}}` or `{{prompt}}` (URL-encoded) |
+| Method | `POST` | `POST`, `PUT`, `PATCH` or `GET` (GET has no body; put `{{prompt}}` in the URL) |
+| Content-Type | `application/json` | The body is escaped to match: JSON, form-encoded or plain text |
+| Body | `{"model": "{{model}}", "prompt": "{{prompt}}"}` | Placeholders: `{{prompt}}`, `{{system}}`, `{{model}}`, and `"{{messages}}"` for an OpenAI-style message array |
+| Reply path | auto | Where the answer is in the JSON response, like `choices.0.message.content`. Blank tries the common shapes, then uses the whole response |
+| Headers | none | As many as you need, one row each |
+
+- **The Test button sends the real request** with your prompt. It shows the request (header
+  values hidden), the status, the raw response and every text path in it. While you edit the
+  connection, click a path to use it as the reply path.
+- **Tools work over plain text.** The agent is told to answer with a
+  `{"tool": "write_file", "args": {...}}` block when it wants a tool. Gantrix runs the tool and
+  sends back the result. Small models sometimes get the JSON wrong.
+- **Custom HTTP runs agents only.** The planner and judge stay on Ollama, OpenAI or Anthropic.
+
+**Editing a connection.** On the Connections page, click **Edit** on any connection to change its
+URL, headers or request. Saved header values stay hidden: leave them as they are, or click
+**Replace** to type a new one.
 
 ### Claude Code as an agent
 

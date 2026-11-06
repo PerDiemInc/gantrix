@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
@@ -251,6 +253,62 @@ describe('engine', () => {
     expect(await sendMessage(e.deps, task.id, { text: 'More please' })).toEqual({
       status: 'task_finished',
     });
+  });
+
+  it('runs a step on a custom HTTP server, with tools through the text protocol', async () => {
+    process.env.GX_HTTP_KEY = 'k-123';
+    const seen: { url: string; key: string; body: { input: { text: string } } }[] = [];
+    const server = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        const body = JSON.parse(raw);
+        seen.push({ url: req.url ?? '', key: String(req.headers['x-key']), body });
+        const sawResult = body.input.text.includes('Result of write_file');
+        const text = sawResult
+          ? 'Wrote http.md.'
+          : '```tool\n{"tool": "write_file", "args": {"path": "http.md", "content": "# From HTTP"}}\n```';
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ data: { outputs: [{ text }] } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      await e.addAgent('writer');
+      const [conn] = await e.db
+        .insert(connections)
+        .values({
+          name: 'custom',
+          provider: 'http',
+          baseUrl: `http://127.0.0.1:${port}/v1/run/{{model}}`,
+          headers: { 'X-Key': 'env:GX_HTTP_KEY' },
+          request: {
+            method: 'POST',
+            contentType: 'application/json',
+            bodyTemplate: '{"input": {"text": "{{prompt}}"}}',
+            replyPath: 'data.outputs.0.text',
+          },
+        })
+        .returning();
+      await e.db
+        .update(agents)
+        .set({ connectionId: conn!.id, model: 'tiny' })
+        .where(eq(agents.name, 'writer'));
+      e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+      const task = await createTask(e.deps, { goal: 'Write http.md' });
+      const done = await e.waitFor(task.id);
+
+      expect(done.status).toBe('succeeded');
+      expect(await readFile(join(done.workspacePath, 'http.md'), 'utf8')).toBe('# From HTTP');
+      expect(seen[0]).toMatchObject({ url: '/v1/run/tiny', key: 'k-123' });
+      expect(seen[0]?.body.input.text).toContain('write_file'); // the tool instructions
+      const [notes] = await stepsOf(task.id);
+      expect(notes?.output).toBe('Wrote http.md.');
+    } finally {
+      server.close();
+      delete process.env.GX_HTTP_KEY;
+    }
   });
 
   it('tells the agent when an approval is denied', async () => {

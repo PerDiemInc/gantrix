@@ -1,4 +1,4 @@
 export type * from './api.ts';
 export * from './events.ts';
 export * from './status.ts';
-export type * from './types.ts';
+export * from './types.ts';

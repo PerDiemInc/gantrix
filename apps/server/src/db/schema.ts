@@ -2,6 +2,7 @@ import {
   APPROVAL_STATUSES,
   type ApprovalStatus,
   type Budget,
+  type HttpRequestConfig,
   MODEL_PROVIDERS,
   type ModelProvider,
   type SkillManifest,
@@ -43,6 +44,8 @@ export const connections = pgTable(
     baseUrl: text('base_url'), // null → the provider's default URL
     // Header name → literal value or "env:NAME". Literal values never leave the API.
     headers: jsonb('headers').$type<Record<string, string>>().notNull().default({}),
+    // Custom HTTP only: method, content type, body template and reply path.
+    request: jsonb('request').$type<HttpRequestConfig>(),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },

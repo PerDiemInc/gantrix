@@ -22,3 +22,27 @@ export interface SkillManifest {
   /** Tool names that run without asking for approval. */
   autoApprove: string[];
 }
+
+export const HTTP_METHODS = ['POST', 'PUT', 'PATCH', 'GET'] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+/**
+ * How to call a custom HTTP model server. Templates use {{prompt}}, {{system}}, {{messages}}
+ * and {{model}}; values are escaped for where they appear.
+ */
+export interface HttpRequestConfig {
+  method: HttpMethod;
+  /** Sent as Content-Type; the body template is escaped to match. */
+  contentType: string;
+  /** The body; ignored for GET (put {{prompt}} in the URL instead). */
+  bodyTemplate: string;
+  /** Where the reply text is in a JSON response, e.g. "choices.0.message.content"; empty → auto. */
+  replyPath: string;
+}
+
+export const DEFAULT_HTTP_REQUEST: HttpRequestConfig = {
+  method: 'POST',
+  contentType: 'application/json',
+  bodyTemplate: '{"model": "{{model}}", "prompt": "{{prompt}}"}',
+  replyPath: '',
+};

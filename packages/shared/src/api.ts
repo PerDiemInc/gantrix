@@ -1,6 +1,6 @@
 import type { GantrixEvent } from './events.ts';
 import type { ApprovalStatus, ModelProvider, StepStatus, TaskStatus } from './status.ts';
-import type { Budget, SkillManifest } from './types.ts';
+import type { Budget, HttpRequestConfig, SkillManifest } from './types.ts';
 
 /** JSON shapes of the HTTP API, shared by the CLI and the web app. Dates are ISO strings. */
 
@@ -154,6 +154,8 @@ export interface ConnectionDto {
   headers: Record<string, string>;
   /** False when prompts and task content leave this machine. */
   isLocal: boolean;
+  /** Custom HTTP only: how to build the request and read the reply. */
+  request: HttpRequestConfig | null;
   createdAt: string;
   updatedAt: string;
 }

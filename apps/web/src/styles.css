@@ -1576,3 +1576,58 @@ label.upload:focus-within {
   gap: 8px;
   justify-content: flex-start;
 }
+
+/* connections: header rows, edit state and the HTTP test output */
+.header-rows {
+  display: grid;
+  gap: 8px;
+}
+.header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.header-row .kept {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  min-height: 40px;
+}
+.header-rows > button {
+  justify-self: start;
+}
+.item.editing {
+  border-color: var(--primary);
+}
+.test-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.http-debug summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+.http-debug pre.output {
+  max-height: 220px;
+  overflow: auto;
+}
+button.chip {
+  border: 1px solid var(--border);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  min-height: 28px;
+}
+@media (max-width: 560px) {
+  .header-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .header-row > :nth-child(4),
+  .header-row > .kept {
+    grid-column: 1 / 2;
+  }
+}
