@@ -21,7 +21,7 @@ export function ApprovalsPage() {
         <div key={a.id} className="approval">
           <div>
             <div className="muted small">
-              <a href={`#/tasks/${a.taskId}`}>task {short(a.taskId)}</a> · {a.stepTitle} ·{' '}
+              <a href={`#/projects/${a.taskId}`}>task {short(a.taskId)}</a> · {a.stepTitle} ·{' '}
               {ago(a.createdAt)}
             </div>
             <p className="small">{a.goal}</p>

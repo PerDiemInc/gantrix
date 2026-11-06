@@ -159,6 +159,32 @@ describe('api', () => {
     expect(byName.dead.error).toBeTruthy();
   });
 
+  it('lists projects with their team, active tasks, approvals and latest event', async () => {
+    const writer = await e.addAgent('writer');
+    e.fake.script.plan = () => ({
+      steps: [
+        {
+          key: 'a',
+          title: 'A',
+          agent: 'writer',
+          instructions: 'Do a',
+          acceptance: 'a.md',
+          dependsOn: [],
+        },
+      ],
+    });
+    const task = await createTask(e.deps, { goal: 'List me' });
+    await e.waitFor(task.id);
+    const [item] = (await app.inject({ url: '/api/tasks', headers: auth })).json();
+    expect(item).toMatchObject({
+      id: task.id,
+      team: [{ agentId: writer.id, state: 'done' }],
+      active: [],
+      pendingApprovals: 0,
+      lastEvent: { type: 'task.status', status: 'succeeded', taskId: task.id },
+    });
+  });
+
   it('creates a task with a merged budget and returns its detail', async () => {
     const res = await app.inject({
       method: 'POST',

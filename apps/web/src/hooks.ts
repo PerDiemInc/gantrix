@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribe } from './api.ts';
 
 export type Route =
-  | { page: 'tasks' }
-  | { page: 'task'; id: string }
+  | { page: 'projects' }
+  | { page: 'project'; id: string }
   | { page: 'logs'; id: string; stepId?: string }
   | { page: 'agents' }
   | { page: 'skills' }
@@ -13,14 +13,16 @@ export type Route =
 
 function parseHash(hash: string): Route {
   const [, page, id, sub, stepId] = hash.replace(/^#/, '').split('/');
-  if (page === 'tasks' && id && sub === 'logs') {
+  // "tasks" is the old name; links from before the projects view keep working.
+  const isProject = page === 'projects' || page === 'tasks';
+  if (isProject && id && sub === 'logs') {
     return stepId ? { page: 'logs', id, stepId } : { page: 'logs', id };
   }
-  if (page === 'tasks' && id) return { page: 'task', id };
+  if (isProject && id) return { page: 'project', id };
   if (page === 'agents' || page === 'skills' || page === 'connections' || page === 'approvals') {
     return { page };
   }
-  return { page: 'tasks' };
+  return { page: 'projects' };
 }
 
 export function useRoute(): Route {

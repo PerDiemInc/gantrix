@@ -114,7 +114,7 @@ export function LogsPage({ id, stepId }: { id: string; stepId?: string }) {
       <header className="task-head">
         <div>
           <div className="eyebrow mono">
-            <a href={`#/tasks/${task.id}`}>task {short(task.id)}</a> · logs
+            <a href={`#/projects/${task.id}`}>task {short(task.id)}</a> · logs
           </div>
           <h1>{task.goal}</h1>
         </div>
@@ -129,7 +129,7 @@ export function LogsPage({ id, stepId }: { id: string; stepId?: string }) {
                 <button
                   type="button"
                   className={`link ${selected?.id === s.id ? 'active' : ''}`}
-                  onClick={() => go(`/tasks/${task.id}/logs/${s.id}`)}
+                  onClick={() => go(`/projects/${task.id}/logs/${s.id}`)}
                 >
                   <span className="mono">{s.key}</span>{' '}
                   <span className="muted small">

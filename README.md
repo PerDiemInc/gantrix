@@ -90,9 +90,16 @@ npm run gantrix -- files last               # list them
 npm run gantrix -- files last compare.md    # print one
 ```
 
-Or watch it on the dashboard: Tasks, then the task.
+Or watch it on the dashboard. In the dashboard a run is a **project**, and its steps are the
+**tasks** its agents work on:
+- **Projects** shows every project at once. Each card has its status, the tasks done so far, the
+  agents on it (a ring shows who is working or waiting for you), and what is happening now.
+  Projects that need your approval stand out. Filter by running, needs you or finished.
+- **A project's page** shows the progress, tokens and time, a "Working now" card for each busy
+  agent, approvals, the Gantt timeline and the files. The chat runs beside them, or as a tab on
+  a phone.
 
-**The task page reads like a meeting.** Under the Gantt chart and the status, the planner, each
+**The chat reads like a meeting.** Next to the Gantt chart and the status, the planner, each
 agent, the judge and you talk in turn. You can join in at any time:
 - To one running step: the agent reads your note before its next turn.
 - To everyone: once the running steps finish, the planner replans with your note and keeps the
