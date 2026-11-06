@@ -44,6 +44,13 @@ export const TEAM = [
       'Designer: mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and slide decks in Google Slides. Briefs, wireframes, design tokens and HTML/CSS mockups, checked for accessibility.',
   },
   {
+    name: 'engineer',
+    avatar: 'preset:gant-night',
+    skills: ['exec-engineer'],
+    description:
+      'Engineer: builds websites and small tools from the brief and the chosen design, tests them, and deploys websites to the local preview server.',
+  },
+  {
     name: 'cpo',
     avatar: 'preset:gant-antenna',
     skills: ['exec-cpo'],

@@ -101,6 +101,8 @@ export interface ApprovalDto {
   tool: string;
   args: Record<string, unknown>;
   status: ApprovalStatus;
+  /** ask_user: the user's answer. */
+  answer: string | null;
   createdAt: string;
   decidedAt: string | null;
 }

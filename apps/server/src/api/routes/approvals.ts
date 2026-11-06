@@ -8,7 +8,11 @@ import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
 const ListApprovals = z.object({ status: z.enum(APPROVAL_STATUSES).default('pending') });
-const Decide = z.object({ approved: z.boolean() });
+// ask_user questions are answered with approved: true and the answer; skipping = approved: false.
+const Decide = z.object({
+  approved: z.boolean(),
+  answer: z.string().trim().min(1).max(4_000).optional(),
+});
 
 export function approvalRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const { db } = deps;
@@ -24,6 +28,7 @@ export function approvalRoutes(app: FastifyInstance, deps: ApiDeps): void {
         tool: approvals.tool,
         args: approvals.args,
         status: approvals.status,
+        answer: approvals.answer,
         createdAt: approvals.createdAt,
         decidedAt: approvals.decidedAt,
         goal: tasks.goal,
@@ -38,8 +43,8 @@ export function approvalRoutes(app: FastifyInstance, deps: ApiDeps): void {
 
   app.post('/api/approvals/:id', async (request) => {
     const { id } = parse(IdParams, request.params);
-    const { approved } = parse(Decide, request.body);
-    const result = await decideApproval(deps, id, approved);
+    const { approved, answer } = parse(Decide, request.body);
+    const result = await decideApproval(deps, id, approved, answer);
     if (result === 'not_found') throw notFound('Approval');
     if (result === 'already_decided')
       throw new HttpError(409, 'This approval was already decided.');

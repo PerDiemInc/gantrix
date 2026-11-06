@@ -1631,3 +1631,49 @@ button.chip {
     grid-column: 1 / 2;
   }
 }
+
+/* agent questions (ask_user) */
+.question {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+}
+.question-who {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.question-text {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.question-options button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.question-answer {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.question-answer > input[id] {
+  flex: 1 1 220px;
+}
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

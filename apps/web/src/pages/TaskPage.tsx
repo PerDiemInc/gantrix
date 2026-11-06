@@ -11,6 +11,7 @@ import { FilePreview, previewKind } from '../components/FilePreview.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
+import { QuestionCard } from '../components/QuestionCard.tsx';
 import { type AgentState, Avatar, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { duration, label, short } from '../format.ts';
 import { useAgents, useNow, useTask } from '../hooks.ts';
@@ -131,9 +132,11 @@ export function eventText(e: StreamEvent, keys: Map<string, string>): string {
     case 'step.tool_call':
       return `${keys.get(e.stepId) ?? 'step'} → ${e.tool} ${e.summary}${e.autoApproved ? ' (no approval needed)' : ''}`;
     case 'approval.requested':
-      return `${keys.get(e.stepId) ?? 'A step'} asks to run ${e.tool}`;
+      return e.question
+        ? `${keys.get(e.stepId) ?? 'A step'} asks: ${e.question}`
+        : `${keys.get(e.stepId) ?? 'A step'} asks to run ${e.tool}`;
     case 'approval.decided':
-      return e.approved ? 'Approved' : 'Denied';
+      return e.answer ? `Answered: ${e.answer}` : e.approved ? 'Approved' : 'Denied';
     case 'goal.judged':
       return `Goal ${e.passed ? 'met' : 'not met'}: ${e.reason}`;
     case 'budget.exceeded':
@@ -287,6 +290,16 @@ export function TaskPage({ id }: { id: string }) {
               </span>
             )}
             <StatusPill status={task.status} big />
+            {events.some((e) => e.type === 'step.tool_call' && e.tool === 'deploy_site') && (
+              <a
+                className="button ghost"
+                href={`${location.protocol}//${location.hostname}:4702/`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="play" size={14} /> Open deployed site
+              </a>
+            )}
             <a className="button ghost" href={`#/projects/${task.id}/logs`}>
               <Icon name="list" size={14} /> Logs
             </a>
@@ -344,29 +357,46 @@ export function TaskPage({ id }: { id: string }) {
       <div className="project-body">
         <div className="project-main">
           <div className="panel-progress stack">
-            {pending.map((a) => (
-              <section key={a.id} className="approval" aria-label="Approval needed">
-                <div>
-                  <p>
-                    <Icon name="hand" /> <strong>{keys.get(a.stepId) ?? 'A task'}</strong> wants to
-                    run <code>{a.tool}</code>
-                  </p>
-                  <pre className="args">{JSON.stringify(a.args, null, 2)}</pre>
-                </div>
-                <div className="approval-actions">
-                  <button type="button" className="primary" onClick={() => void decide(a.id, true)}>
-                    <Icon name="check" size={14} /> Approve
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost danger"
-                    onClick={() => void decide(a.id, false)}
-                  >
-                    <Icon name="x" size={14} /> Deny
-                  </button>
-                </div>
-              </section>
-            ))}
+            {pending.map((a) =>
+              a.tool === 'ask_user' ? (
+                <QuestionCard
+                  key={a.id}
+                  id={a.id}
+                  who={`${(() => {
+                    const st = task.steps.find((x) => x.id === a.stepId);
+                    return (st?.agentId && agents.get(st.agentId)?.name) || 'An agent';
+                  })()} · ${keys.get(a.stepId) ?? 'task'}`}
+                  args={a.args}
+                  onDone={reload}
+                />
+              ) : (
+                <section key={a.id} className="approval" aria-label="Approval needed">
+                  <div>
+                    <p>
+                      <Icon name="hand" /> <strong>{keys.get(a.stepId) ?? 'A task'}</strong> wants
+                      to run <code>{a.tool}</code>
+                    </p>
+                    <pre className="args">{JSON.stringify(a.args, null, 2)}</pre>
+                  </div>
+                  <div className="approval-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void decide(a.id, true)}
+                    >
+                      <Icon name="check" size={14} /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost danger"
+                      onClick={() => void decide(a.id, false)}
+                    >
+                      <Icon name="x" size={14} /> Deny
+                    </button>
+                  </div>
+                </section>
+              ),
+            )}
 
             <WorkingNow task={task} events={events} agents={agents} now={now} onMessage={message} />
 

@@ -19,6 +19,7 @@ import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
+import { ASK_USER } from '../skills/tools/ask.ts';
 import { fileTools } from '../skills/tools/files.ts';
 import { builtinTools } from '../skills/tools/index.ts';
 import { resolveInWorkspace } from '../skills/workspace.ts';
@@ -102,7 +103,13 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
         'worker',
         modelDefaults(config),
       ),
-      tools: [...builtinTools(toolkit.builtinTools, task.workspacePath), ...mcp.tools],
+      tools: [
+        ...builtinTools(toolkit.builtinTools, task.workspacePath, {
+          sitesDir: config.GANTRIX_SITES_DIR,
+          previewUrl: `http://${config.GANTRIX_HOST}:${config.GANTRIX_PREVIEW_PORT}`,
+        }),
+        ...mcp.tools,
+      ],
       autoApprove: toolkit.autoApprove,
       approveAll: task.approveAll,
       checkpointer,
@@ -231,7 +238,7 @@ async function nextInput(
     }
     if (rows.some((r) => r.status === 'pending')) return 'waiting';
     const decisions: Record<string, ApprovalDecision> = Object.fromEntries(
-      rows.map((r) => [r.interruptId, { approved: r.status === 'approved' }]),
+      rows.map((r) => [r.interruptId, { approved: r.status === 'approved', answer: r.answer }]),
     );
     return new Command({ resume: decisions }) as AgentInput;
   }
@@ -316,7 +323,13 @@ async function requestApprovals(
       await emit(
         tx,
         taskId,
-        { type: 'approval.requested', approvalId: a.id, stepId: step.id, tool: a.tool },
+        {
+          type: 'approval.requested',
+          approvalId: a.id,
+          stepId: step.id,
+          tool: a.tool,
+          ...(a.tool === ASK_USER ? { question: String(a.args.question ?? '') } : {}),
+        },
         step.id,
       );
     }

@@ -5,6 +5,7 @@ import {
   type AgentDto,
   type ApprovalListItem,
   type ConnectionDto,
+  EXAMPLES,
   isTerminal,
   type SkillDto,
   type StepConversationDto,
@@ -260,6 +261,33 @@ async function askApproval(client: Client, approvalId: string): Promise<void> {
   const pending = await client.get<ApprovalListItem[]>('/api/approvals?status=pending');
   const approval = pending.find((a) => a.id === approvalId);
   if (!approval) return; // already decided (e.g. replayed history)
+  if (approval.tool === 'ask_user') {
+    const { question, options, why } = approval.args as {
+      question?: string;
+      options?: string[];
+      why?: string;
+    };
+    console.log(paint('cyan', `\n  ${approval.stepTitle} asks: ${paint('bold', question ?? '')}`));
+    if (why) console.log(paint('gray', `  (${why})`));
+    options?.forEach((o, i) => {
+      console.log(`  ${i + 1}. ${o}`);
+    });
+    const rl = createInterface({ input: stdin, output: stdout });
+    const reply = (
+      await rl.question(
+        paint(
+          'cyan',
+          options?.length
+            ? '  Your answer (number or text, empty skips): '
+            : '  Your answer (empty skips): ',
+        ),
+      )
+    ).trim();
+    rl.close();
+    const picked = options?.[Number(reply) - 1];
+    await answerQuestion(client, approvalId, picked ?? reply);
+    return;
+  }
   console.log(
     paint(
       'yellow',
@@ -303,6 +331,27 @@ export async function listApprovals(client: Client): Promise<void> {
     console.log(`  ${JSON.stringify(a.args)}`);
   }
   console.log(paint('gray', '\nDecide with: gantrix approve <id>  or  gantrix deny <id>'));
+}
+
+async function pendingId(client: Client, ref: string): Promise<string> {
+  if (ref.length >= 36) return ref;
+  const match = (await client.get<ApprovalListItem[]>('/api/approvals?status=pending')).filter(
+    (a) => a.id.endsWith(ref),
+  );
+  if (match.length !== 1 || !match[0])
+    throw new Error(`No single pending question matches "${ref}".`);
+  return match[0].id;
+}
+
+/** Answers an agent's ask_user question; an empty answer skips it. */
+export async function answerQuestion(client: Client, ref: string, answer: string): Promise<void> {
+  const id = await pendingId(client, ref);
+  const text = answer.trim();
+  await client.post(
+    `/api/approvals/${id}`,
+    text ? { approved: true, answer: text } : { approved: false },
+  );
+  console.log(text ? `  ${stepIcon('succeeded')} answered` : `  ${stepIcon('pending')} skipped`);
 }
 
 export async function decide(client: Client, ref: string, approved: boolean): Promise<void> {
@@ -547,4 +596,25 @@ export async function say(
       ? `Sent to ${o.to}; its agent reads it before its next turn.`
       : 'Sent to the team; the planner replans with it once the running steps finish.',
   );
+}
+
+// ---- examples
+
+export async function runExample(
+  client: Client,
+  name: string,
+  o: { detach?: boolean },
+): Promise<void> {
+  const example = EXAMPLES[name];
+  if (!example)
+    throw new Error(`No example "${name}". Examples: ${Object.keys(EXAMPLES).join(', ')}.`);
+  const agents = (await client.get<AgentDto[]>('/api/agents')).map((a) => a.name);
+  const missing = example.agents.filter((n) => !agents.includes(n));
+  if (missing.length) {
+    throw new Error(`The example needs the ${missing.join(', ')} agent(s). Run: gantrix team add`);
+  }
+  await runTask(client, example.goal, {
+    maxMinutes: String(example.maxMinutes),
+    ...(o.detach ? { detach: true } : {}),
+  });
 }

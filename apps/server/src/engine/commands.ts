@@ -55,11 +55,17 @@ export async function decideApproval(
   deps: EngineDeps,
   approvalId: string,
   approved: boolean,
+  /** ask_user: the user's answer. */
+  answer?: string,
 ): Promise<DecisionResult> {
   const outcome = await deps.db.transaction(async (tx) => {
     const [approval] = await tx
       .update(approvals)
-      .set({ status: approved ? 'approved' : 'denied', decidedAt: new Date() })
+      .set({
+        status: approved ? 'approved' : 'denied',
+        decidedAt: new Date(),
+        ...(answer ? { answer } : {}),
+      })
       .where(and(eq(approvals.id, approvalId), eq(approvals.status, 'pending')))
       .returning();
     if (!approval) {
@@ -69,7 +75,7 @@ export async function decideApproval(
     await emit(
       tx,
       approval.taskId,
-      { type: 'approval.decided', approvalId, approved },
+      { type: 'approval.decided', approvalId, approved, ...(answer ? { answer } : {}) },
       approval.stepId,
     );
     const open = await tx.query.approvals.findFirst({

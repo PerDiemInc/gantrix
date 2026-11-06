@@ -117,9 +117,15 @@ export function nowText(e: StreamEvent | null, agentName: (stepId: string) => st
     case 'step.tool_call':
       return `${agentName(e.stepId)} used ${e.tool}`;
     case 'approval.requested':
-      return `${agentName(e.stepId)} asks to run ${e.tool}`;
+      return e.question
+        ? `${agentName(e.stepId)} asks you: ${clip(e.question)}`
+        : `${agentName(e.stepId)} asks to run ${e.tool}`;
     case 'approval.decided':
-      return e.approved ? 'You approved a tool call' : 'You denied a tool call';
+      return e.answer
+        ? `You answered: ${clip(e.answer)}`
+        : e.approved
+          ? 'You approved a tool call'
+          : 'You denied a tool call';
     case 'goal.judged':
       return `Goal ${e.passed ? 'met' : 'not met yet'}: ${clip(e.reason)}`;
     case 'budget.exceeded':

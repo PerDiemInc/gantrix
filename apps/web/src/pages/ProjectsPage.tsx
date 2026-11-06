@@ -1,4 +1,4 @@
-import { isTerminal, type TaskDto, type TaskListItem } from '@gantrix/shared';
+import { EXAMPLES, isTerminal, type TaskDto, type TaskListItem } from '@gantrix/shared';
 import { type FormEvent, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
@@ -36,6 +36,23 @@ function NewProject({ onClose }: { onClose: () => void }) {
         <button type="button" className="ghost small" onClick={onClose}>
           Close
         </button>
+      </div>
+      <div className="examples">
+        <span className="muted small">Try an example:</span>
+        {Object.entries(EXAMPLES).map(([key, ex]) => (
+          <button
+            key={key}
+            type="button"
+            className="chip"
+            onClick={() => {
+              setGoal(ex.goal);
+              setMinutes(String(ex.maxMinutes));
+            }}
+            title={`Needs the ${ex.agents.join(', ')} agents (gantrix team add)`}
+          >
+            {ex.title}
+          </button>
+        ))}
       </div>
       <label>
         Goal
@@ -172,8 +189,8 @@ function ProjectCard({
         <a className="needs-you-bar" href={`#/projects/${p.id}`}>
           <Icon name="hand" size={14} />
           {p.pendingApprovals === 1
-            ? 'An agent needs your approval'
-            : `${p.pendingApprovals} approvals wait for you`}
+            ? 'An agent is waiting for you'
+            : `${p.pendingApprovals} questions or approvals wait for you`}
         </a>
       )}
     </li>

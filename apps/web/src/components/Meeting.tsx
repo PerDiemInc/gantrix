@@ -108,10 +108,15 @@ export function meetingLines(
         );
         break;
       case 'approval.requested':
-        say(e, 'agent', who(e.stepId), `I need your OK to run ${e.tool}.`);
+        say(
+          e,
+          'agent',
+          who(e.stepId),
+          e.question ? `Question for you: ${e.question}` : `I need your OK to run ${e.tool}.`,
+        );
         break;
       case 'approval.decided':
-        say(e, 'you', 'You', e.approved ? 'Approved.' : 'Denied.');
+        say(e, 'you', 'You', e.answer ? e.answer : e.approved ? 'Approved.' : 'Skipped or denied.');
         break;
       case 'goal.judged':
         say(e, 'judge', 'Judge', `Goal ${e.passed ? 'met' : 'not met yet'}: ${e.reason}`);

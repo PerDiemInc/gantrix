@@ -5,6 +5,7 @@ import { buildServer } from './api/server.ts';
 import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
+import { createPreviewServer } from './preview.ts';
 
 const config = loadConfig();
 if (!config.GANTRIX_TOKEN) {
@@ -27,10 +28,17 @@ await hub.start();
 const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRIX_TOKEN);
 await app.listen({ host: config.GANTRIX_HOST, port: config.GANTRIX_PORT });
 
+// Sites published by deploy_site, on their own origin (see preview.ts).
+const preview = createPreviewServer(config.GANTRIX_SITES_DIR);
+preview.on('error', (error) => console.error(`Preview server: ${error.message}`));
+preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
+
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  preview.closeAllConnections();
+  preview.close();
   await app.close();
   await hub.close();
   await queues.close();

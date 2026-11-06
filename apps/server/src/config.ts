@@ -18,6 +18,9 @@ const ConfigSchema = z.object({
   GANTRIX_LLM_CONCURRENCY: positiveInt(2),
   GANTRIX_WORKSPACES_DIR: path.default('~/.gantrix/workspaces'),
   GANTRIX_SKILLS_DIR: path.default('~/.gantrix/skills'),
+  // deploy_site publishes here, and the preview server serves it on its own port.
+  GANTRIX_SITES_DIR: path.default('~/.gantrix/sites'),
+  GANTRIX_PREVIEW_PORT: z.coerce.number().int().min(1).max(65535).default(4702),
   GANTRIX_MAX_STEP_ATTEMPTS: positiveInt(3),
   GANTRIX_MAX_REPLANS: positiveInt(5),
   GANTRIX_MAX_TOKENS: positiveInt(200_000),

@@ -108,7 +108,9 @@ connections
 const team = program.command('team').description('the built-in executive agents');
 team
   .command('add')
-  .description('install the CTO, CMO, CRO, CISO, CPO and designer agents and their skills')
+  .description(
+    'install the CTO, CMO, CRO, CISO, CPO, designer and engineer agents and their skills',
+  )
   .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
   .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
   .action(run((o) => addTeam(client, o)));
@@ -163,6 +165,17 @@ program
   .command('approvals')
   .description('list pending approvals')
   .action(run(() => cmd.listApprovals(client)));
+program
+  .command('answer <id> [words...]')
+  .description("answer an agent's question (empty skips it)")
+  .action(
+    run((id: string, words: string[] = []) => cmd.answerQuestion(client, id, words.join(' '))),
+  );
+program
+  .command('example <name>')
+  .description('start an example project: website')
+  .option('--detach', "don't follow the project")
+  .action(run((name: string, o) => cmd.runExample(client, name, o)));
 program
   .command('approve <id>')
   .description('approve a tool call')

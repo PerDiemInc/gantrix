@@ -14,6 +14,7 @@ import {
 } from '@langchain/langgraph';
 import { tokensUsed } from '../models/provider.ts';
 import { requiresApproval } from '../skills/policy.ts';
+import { ASK_USER } from '../skills/tools/ask.ts';
 
 export interface ApprovalRequest {
   tool: string;
@@ -22,6 +23,8 @@ export interface ApprovalRequest {
 
 export interface ApprovalDecision {
   approved: boolean;
+  /** ask_user: what the user answered. */
+  answer?: string | null;
 }
 
 export const MAX_MODEL_TURNS = 25; // the runner sets recursionLimit = 2 × turns + 1
@@ -55,6 +58,17 @@ export function buildStepAgent(o: StepAgentOptions) {
     const tool = byName.get(call.name);
     if (!tool) {
       return `Error: unknown tool "${call.name}". Available: ${[...byName.keys()].join(', ')}.`;
+    }
+    // ask_user always waits for the user, whatever the approval setting.
+    if (call.name === ASK_USER) {
+      const decision = interrupt<ApprovalRequest, ApprovalDecision>({
+        tool: call.name,
+        args: call.args,
+      });
+      await o.onToolCall(call.name, call.args, false);
+      return decision.approved && decision.answer
+        ? `The user answered: ${decision.answer}`
+        : 'The user skipped this question. Make a sensible assumption, say what you assumed, and go on.';
     }
     const gated = requiresApproval(call.name, o.autoApprove);
     if (gated && !o.approveAll) {

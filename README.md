@@ -183,11 +183,13 @@ auto-approve: [web_fetch]       # optional; tools that run without asking (never
 Instructions the agent gets whenever it has this skill.
 ```
 
-| Built-in tool | What it does | Needs approval |
+| Built-in tool | What it does | Waits for you |
 |---|---|---|
-| `read_file`, `write_file`, `list_files` | Text files in the task's folder only | no |
-| `web_fetch` | Public web pages; refuses local and private addresses | yes, unless a skill auto-approves it |
-| `shell` | A shell command in the task's folder, 2-minute limit | **always** |
+| `read_file`, `write_file`, `list_files` | Text files in the task's folder only | never |
+| `web_fetch` | Public web pages; refuses local and private addresses | on projects that ask first, unless a skill auto-approves it |
+| `shell` | A shell command in the task's folder, 2-minute limit | on projects that ask first (no skill can skip that) |
+| `ask_user` | Asks you a question, optionally with answers to pick from, and waits for your reply | always waits for you |
+| `deploy_site` | Publishes a workspace folder with an `index.html` on the local preview server (port 4702) | on projects that ask first |
 
 MCP tools are named `<server>_<tool>` (for example `search_query`) and need approval unless a
 skill lists them in `auto-approve`.
@@ -198,6 +200,31 @@ Examples are in [`examples/skills`](examples/skills): `workspace-files`, `shell-
 Installing a skill copies it to `~/.gantrix/skills/<name>/<version>` and records a checksum, so
 editing your original folder doesn't change what runs. To update a skill, bump its `version`
 and install it again.
+
+## Example: build me a website
+
+A project where the agents talk to you as they work:
+
+```bash
+npm run gantrix -- team add            # cpo, designer, engineer and the rest
+npm run gantrix -- example website     # or: New project → "Build me a website" on the dashboard
+```
+
+1. **The product manager (`cpo`) asks you** what the site is for, who it's for and which pages
+   it needs, one question at a time, then writes `product/brief.md`.
+2. **The designer sketches three different styles** as `design/styles/*.html` and asks you
+   which one to build. Open them in the project's Files panel to compare.
+3. **The engineer builds the site** in `site/` in the style you chose and **deploys it** to
+   the local preview server. The link is in its reply and under **Open deployed site** on the
+   project page, at `http://127.0.0.1:4702/<name>/`.
+
+Questions show up on the project page, on the Approvals page and in `gantrix tail`. You can
+also answer from the terminal with `gantrix answer <id> "your answer"`. A question always
+waits for you, even on projects that don't ask first. Skip one and the agent makes, and states,
+an assumption. The example gets a 3-hour time budget, because your answers take time.
+
+The preview server only serves `~/.gantrix/sites` (`GANTRIX_SITES_DIR`), on its own port
+(`GANTRIX_PREVIEW_PORT`, 4702). A deployed site can't reach the dashboard or your token.
 
 ## The executive team (optional)
 
@@ -215,6 +242,7 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
 | `cro` | `exec-cro` | Customer profiles, lead lists from public pages, cold email and SMS drafts, sends email | files, web, outreach |
 | `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
 | `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
+| `engineer` | `exec-engineer` | Builds websites and small tools from the brief and the chosen design, then deploys them to the local preview server | files, web, shell, deploy |
 | `designer` | `exec-designer`, `google-slides` | Mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and Google Slides decks: brief, wireframes, design tokens, HTML/CSS mockups and print files, checked against WCAG 2.2 | files, web, Google Slides |
 
 It's safe to run again. Team agents you haven't changed move to the newest team skills; any
@@ -345,7 +373,8 @@ gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
-gantrix approvals | approve <id> | deny <id>
+gantrix approvals | approve <id> | deny <id> | answer <id> "<answer>"
+gantrix example website
 ```
 
 Run it as `npm run gantrix -- <command>`. `<task>` is `last`, a full ID, or the short ID that
@@ -471,6 +500,7 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `GANTRIX_LLM_CONCURRENCY` | `2` | Model calls at once per worker |
 | `GANTRIX_WORKSPACES_DIR`, `GANTRIX_SKILLS_DIR` | `~/.gantrix/…` | Where task files and skills live |
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |
+| `GANTRIX_SITES_DIR`, `GANTRIX_PREVIEW_PORT` | `~/.gantrix/sites`, `4702` | Where deploy_site publishes, and the preview server's port |
 | `GANTRIX_APPROVE_ALL` | `true` | Tool calls run without asking; `false` makes every new project ask first |
 
 ## Development

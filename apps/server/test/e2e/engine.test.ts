@@ -311,6 +311,40 @@ describe('engine', () => {
     }
   });
 
+  it('asks the user with ask_user, even with approvals off, and uses the answer', async () => {
+    await e.addAgent('pm', ['ask_user', 'write_file']);
+    e.fake.script.plan = () => ({ steps: [step('brief', 'pm')] });
+    e.fake.script.worker = ({ toolResults }) => {
+      if (!toolResults.length) {
+        return { name: 'ask_user', args: { question: 'What colour?', options: ['Blue', 'Green'] } };
+      }
+      if (toolResults.length === 1) {
+        return { name: 'write_file', args: { path: 'brief.md', content: toolResults[0] ?? '' } };
+      }
+      return `Brief written: ${toolResults[0]}`;
+    };
+    const task = await createTask(e.deps, { goal: 'Write a brief', approveAll: true });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+
+    const [question] = await e.db.select().from(approvals).where(eq(approvals.taskId, task.id));
+    expect(question).toMatchObject({
+      tool: 'ask_user',
+      status: 'pending',
+      args: { question: 'What colour?', options: ['Blue', 'Green'] },
+    });
+    const asked = (
+      await e.db.select().from(events).where(eq(events.taskId, task.id)).orderBy(asc(events.id))
+    ).find((r) => r.type === 'approval.requested');
+    expect(asked?.payload).toMatchObject({ question: 'What colour?' });
+
+    expect(await decideApproval(e.deps, question!.id, true, 'Blue')).toBe('decided');
+    const done = await e.waitFor(task.id);
+    expect(done.status).toBe('succeeded');
+    expect(await readFile(join(done.workspacePath, 'brief.md'), 'utf8')).toBe(
+      'The user answered: Blue',
+    );
+  });
+
   it('tells the agent when an approval is denied', async () => {
     await e.addAgent('fetcher', ['web_fetch']);
     e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });

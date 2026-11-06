@@ -189,6 +189,8 @@ export const approvals = pgTable(
     tool: text('tool').notNull(),
     args: jsonb('args').$type<Record<string, unknown>>().notNull(),
     status: text('status').$type<ApprovalStatus>().notNull().default('pending'),
+    // ask_user: the user's answer (approved) or null when they skipped it (denied).
+    answer: text('answer'),
     createdAt: createdAt(),
     decidedAt: ts('decided_at'),
   },

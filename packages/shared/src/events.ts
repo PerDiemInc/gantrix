@@ -13,8 +13,21 @@ export type GantrixEvent =
       /** Would have asked, but the task is in god mode. */
       autoApproved?: boolean;
     }
-  | { type: 'approval.requested'; approvalId: string; stepId: string; tool: string }
-  | { type: 'approval.decided'; approvalId: string; approved: boolean }
+  | {
+      type: 'approval.requested';
+      approvalId: string;
+      stepId: string;
+      tool: string;
+      /** ask_user: the agent's question. */
+      question?: string;
+    }
+  | {
+      type: 'approval.decided';
+      approvalId: string;
+      approved: boolean;
+      /** ask_user: the user's answer. */
+      answer?: string;
+    }
   | { type: 'user.message'; messageId: string; text: string; stepId?: string }
   | { type: 'user.message_delivered'; messageId: string; stepId: string }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
