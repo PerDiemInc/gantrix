@@ -1,0 +1,113 @@
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
+import { createClient } from './client.ts';
+import * as cmd from './commands.ts';
+
+// Settings come from the environment, falling back to the repo's .env (never overriding).
+try {
+  process.loadEnvFile(fileURLToPath(new URL('../../../.env', import.meta.url)));
+} catch {
+  // no .env: rely on the environment
+}
+const baseUrl =
+  process.env.GANTRIX_URL ??
+  `http://${process.env.GANTRIX_HOST ?? '127.0.0.1'}:${process.env.GANTRIX_PORT ?? '4700'}`;
+const token = process.env.GANTRIX_TOKEN ?? '';
+
+const client = createClient(baseUrl, token);
+const run =
+  <A extends unknown[]>(fn: (...args: A) => Promise<void>) =>
+  async (...args: A) => {
+    try {
+      if (!token) throw new Error('GANTRIX_TOKEN is not set (see the server .env).');
+      await fn(...args);
+    } catch (error) {
+      console.error(cmd.explain(error));
+      process.exitCode = 1;
+    }
+  };
+
+const program = new Command('gantrix')
+  .description('Agents with skills that work a plan like a Gantt chart until the goal is met.')
+  .version('0.1.0');
+
+const agents = program.command('agents').description('manage agents');
+agents
+  .command('list', { isDefault: true })
+  .description('list agents')
+  .action(run(() => cmd.listAgents(client)));
+agents
+  .command('add <name>')
+  .description('add an agent')
+  .option('-d, --description <text>', 'what the agent is good at (the planner reads this)')
+  .option('-s, --skills <names>', 'comma-separated skill names')
+  .option('-m, --model <model>', 'e.g. qwen3:8b or openai/<model> (default: GANTRIX_DEFAULT_MODEL)')
+  .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
+  .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
+  .option('--prompt <text>', 'extra system prompt')
+  .action(run((name: string, o) => cmd.addAgent(client, name, o)));
+agents
+  .command('rm <name>')
+  .description('remove an agent')
+  .action(run((name: string) => cmd.removeAgent(client, name)));
+
+const skills = program.command('skills').description('manage skills');
+skills
+  .command('list', { isDefault: true })
+  .description('list installed skills')
+  .action(run(() => cmd.listSkills(client)));
+skills
+  .command('add <folder>')
+  .description('install a skill folder containing a SKILL.md')
+  .action(run((folder: string) => cmd.addSkill(client, folder)));
+skills
+  .command('rm <name[@version]>')
+  .description('remove an installed skill')
+  .action(run((ref: string) => cmd.removeSkill(client, ref)));
+
+program
+  .command('run <goal...>')
+  .description('start a task and follow it live')
+  .option('--max-minutes <n>', 'time budget')
+  .option('--max-tokens <n>', 'token budget')
+  .option('--max-replans <n>', 'replan budget')
+  .option('--detach', "don't follow the task")
+  .action(run((goal: string[], o) => cmd.runTask(client, goal.join(' '), o)));
+program
+  .command('tasks')
+  .description('list recent tasks')
+  .option('-n, --limit <n>', 'how many', '20')
+  .action(run((o) => cmd.listTasks(client, o)));
+program
+  .command('show <task>')
+  .description('show a task as a Gantt chart ("last" = most recent)')
+  .option('-a, --all', 'include superseded steps from earlier plans')
+  .action(run((ref: string, o) => cmd.showTask(client, ref, o)));
+program
+  .command('tail <task>')
+  .description('follow a task live and answer approvals')
+  .action(run((ref: string) => cmd.tail(client, ref)));
+program
+  .command('cancel <task>')
+  .description('cancel a task')
+  .action(run((ref: string) => cmd.cancel(client, ref)));
+program
+  .command('files <task> [path]')
+  .description('list workspace files, or print one')
+  .action(run((ref: string, path?: string) => cmd.files(client, ref, path)));
+
+program
+  .command('approvals')
+  .description('list pending approvals')
+  .action(run(() => cmd.listApprovals(client)));
+program
+  .command('approve <id>')
+  .description('approve a tool call')
+  .action(run((id: string) => cmd.decide(client, id, true)));
+program
+  .command('deny <id>')
+  .description('deny a tool call')
+  .action(run((id: string) => cmd.decide(client, id, false)));
+
+await program.parseAsync();

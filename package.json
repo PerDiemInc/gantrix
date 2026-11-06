@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "biome check .",
     "test": "vitest run --project unit",
-    "test:e2e": "vitest run --project e2e"
+    "test:e2e": "vitest run --project e2e",
+    "gantrix": "node apps/cli/src/index.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.5",
