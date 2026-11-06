@@ -74,7 +74,8 @@ npm run gantrix -- agents add editor -d "Turns notes into a polished summary" -s
 
 The planner reads each agent's description to decide who does what, so make it specific.
 You can also do this on the dashboard's Skills and Agents pages. When you add an agent there,
-pick where it runs and then a model from that server's list.
+pick where it runs and then a model from that server's list. Every agent gets a Gant avatar;
+click it on the Agents page to pick another one, upload your own image, or use initials.
 
 ### 5. Run your first task
 
