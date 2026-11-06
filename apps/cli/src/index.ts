@@ -126,6 +126,11 @@ program
   .option('-a, --all', 'include superseded steps from earlier plans')
   .action(run((ref: string, o) => cmd.showTask(client, ref, o)));
 program
+  .command('say <task> <words...>')
+  .description('send a note to a running task: the whole team (replans) or one step with --to')
+  .option('--to <step>', 'the step key, e.g. research_tea')
+  .action(run((ref: string, words: string[], o) => cmd.say(client, ref, words, o)));
+program
   .command('logs <task> [step]')
   .description("show each step's conversation: prompts, replies, tool calls and the judge")
   .option('--full', 'show system prompts, thinking and long text in full')

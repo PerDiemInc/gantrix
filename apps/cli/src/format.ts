@@ -108,5 +108,9 @@ export function describeEvent(e: StreamEvent, stepKeys: Map<string, string>): st
       return `${at} goal ${e.passed ? paint('green', 'met') : paint('yellow', 'not met')}: ${e.reason}`;
     case 'budget.exceeded':
       return `${at} ${paint('red', `budget exceeded (${e.limit}): ${e.detail}`)}`;
+    case 'user.message':
+      return `${at} ${paint('cyan', `you → ${e.stepId ? (stepKeys.get(e.stepId) ?? 'a step') : 'the team'}: ${e.text}`)}`;
+    case 'user.message_delivered':
+      return `${at}   ${paint('gray', `↳ ${stepKeys.get(e.stepId) ?? 'a step'} read your note`)}`;
   }
 }

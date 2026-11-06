@@ -73,7 +73,8 @@ npm run gantrix -- agents add editor -d "Turns notes into a polished summary" -s
 ```
 
 The planner reads each agent's description to decide who does what, so make it specific.
-You can also do this on the dashboard's Skills and Agents pages.
+You can also do this on the dashboard's Skills and Agents pages. When you add an agent there,
+pick where it runs and then a model from that server's list.
 
 ### 5. Run your first task
 
@@ -90,6 +91,17 @@ npm run gantrix -- files last compare.md    # print one
 ```
 
 Or watch it on the dashboard: Tasks, then the task.
+
+**The task page reads like a meeting.** Under the Gantt chart and the status, the planner, each
+agent, the judge and you talk in turn. You can join in at any time:
+- To one running step: the agent reads your note before its next turn.
+- To everyone: once the running steps finish, the planner replans with your note and keeps the
+  finished work. This replan doesn't use up the replan budget.
+
+```bash
+npm run gantrix -- say last "Also add a price comparison"           # to everyone
+npm run gantrix -- say last --to research_tea "Use sources from 2025" # to one step
+```
 
 To see what each agent was told, what it answered and every tool call it made, open **Logs**
 on the task page, or click "View conversation" on a step. You can also print it in the terminal:
@@ -302,6 +314,7 @@ gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
 gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
+gantrix say <task> "<note>" [--to <step>]
 gantrix approvals | approve <id> | deny <id>
 ```
 

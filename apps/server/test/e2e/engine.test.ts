@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { agents, approvals, connections, events, steps } from '../../src/db/schema.ts';
-import { cancelTask, createTask, decideApproval } from '../../src/engine/commands.ts';
+import { cancelTask, createTask, decideApproval, sendMessage } from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 const step = (key: string, agent: string, dependsOn: string[] = []) => ({
@@ -183,6 +183,72 @@ describe('engine', () => {
       'Claude Code',
     );
     expect(e.fake.calls.worker).toBe(0); // the fake Ollama only planned and judged
+  });
+
+  it("gives a running step the user's note before its next model turn", async () => {
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length ? 'Done.' : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const task = await createTask(e.deps, { goal: 'Fetch a page' });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    const [fetch] = await stepsOf(task.id);
+
+    expect(
+      await sendMessage(e.deps, task.id, { text: 'Use the EU site.', stepId: fetch!.id }),
+    ).toMatchObject({
+      status: 'sent',
+    });
+    const [pending] = await e.db.select().from(approvals).where(eq(approvals.taskId, task.id));
+    await decideApproval(e.deps, pending!.id, true);
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+
+    const sawNote = e.fake.bodies.some((b) =>
+      b.messages.some((m) => m.role === 'user' && m.content.includes('Use the EU site.')),
+    );
+    expect(sawNote).toBe(true);
+    expect(await eventTypes(task.id)).toContain('user.message_delivered');
+  });
+
+  it('replans with a note to the whole team after running steps finish, keeping done work', async () => {
+    await e.addAgent('fetcher', ['web_fetch', 'write_file']);
+    const prompts: string[] = [];
+    e.fake.script.plan = (prompt) => {
+      prompts.push(prompt);
+      return prompt.includes('The user says: Also add a summary.')
+        ? { steps: [step('summary', 'fetcher', ['fetch'])] }
+        : { steps: [step('fetch', 'fetcher')] };
+    };
+    e.fake.script.worker = ({ title, toolResults }) =>
+      title !== 'fetch' || toolResults.length
+        ? `Done ${title}.`
+        : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const task = await createTask(e.deps, { goal: 'Fetch a page' });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+
+    await sendMessage(e.deps, task.id, { text: 'Also add a summary.' });
+    const [pending] = await e.db.select().from(approvals).where(eq(approvals.taskId, task.id));
+    await decideApproval(e.deps, pending!.id, true);
+    const done = await e.waitFor(task.id);
+
+    expect(done.status).toBe('succeeded');
+    expect(done.replans).toBe(1);
+    expect(prompts.at(-1)).toContain('The user says: Also add a summary.');
+    const all = await stepsOf(task.id);
+    expect(all.map((s) => `${s.key}:${s.status}`)).toEqual([
+      'fetch:succeeded',
+      'summary:succeeded',
+    ]);
+  });
+
+  it('refuses notes to a finished task', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+    const task = await createTask(e.deps, { goal: 'Write notes' });
+    await e.waitFor(task.id);
+    expect(await sendMessage(e.deps, task.id, { text: 'More please' })).toEqual({
+      status: 'task_finished',
+    });
   });
 
   it('tells the agent when an approval is denied', async () => {

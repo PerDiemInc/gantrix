@@ -6,7 +6,7 @@ import { createChatModel, tokensUsed } from '../models/provider.ts';
 import { validatePlan } from '../plan/dag.ts';
 import { type Plan, PlanSchema } from '../plan/schema.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
-import { latestGoalVerdict } from './supervisor.ts';
+import { latestGoalVerdict, teamNotesFor } from './supervisor.ts';
 
 const PLAN_ATTEMPTS = 3;
 const clip = (text: string | null, max: number) =>
@@ -144,6 +144,9 @@ async function whyReplan(
     .map((s) => `- Step "${s.title}" failed: ${s.error ?? s.judgeReason ?? 'unknown error'}`);
   const verdict = await latestGoalVerdict(deps.db, taskId, version - 1);
   if (verdict && !verdict.passed) failed.push(`- The goal isn't met yet: ${verdict.reason}`);
+  for (const note of await teamNotesFor(deps.db, taskId, version)) {
+    failed.push(`- The user says: ${note}`);
+  }
   return failed.join('\n');
 }
 

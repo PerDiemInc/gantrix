@@ -4,8 +4,8 @@ import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { approvals, events, plans, steps, tasks } from '../../db/schema.ts';
-import { cancelTask, createTask } from '../../engine/commands.ts';
+import { approvals, events, plans, steps, taskMessages, tasks } from '../../db/schema.ts';
+import { cancelTask, createTask, sendMessage } from '../../engine/commands.ts';
 import { stepThreadId } from '../../engine/threads.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
@@ -39,6 +39,10 @@ const EventsPage = z.object({
 });
 const FileQuery = z.object({ path: z.string().min(1) });
 const StepParams = z.object({ id: z.uuid(), stepId: z.uuid() });
+const MessageBody = z.object({
+  text: z.string().trim().min(1).max(4_000),
+  stepId: z.uuid().optional(),
+});
 
 export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const { db } = deps;
@@ -120,6 +124,31 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       attempts,
     };
     return dto;
+  });
+
+  app.get('/api/tasks/:id/messages', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    return db
+      .select()
+      .from(taskMessages)
+      .where(eq(taskMessages.taskId, task.id))
+      .orderBy(asc(taskMessages.createdAt));
+  });
+
+  app.post('/api/tasks/:id/messages', async (request, reply) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const body = parse(MessageBody, request.body);
+    const r = await sendMessage(deps, task.id, {
+      text: body.text,
+      ...(body.stepId ? { stepId: body.stepId } : {}),
+    });
+    if (r.status === 'task_finished')
+      throw new HttpError(409, 'The task has finished; start a new one.');
+    if (r.status === 'no_step') throw notFound('Step');
+    if (r.status === 'step_finished') {
+      throw new HttpError(409, 'That step has finished; send the note to the whole team instead.');
+    }
+    return reply.code(201).send({ id: r.id });
   });
 
   app.get('/api/tasks/:id/events', async (request) => {
