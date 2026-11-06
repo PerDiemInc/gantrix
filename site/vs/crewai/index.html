@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gantrix vs CrewAI: Local-First AI Agent Orchestration Compared</title>
+<meta name="description" content="How Gantrix and CrewAI differ: a ready-to-run TypeScript app that plans goals as parallel steps on local models, vs a mature Python framework for agent crews.">
+<link rel="canonical" href="https://perdieminc.github.io/gantrix/vs/crewai/">
+<link rel="icon" href="../../assets/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Gantrix">
+<meta property="og:title" content="Gantrix vs CrewAI: Local-First AI Agent Orchestration Compared">
+<meta property="og:description" content="How Gantrix and CrewAI differ: a ready-to-run TypeScript app that plans goals as parallel steps on local models, vs a mature Python framework for agent crews.">
+<meta property="og:url" content="https://perdieminc.github.io/gantrix/vs/crewai/">
+<meta property="og:image" content="https://perdieminc.github.io/gantrix/assets/social.png">
+<meta property="og:image:alt" content="Gant, the Gantrix mascot, next to the Gantrix wordmark">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../assets/site.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Gantrix", "item": "https://perdieminc.github.io/gantrix/"}, {"@type": "ListItem", "position": 2, "name": "Gantrix vs CrewAI", "item": "https://perdieminc.github.io/gantrix/vs/crewai/"}]}</script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="../../" aria-label="Gantrix home">
+      <img src="../../assets/logo.svg" alt="" width="44" height="36">
+      <span>Gantri<span class="x">x</span></span>
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a class="opt2" href="../../#start">Get started</a>
+      <a class="opt" href="../../#how">How it works</a>
+      <a class="opt" href="../../#skills">Skills</a>
+      <a href="https://github.com/PerDiemInc/gantrix">GitHub</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="wrap page">
+    <p class="crumbs"><a href="../../">Gantrix</a> / compare / CrewAI</p>
+    <h1>Gantrix vs <em>CrewAI</em></h1>
+    <p class="lede">Both are MIT-licensed and both can run agents on local models through Ollama. The difference is what you get: CrewAI is a mature Python framework you build agent teams with in code. Gantrix is a ready-to-run app that turns a goal into a plan of dependent steps and runs it for you.</p>
+    <div class="box"><table class="compare">
+      <thead><tr><th></th><th>Gantrix</th><th>CrewAI</th></tr></thead>
+      <tbody>
+<tr><td>What it is</td><td>An app: API, worker, web dashboard and CLI</td><td>A Python framework you build crews and flows with</td></tr>
+<tr><td>Language</td><td>Node 26, TypeScript</td><td>Python 3.10–3.13</td></tr>
+<tr><td>Who writes the plan</td><td>A planner model turns each goal into dependent steps, and replans when steps fail</td><td>You define the agents and tasks in code</td></tr>
+<tr><td>Parallel work</td><td>Every step whose dependencies are done starts at once; shown as a live Gantt chart</td><td>Depends on how you structure the crew or flow</td></tr>
+<tr><td>Checking results</td><td>A judge checks every step against its &ldquo;done when&rdquo;, with retries and replans</td><td>Up to your crew design</td></tr>
+<tr><td>Human in the loop</td><td>Per-tool approvals; shell always asks</td><td>Human input during task execution (see CrewAI docs)</td></tr>
+<tr><td>Local models</td><td>Ollama by default, or any OpenAI-compatible server</td><td>Supported, including Ollama</td></tr>
+<tr><td>Skills</td><td>SKILL.md folders (Claude-compatible) and MCP servers</td><td>Tools you add in Python</td></tr>
+<tr><td>Restart safety</td><td>State in Postgres, jobs in BullMQ; a restarted worker resumes</td><td>Depends on how you deploy it</td></tr>
+<tr><td>Maturity</td><td>New (v0.1)</td><td>Large community, about 60k GitHub stars</td></tr>
+<tr><td>License</td><td>MIT</td><td>MIT</td></tr>
+      </tbody>
+    </table></div>
+    <div class="verdict">
+      <div><h2 style="font-size:26px;margin:0">Pick CrewAI if</h2><ul><li>Your team works in Python</li><li>You want a large ecosystem of examples, integrations and tutorials</li><li>You want to script exactly how each agent collaborates</li></ul></div>
+      <div><h2 style="font-size:26px;margin:0">Pick Gantrix if</h2><ul><li>You want a running system, not a library: dashboard, CLI and queue included</li><li>Your stack is Node and TypeScript</li><li>You want the plan made for you and shown as a Gantt chart</li><li>Everything must stay on your machine, with approvals for risky tools</li></ul></div>
+    </div>
+    <p class="note">Facts about CrewAI come from its GitHub repository and documentation as of November 2026 (license, language, Python versions, star count, human input guide). Corrections are welcome as a GitHub issue.</p>
+    <div class="cta"><a class="btn primary" href="../../#start">Try Gantrix <small>about 10 min</small></a><a class="btn" href="https://github.com/PerDiemInc/gantrix">PerDiemInc/gantrix <small>on GitHub</small></a></div>
+  </div>
+</main>
+<footer>
+  <div class="wrap">
+    <span><img src="../../assets/logo.svg" alt="" width="34" height="28">Gantrix · MIT license</span>
+    <nav class="foot-links" aria-label="Compare"><a href="../crewai/">Gantrix vs CrewAI</a><a href="../langgraph/">Gantrix vs LangGraph.js</a></nav>
+    <a class="powered" href="https://tryperdiem.com">Powered by <b>Per Diem</b></a>
+  </div>
+</footer>
+</body>
+</html>

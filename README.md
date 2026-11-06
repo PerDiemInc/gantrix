@@ -7,10 +7,10 @@
 
 <p align="center"><b>Open-source AI agents that work a plan like a Gantt chart, on your own machine.</b></p>
 
-You create **agents**, give each one or more **skills**, and hand Gantrix a **goal**. A planner
-splits the goal into steps that depend on each other. Steps that are ready run in parallel. A
-judge checks every result, and Gantrix retries, replans or asks for your approval until the goal
-is met or a budget runs out.
+**Gantrix is an open-source, local-first AI agent orchestrator.** Give it a goal and agents with
+skills (SKILL.md folders and MCP servers). It plans dependent steps, runs the ready ones in
+parallel on Ollama models, has a judge check each result, and asks you before risky tools run.
+It retries and replans until the goal is met or a budget runs out.
 
 ```
 ✔ research_tea       │███████████████████████████████                 │  42.6s  researcher
@@ -20,6 +20,8 @@ is met or a budget runs out.
 ```
 
 **Site:** https://perdieminc.github.io/gantrix/ has an overview and the same getting-started steps.
+Compare: [Gantrix vs CrewAI](https://perdieminc.github.io/gantrix/vs/crewai/) ·
+[Gantrix vs LangGraph.js](https://perdieminc.github.io/gantrix/vs/langgraph/).
 The mascot is Gant; the logo files are in [`site/assets`](site/assets).
 
 ---
