@@ -20,6 +20,9 @@ const PATHS = {
   send: 'M4 12l16-8-6 16-3-7z',
   arrowLeft: 'M19 12H5m6-6l-6 6 6 6',
   pause: 'M8 5v14M16 5v14',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM13 7l4 4',
+  hash: 'M9 4L7 20M17 4l-2 16M4 9h16M3 15h16',
 } as const;
 
 export type IconName = keyof typeof PATHS;

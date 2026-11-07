@@ -42,7 +42,12 @@ export function meetingLines(
         if (e.status === 'planning' && e.reason)
           say(e, 'planner', 'Planner', `Replanning: ${e.reason}.`);
         else if (isTerminal(e.status)) {
-          say(e, 'system', 'Gantrix', `Task ${label(e.status)}${e.reason ? `: ${e.reason}` : ''}.`);
+          say(
+            e,
+            'system',
+            'Gantrix',
+            `Project ${label(e.status)}${e.reason ? `: ${e.reason.replace(/\.$/, '')}` : ''}.`,
+          );
         }
         break;
       case 'plan.created': {
@@ -174,7 +179,11 @@ function Composer({
   const open = task.steps.filter((s) => OPEN_STEP.has(s.status));
   if (isTerminal(task.status)) {
     return (
-      <p className="muted small">This project has finished. Start a new project to keep going.</p>
+      <p className="muted small">
+        {task.status === 'needs_attention'
+          ? 'The project is stopped. Resume or add time to keep going.'
+          : 'This project has finished. Start a new project to keep going.'}
+      </p>
     );
   }
   const send = async (e: FormEvent) => {

@@ -1,4 +1,5 @@
 import type { ConversationMessage, StepConversationDto } from '@gantrix/shared';
+import { projectTitle } from '@gantrix/shared';
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { label, short } from '../format.ts';
@@ -116,7 +117,7 @@ export function LogsPage({ id, stepId }: { id: string; stepId?: string }) {
           <div className="eyebrow mono">
             <a href={`#/projects/${task.id}`}>task {short(task.id)}</a> · logs
           </div>
-          <h1>{task.goal}</h1>
+          <h1>{projectTitle(task)}</h1>
         </div>
       </header>
 

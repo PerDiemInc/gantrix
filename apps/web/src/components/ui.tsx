@@ -60,11 +60,22 @@ export function Avatar({
   );
 }
 
-export function TaskProgress({ counts }: { counts: TaskListItem['stepCounts'] }) {
+export function TaskProgress({
+  counts,
+  stopped = false,
+}: {
+  counts: TaskListItem['stepCounts'];
+  /** The project ended or paused: no plan is coming. */
+  stopped?: boolean;
+}) {
   const total = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0);
   const done = counts.succeeded ?? 0;
   if (!total) {
-    return <div className="bar-label muted small">Planning the tasks…</div>;
+    return (
+      <div className="bar-label muted small">
+        {stopped ? 'No tasks yet' : 'Planning the tasks…'}
+      </div>
+    );
   }
   const part = (n = 0) => `${(n / total) * 100}%`;
   return (

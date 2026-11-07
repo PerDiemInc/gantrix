@@ -181,6 +181,8 @@ export async function runTask(
     ask?: boolean;
     agents?: string;
     description?: string;
+    name?: string;
+    slack?: boolean;
     detach?: boolean;
   },
 ): Promise<void> {
@@ -205,6 +207,8 @@ export async function runTask(
     goal,
     budget,
     ...(agentIds ? { agentIds } : {}),
+    ...(o.name ? { name: o.name } : {}),
+    ...(o.slack ? { slack: true } : {}),
     ...(o.description ? { description: o.description } : {}),
     ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });
@@ -657,4 +661,44 @@ export async function extend(
   console.log(
     `${r.status === 'resumed' ? 'Continuing' : 'Extended'}: ${r.budget.maxMinutes} min, ${r.budget.maxTokens.toLocaleString()} tokens, ${r.budget.maxReplans} replans.`,
   );
+}
+
+export async function stop(client: Client, ref: string): Promise<void> {
+  const id = await resolveTask(client, ref);
+  const { stopped } = await client.post<{ stopped: boolean }>(`/api/tasks/${id}/stop`);
+  console.log(
+    stopped
+      ? `Stopped ${short(id)}. Running tasks stop at their next model turn. Continue with: gantrix resume ${short(id)}`
+      : `${short(id)} isn't running.`,
+  );
+}
+
+export async function resume(client: Client, ref: string): Promise<void> {
+  const id = await resolveTask(client, ref);
+  await client.post(`/api/tasks/${id}/resume`);
+  console.log(`Resumed ${short(id)}.`);
+}
+
+export async function remove(client: Client, ref: string, o: { yes?: boolean }): Promise<void> {
+  const id = await resolveTask(client, ref);
+  if (!o.yes) {
+    throw new Error(
+      `This deletes ${short(id)}, its history and its workspace files for good. Run again with --yes.`,
+    );
+  }
+  await client.del(`/api/tasks/${id}`);
+  console.log(`Deleted ${short(id)}.`);
+}
+
+export async function rename(client: Client, ref: string, name: string): Promise<void> {
+  const id = await resolveTask(client, ref);
+  await client.patch(`/api/tasks/${id}`, { name });
+  console.log(`Renamed ${short(id)} to "${name}".`);
+}
+
+export async function slackSwitch(client: Client, ref: string, on: string): Promise<void> {
+  const id = await resolveTask(client, ref);
+  const slack = on !== 'off';
+  await client.patch(`/api/tasks/${id}`, { slack });
+  console.log(`Slack updates ${slack ? 'on' : 'off'} for ${short(id)}.`);
 }

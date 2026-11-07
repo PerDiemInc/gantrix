@@ -3,6 +3,7 @@ import {
   EXAMPLES,
   isTerminal,
   OKR_EXAMPLE,
+  projectTitle,
   type TaskDto,
   type TaskListItem,
 } from '@gantrix/shared';
@@ -10,6 +11,7 @@ import { type FormEvent, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
+import { useSlackStatus } from '../components/ProjectControls.tsx';
 import { Avatar, nowText, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { ago, duration, label } from '../format.ts';
 import { go, useAgents, useLive } from '../hooks.ts';
@@ -21,7 +23,12 @@ const TIME_PRESETS: [number, string][] = [
 ];
 
 function NewProject({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const slackStatus = useSlackStatus();
+  // null = follow the default (on when Slack is set up).
+  const [slackChoice, setSlackChoice] = useState<boolean | null>(null);
+  const slack = slackChoice ?? Boolean(slackStatus?.posts);
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
@@ -74,7 +81,9 @@ function NewProject({ onClose }: { onClose: () => void }) {
       );
       const task = await api.post<TaskDto>('/api/tasks', {
         goal,
+        ...(name.trim() ? { name } : {}),
         ...(description.trim() ? { description } : {}),
+        ...(slackStatus?.posts ? { slack } : {}),
         budget: minutes ? { maxMinutes: Number(minutes) } : {},
         approveAll: !askFirst,
         ...(team.size ? { agentIds: [...team] } : {}),
@@ -103,6 +112,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
             type="button"
             className="chip"
             onClick={() => {
+              setName(ex.title);
               setDescription(ex.description);
               setGoal(ex.goal);
               setMinutes(String(ex.maxMinutes));
@@ -121,8 +131,19 @@ function NewProject({ onClose }: { onClose: () => void }) {
 
       <section className="np-section">
         <h3>
-          <span className="np-step">1</span> Description
+          <span className="np-step">1</span> Name and description
         </h3>
+        <label>
+          <span className="sr-only">Project name</span>
+          <input
+            value={name}
+            maxLength={120}
+            onChange={(e) => setName(e.target.value)}
+            // biome-ignore lint/a11y/noAutofocus: the form opens because the user asked for it
+            autoFocus
+            placeholder="Project name, e.g. Crumb & Co website"
+          />
+        </label>
         <label>
           <span className="sr-only">Description</span>
           <textarea
@@ -130,8 +151,6 @@ function NewProject({ onClose }: { onClose: () => void }) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What is this project, for whom, and what do you already have? E.g. A website for Crumb & Co, a bakery in Austin, for neighbours and office catering."
             rows={3}
-            // biome-ignore lint/a11y/noAutofocus: the form opens because the user asked for it
-            autoFocus
           />
         </label>
       </section>
@@ -328,6 +347,26 @@ function NewProject({ onClose }: { onClose: () => void }) {
           <Icon name="hand" />
           Ask me before risky tools
         </label>
+        {slackStatus?.posts && (
+          <label
+            className="inline switch"
+            title={
+              slackStatus.replies
+                ? 'Progress goes to a Slack thread; replies there steer the project'
+                : 'Progress goes to a Slack thread'
+            }
+          >
+            <input
+              type="checkbox"
+              role="switch"
+              aria-checked={slack}
+              checked={slack}
+              onChange={(e) => setSlackChoice(e.target.checked)}
+            />
+            <Icon name="hash" />
+            Post to Slack
+          </label>
+        )}
         <button type="submit" className="primary push" disabled={busy || !goal.trim()}>
           {busy ? 'Starting…' : 'Start project'}
         </button>
@@ -373,9 +412,9 @@ function ProjectCard({
           <span className="muted small push">{ago(p.createdAt)}</span>
         </div>
         <h3 className="project-goal" title={p.goal}>
-          {p.goal}
+          {projectTitle(p)}
         </h3>
-        <TaskProgress counts={p.stepCounts} />
+        <TaskProgress counts={p.stepCounts} stopped={isTerminal(p.status)} />
         {p.team.length > 0 && (
           <ul className="team" aria-label="Agents on this project">
             {p.team.map((t) => (

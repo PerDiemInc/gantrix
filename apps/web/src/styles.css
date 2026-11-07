@@ -2101,3 +2101,59 @@ button.chip {
 .new-project .np-model-edit > button {
   justify-self: start;
 }
+
+/* Project name, rename, delete */
+.project-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.project-name h1 {
+  margin: 2px 0;
+}
+.rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+}
+.project-header .rename input {
+  min-width: min(420px, 100%);
+  font-size: 20px;
+  font-weight: 700;
+}
+.project-goal summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.project-goal .project-goal-text {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.icon-only {
+  padding: 6px;
+  line-height: 0;
+}
+.confirm-dialog {
+  max-width: 440px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  background: var(--surface);
+  color: var(--text);
+}
+.confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.confirm-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.danger-solid {
+  background: #b4231f;
+  color: #fff;
+  border-color: transparent;
+}

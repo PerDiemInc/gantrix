@@ -1,0 +1,29 @@
+# Create the Gantrix Slack app from this manifest:
+# https://api.slack.com/apps → Create New App → From a manifest → paste this file.
+display_information:
+  name: Gantrix
+  description: Posts project progress from your Gantrix agents; reply in the thread to steer them.
+  background_color: "#1d1a33"
+features:
+  bot_user:
+    display_name: Gantrix
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - chat:write # post progress in the channel
+      - app_mentions:read # "@Gantrix status", questions, commands
+      - channels:history # replies in a project's thread (public channel)
+      - groups:history # the same in a private channel
+      - reactions:write # 👀 / ✅ on replies it handled
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+  interactivity:
+    is_enabled: false
+  # Socket Mode: Slack sends events over a connection Gantrix opens, so no public URL is needed.
+  socket_mode_enabled: true
+  token_rotation_enabled: false

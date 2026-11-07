@@ -6,6 +6,7 @@ import { Gallery } from '../components/Gallery.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
+import { DeleteProject, ProjectName, SlackSwitch } from '../components/ProjectControls.tsx';
 import { TaskBoard, TaskDialog, TeamPanel } from '../components/ProjectTeam.tsx';
 import { QuestionCard } from '../components/QuestionCard.tsx';
 import { type AgentState, StatusPill, TaskProgress } from '../components/ui.tsx';
@@ -171,6 +172,16 @@ export function TaskPage({ id }: { id: string }) {
       return;
     await api.post(`/api/tasks/${task.id}/cancel`);
   };
+  const stoppedByYou = task.status === 'needs_attention' && task.error === 'Stopped by you.';
+  const control = async (action: 'stop' | 'resume') => {
+    setExtendError('');
+    try {
+      await api.post(`/api/tasks/${task.id}/${action}`);
+      reload();
+    } catch (err) {
+      setExtendError((err as Error).message);
+    }
+  };
   const message = (stepId: string) => {
     setChatTarget(stepId);
     setTab('chat');
@@ -189,8 +200,12 @@ export function TaskPage({ id }: { id: string }) {
               project {short(task.id)} · plan v{task.plans.length || '–'} ·{' '}
               {duration(end - Date.parse(task.createdAt))}
             </div>
+            <ProjectName task={task} onChange={reload} />
             {task.description && <p className="project-description">{task.description}</p>}
-            <h1 className="project-goal-text">{task.goal}</h1>
+            <details className="project-goal" open={!task.name && !task.description}>
+              <summary className="small">Goal</summary>
+              <p className="project-goal-text">{task.goal}</p>
+            </details>
           </div>
           <div className="task-actions">
             {!task.approveAll && (
@@ -212,15 +227,32 @@ export function TaskPage({ id }: { id: string }) {
             <a className="button ghost" href={`#/projects/${task.id}/logs`}>
               <Icon name="list" size={14} /> Logs
             </a>
+            <SlackSwitch task={task} onChange={reload} />
             {!isTerminal(task.status) && (
-              <button type="button" className="ghost danger" onClick={() => void cancel()}>
-                <Icon name="stop" size={14} /> Cancel
+              <>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void control('stop')}
+                  title="Pause it: running tasks stop at their next step; resume any time"
+                >
+                  <Icon name="pause" size={14} /> Stop
+                </button>
+                <button type="button" className="ghost danger" onClick={() => void cancel()}>
+                  <Icon name="stop" size={14} /> Cancel
+                </button>
+              </>
+            )}
+            {stoppedByYou && (
+              <button type="button" className="primary" onClick={() => void control('resume')}>
+                <Icon name="play" size={14} /> Resume
               </button>
             )}
+            {isTerminal(task.status) && <DeleteProject task={task} />}
           </div>
         </div>
         <div className="project-summary">
-          <TaskProgress counts={counts} />
+          <TaskProgress counts={counts} stopped={isTerminal(task.status)} />
           <div className="meters">
             <Meter name="Tokens" used={task.tokensUsed} max={task.budget.maxTokens} />
             <Meter name="Time" used={elapsedMin} max={task.budget.maxMinutes} unit=" min" />
@@ -242,7 +274,7 @@ export function TaskPage({ id }: { id: string }) {
             </fieldset>
           )}
         </div>
-        {task.status === 'needs_attention' && (
+        {task.status === 'needs_attention' && !stoppedByYou && (
           <section className="resume" aria-label="Continue the project">
             <p>
               <Icon name="alert" /> <b>Stopped:</b> {task.error ?? 'it needs your attention.'} Add
@@ -379,7 +411,11 @@ export function TaskPage({ id }: { id: string }) {
                 </div>
               </div>
               {!steps.length ? (
-                <p className="muted">The planner is splitting the goal into tasks…</p>
+                <p className="muted">
+                  {isTerminal(task.status)
+                    ? 'It stopped before the planner split the goal into tasks.'
+                    : 'The planner is splitting the goal into tasks…'}
+                </p>
               ) : view === 'board' ? (
                 <TaskBoard steps={current} agents={agents} onOpen={setSelected} />
               ) : (

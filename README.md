@@ -102,7 +102,8 @@ Or watch it on the dashboard. In the dashboard a run is a **project**, and its s
 
 **Setting up a project.** The New project form has five parts:
 
-1. **Description:** what the project is, for whom, and what you already have.
+1. **Name and description:** a short name, and what the project is, for whom, and what you
+   already have.
 2. **Goal:** an OKR works best, meaning one objective and 3 or 4 measurable key results. The box
    shows an example. **Generate from description** has the default model draft an OKR from your
    description for you to edit. The judge checks the finished work against the goal.
@@ -111,7 +112,10 @@ Or watch it on the dashboard. In the dashboard a run is a **project**, and its s
    another (for example local Claude Code) for this project only.
 5. **Time limit:** 3 hours by default. You can add more while it runs.
 
-On the command line: `gantrix run --description "…" --agents cpo,designer,engineer
+With Slack set up, **Post to Slack** (on by default) gives the project a Slack thread; see
+[Slack](#slack-optional).
+
+On the command line: `gantrix run --name "Crumb site" --description "…" --agents cpo,designer,engineer
 --max-minutes 180 "<goal>"`.
 
 **More time while it runs.** Use **+15 min / +30 min / +1 h** under the budget meters, or run
@@ -388,6 +392,50 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 - LTX-2 was tried and dropped: running LTX Desktop next to ComfyUI used more RAM than a 48 GB
   Mac has.
 
+## Managing projects
+
+- **Name** a project in the New project form, or rename it with the pencil next to its title.
+  Without a name it shows the start of its description or goal.
+- **Stop** pauses it: nothing new starts and running tasks stop at their next model turn.
+  **Resume** picks it up where it stopped. **Cancel** ends it for good.
+- **Delete** (finished or stopped projects only) removes the project, its tasks, chat and
+  history, and its workspace folder. Sites it deployed stay. The dashboard asks first; the CLI
+  needs `--yes`.
+
+## Slack (optional)
+
+Each project with **Post to Slack** on gets its own thread in one channel: the plan, each
+finished or failed task, every question an agent asks you, and the end (which also shows in the
+channel). It works both ways:
+
+- **Reply in the thread** to steer the team (your note reaches the agents working now), or to
+  answer the question an agent asked. A number picks one of its options.
+- **Mention the app** in the thread to ask about the project, for example *@Gantrix what's
+  left?*. It answers from the project's tasks, results and recent activity, using the default
+  model.
+- **Commands** (mention the app): `status`, `add designer`, `remove cto`, `stop`, `resume`,
+  `extend 60m`, `rename Crumb site`, `help`. A mention outside a thread lists running projects.
+
+Anyone in the channel can ask questions. Only the people in `SLACK_ALLOWED_USERS` can steer,
+answer, change the team, stop or rename, because agents act on what they say.
+
+**Set it up (about 5 minutes):**
+
+1. Go to <https://api.slack.com/apps>, choose **Create New App → From a manifest**, pick your
+   workspace and paste [`docs/slack-app-manifest.yml`](docs/slack-app-manifest.yml).
+2. **Install to Workspace**, then copy the **Bot User OAuth Token** (`xoxb-…`) into
+   `SLACK_BOT_TOKEN`.
+3. Under **Basic Information → App-Level Tokens**, generate a token with the
+   `connections:write` scope and put it (`xapp-…`) in `SLACK_APP_TOKEN`. Skip this step if you
+   only want updates, not replies.
+4. In Slack, invite the app to a channel (`/invite @Gantrix`). Copy the channel ID from the
+   channel's details (it starts with `C`) into `SLACK_CHANNEL_ID`.
+5. Put your member ID (your profile → ⋮ → **Copy member ID**) in `SLACK_ALLOWED_USERS`.
+6. Restart the API. It logs `Slack: posting to C…, listening for replies`.
+
+Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. Tokens stay in
+`.env`; the dashboard only learns whether Slack is set up.
+
 ## Approvals and safety
 
 - **By default, agents don't ask.** Every tool call runs without an approval, including shell
@@ -413,10 +461,11 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connectio
 gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
-gantrix run "<goal>" [--description text] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
+gantrix run "<goal>" [--name text] [--description text] [--slack] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
 gantrix extend <task> [--minutes n] [--tokens n] [--replans n]
+gantrix stop <task> | resume <task> | rename <task> "<name>" | delete <task> --yes | slack <task> on|off
 gantrix approvals | approve <id> | deny <id> | answer <id> "<answer>"
 gantrix example website
 ```
@@ -546,6 +595,10 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |
 | `GANTRIX_SITES_DIR`, `GANTRIX_PREVIEW_PORT` | `~/.gantrix/sites`, `4702` | Where deploy_site publishes, and the preview server's port |
 | `GANTRIX_APPROVE_ALL` | `true` | Tool calls run without asking; `false` makes every new project ask first |
+| `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` | unset | Projects with Slack on post progress to a thread in this channel |
+| `SLACK_APP_TOKEN` | unset | Socket Mode: replies and mentions in Slack reach the project |
+| `SLACK_ALLOWED_USERS` | empty | Slack member ids who may steer, answer, change the team, stop or rename |
+| `GANTRIX_DASHBOARD_URL` | `http://127.0.0.1:4701` | Where links in Slack messages point |
 
 ## Development
 

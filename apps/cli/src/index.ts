@@ -122,6 +122,8 @@ program
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
   .option('--description <text>', 'what the project is; the goal says what done means')
+  .option('--name <name>', 'a short name for the project')
+  .option('--slack', 'post progress to Slack (needs SLACK_BOT_TOKEN and SLACK_CHANNEL_ID)')
   .option('--agents <names>', 'only these agents may work on it, e.g. cpo,designer,engineer')
   .option('--ask', 'ask before shell, web, MCP and email tools (approvals on)')
   .option(
@@ -185,6 +187,27 @@ program
   .option('--tokens <n>', 'tokens to add')
   .option('--replans <n>', 'replans to add')
   .action(run((ref: string, o) => cmd.extend(client, ref, o)));
+program
+  .command('stop <task>')
+  .description('pause a project; resume it later')
+  .action(run((ref: string) => cmd.stop(client, ref)));
+program
+  .command('resume <task>')
+  .description('continue a stopped project')
+  .action(run((ref: string) => cmd.resume(client, ref)));
+program
+  .command('rename <task> <name>')
+  .description('name a project')
+  .action(run((ref: string, name: string) => cmd.rename(client, ref, name)));
+program
+  .command('delete <task>')
+  .description('delete a finished or stopped project, its history and workspace')
+  .option('--yes', 'really delete it')
+  .action(run((ref: string, o) => cmd.remove(client, ref, o)));
+program
+  .command('slack <task> <on|off>')
+  .description("turn a project's Slack updates on or off")
+  .action(run((ref: string, on: string) => cmd.slackSwitch(client, ref, on)));
 program
   .command('approve <id>')
   .description('approve a tool call')
