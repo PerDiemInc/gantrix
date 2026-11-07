@@ -368,21 +368,26 @@ describe('engine', () => {
   });
 
   it('extends a project that stopped on its budget and runs it to the end', async () => {
-    await e.addAgent('writer');
-    e.fake.script.plan = () => ({ steps: [step('a', 'writer'), step('b', 'writer', ['a'])] });
-    const task = await createTask(e.deps, { goal: 'Two notes' });
-    await e.waitFor(task.id, (t) => t.status === 'running');
-    // Stop it as the budget check would, with one task left unstarted.
-    await cancelTask(e.deps, task.id);
-    await e.waitFor(task.id);
-    await e.db.update(tasks).set({ status: 'needs_attention' }).where(eq(tasks.id, task.id));
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length ? 'Fetched.' : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    // Pause on an approval: nothing is running, so stopping it here is deterministic.
+    const task = await createTask(e.deps, { goal: 'Fetch', approveAll: false });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    // Stop it as the budget check would; resume without asking this time.
+    await e.db
+      .update(tasks)
+      .set({ status: 'needs_attention', finishedAt: new Date(), approveAll: true })
+      .where(eq(tasks.id, task.id));
 
     const r = await extendTask(e.deps, task.id, { minutes: 30 });
     expect(r.status).toBe('resumed');
     expect(r.budget.maxMinutes).toBe(task.budget.maxMinutes + 30);
     const done = await e.waitFor(task.id);
     expect(done.status).toBe('succeeded');
-    expect((await stepsOf(task.id)).map((s) => s.status)).toEqual(['succeeded', 'succeeded']);
+    const [fetch] = await stepsOf(task.id);
+    expect(fetch).toMatchObject({ status: 'succeeded', attempt: 2 });
     expect((await extendTask(e.deps, task.id, { minutes: 5 })).status).toBe('finished');
   });
 
