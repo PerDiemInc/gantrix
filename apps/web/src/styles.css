@@ -1677,3 +1677,122 @@ button.chip {
   align-items: center;
   gap: 8px;
 }
+
+/* project budget: add time, continue a stopped project */
+.extend {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.resume {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--s-needs);
+  background: var(--warn-bg);
+}
+.resume p {
+  margin: 0;
+}
+
+/* choosing a project's agents */
+.team-picker {
+  display: grid;
+  gap: 8px;
+}
+.team-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.agent-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  min-height: 40px;
+  font-weight: 500;
+}
+.agent-option.on {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+.agent-option:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* gallery and thumbnails */
+.gallery {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+}
+.thumb-button {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: left;
+}
+.thumb-button.active {
+  border-color: var(--primary);
+}
+.thumb {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.thumb-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #fff;
+}
+.thumb .thumb-frame > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* pages render at 1280px wide, scaled to the thumbnail */
+.thumb-frame iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 800px;
+  border: 0;
+  transform: scale(0.16);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.thumb figcaption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.question-options.visual {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+}
+.question-options.visual button {
+  padding: 6px;
+  height: auto;
+  text-align: left;
+}

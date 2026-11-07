@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MediaConfig } from './config.ts';
+import { convertImage, IMAGE_EXTS } from './convert.ts';
 import { inputImage, outputPath } from './files.ts';
 import { licenseWarning, type MediaKind, type ModelInfo, type ProviderId } from './registry.ts';
 import { MediaError, type Provider } from './types.ts';
@@ -86,10 +87,14 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
     'generate_image',
     {
       description:
-        'Create a PNG image from a prompt, or edit an existing workspace image (from_image). Saves it in the task workspace.',
+        'Create an image from a prompt, or edit an existing workspace image (from_image). Saves it in the task workspace as PNG, JPEG or WebP, picked by the file extension.',
       inputSchema: {
         prompt: z.string().min(1).describe('what the image shows'),
-        path: z.string().describe('where to save it, relative to the workspace, ending in .png'),
+        path: z
+          .string()
+          .describe(
+            'where to save it, relative to the workspace, ending in .png, .jpg, .jpeg or .webp',
+          ),
         model: z
           .string()
           .optional()
@@ -110,7 +115,9 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
     (args) =>
       run(async () => {
         const model = pick('image', args.model, Boolean(args.from_image));
-        const out = await outputPath(args.path, '.png');
+        const out = await outputPath(args.path, IMAGE_EXTS);
+        // Models save PNG; other formats are converted afterwards.
+        const png = out.toLowerCase().endsWith('.png') ? out : `${out}.tmp.png`;
         const from = args.from_image ? await inputImage(args.from_image) : undefined;
         const t = Date.now();
         const r = await providers[model.provider]().image(
@@ -122,8 +129,9 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
             ...(from ? { fromImage: from } : {}),
             ...(args.strength === undefined ? {} : { strength: args.strength }),
           },
-          out,
+          png,
         );
+        if (png !== out) await convertImage(png, out);
         return withWarning(
           model,
           `Saved ${args.path} (${r.width}×${r.height}) with ${model.id} in ${took(Date.now() - t)}.`,

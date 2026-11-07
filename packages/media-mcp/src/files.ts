@@ -24,8 +24,11 @@ export async function inWorkspace(input: string, root = process.cwd()): Promise<
 }
 
 /** An output path: inside the workspace, with the right extension, folders created. */
-export async function outputPath(input: string, ext: '.png' | '.mp4'): Promise<string> {
-  if (!input.toLowerCase().endsWith(ext)) throw new MediaError(`"${input}" must end in ${ext}.`);
+export async function outputPath(input: string, ext: string | readonly string[]): Promise<string> {
+  const allowed = typeof ext === 'string' ? [ext] : ext;
+  if (!allowed.some((e) => input.toLowerCase().endsWith(e))) {
+    throw new MediaError(`"${input}" must end in ${allowed.join(', ')}.`);
+  }
   const path = await inWorkspace(input);
   await mkdir(dirname(path), { recursive: true });
   return path;

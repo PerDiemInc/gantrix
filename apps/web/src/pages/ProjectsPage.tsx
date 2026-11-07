@@ -13,6 +13,16 @@ function NewProject({ onClose }: { onClose: () => void }) {
   const [askFirst, setAskFirst] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const agents = useAgents();
+  // Empty = every agent may work on the project.
+  const [team, setTeam] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setTeam((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -22,6 +32,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
         goal,
         budget: minutes ? { maxMinutes: Number(minutes) } : {},
         approveAll: !askFirst,
+        ...(team.size ? { agentIds: [...team] } : {}),
       });
       go(`/projects/${task.id}`);
     } catch (err) {
@@ -47,6 +58,11 @@ function NewProject({ onClose }: { onClose: () => void }) {
             onClick={() => {
               setGoal(ex.goal);
               setMinutes(String(ex.maxMinutes));
+              setTeam(
+                new Set(
+                  [...agents.values()].filter((a) => ex.agents.includes(a.name)).map((a) => a.id),
+                ),
+              );
             }}
             title={`Needs the ${ex.agents.join(', ')} agents (gantrix team add)`}
           >
@@ -69,6 +85,32 @@ function NewProject({ onClose }: { onClose: () => void }) {
           The planner splits it into tasks and gives each one to the agent that fits.
         </span>
       </label>
+      <fieldset className="team-picker">
+        <legend>
+          Agents <span className="muted small">({team.size ? `${team.size} chosen` : 'all'})</span>
+        </legend>
+        <div className="team-options">
+          {[...agents.values()].map((a) => (
+            <label
+              key={a.id}
+              className={`agent-option${team.has(a.id) ? ' on' : ''}`}
+              title={a.description}
+            >
+              <input
+                type="checkbox"
+                checked={team.has(a.id)}
+                onChange={() => toggle(a.id)}
+                className="sr-only"
+              />
+              <Avatar name={a.name} avatar={a.avatar} size={28} />
+              {a.name}
+            </label>
+          ))}
+        </div>
+        <span className="muted small">
+          Pick the agents the planner may use. None picked means all of them.
+        </span>
+      </fieldset>
       <div className="row-actions">
         <label className="inline">
           Time budget

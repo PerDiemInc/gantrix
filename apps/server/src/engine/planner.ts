@@ -1,4 +1,4 @@
-import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { agentSkills, agents, plans, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { resolveModelSpec } from '../models/connections.ts';
@@ -39,9 +39,16 @@ export async function runPlanJob(
   });
   if (existing) return; // already planned; this is a repeated job
 
-  const team = await loadTeam(deps);
+  const team = await loadTeam(deps, task.agentIds);
   if (!team.length) {
-    await failTask(deps, task.id, 'Create at least one agent before running a task.', 0);
+    await failTask(
+      deps,
+      task.id,
+      task.agentIds?.length
+        ? "None of this project's agents exist any more. Start it again with other agents."
+        : 'Create at least one agent before running a task.',
+      0,
+    );
     return;
   }
   const all = await db.select().from(steps).where(eq(steps.taskId, task.id)).orderBy(steps.id);
@@ -100,7 +107,8 @@ export async function runPlanJob(
   );
 }
 
-async function loadTeam(deps: EngineDeps): Promise<TeamMember[]> {
+/** Every agent, or only the ones the project chose. */
+async function loadTeam(deps: EngineDeps, only: string[] | null): Promise<TeamMember[]> {
   const rows = await deps.db
     .select({
       id: agents.id,
@@ -111,6 +119,7 @@ async function loadTeam(deps: EngineDeps): Promise<TeamMember[]> {
     .from(agents)
     .leftJoin(agentSkills, eq(agentSkills.agentId, agents.id))
     .leftJoin(skills, eq(skills.id, agentSkills.skillId))
+    .where(only?.length ? inArray(agents.id, only) : undefined)
     .orderBy(agents.name);
   const team = new Map<string, TeamMember>();
   for (const r of rows) {

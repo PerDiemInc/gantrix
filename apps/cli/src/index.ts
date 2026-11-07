@@ -121,6 +121,7 @@ program
   .option('--max-minutes <n>', 'time budget')
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
+  .option('--agents <names>', 'only these agents may work on it, e.g. cpo,designer,engineer')
   .option('--ask', 'ask before shell, web, MCP and email tools (approvals on)')
   .option(
     '--approve-all',
@@ -176,6 +177,13 @@ program
   .description('start an example project: website')
   .option('--detach', "don't follow the project")
   .action(run((name: string, o) => cmd.runExample(client, name, o)));
+program
+  .command('extend <task>')
+  .description('give a project more time, tokens or replans; a stopped one continues')
+  .option('--minutes <n>', 'minutes to add', '30')
+  .option('--tokens <n>', 'tokens to add')
+  .option('--replans <n>', 'replans to add')
+  .action(run((ref: string, o) => cmd.extend(client, ref, o)));
 program
   .command('approve <id>')
   .description('approve a tool call')

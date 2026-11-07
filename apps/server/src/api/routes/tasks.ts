@@ -5,8 +5,8 @@ import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { approvals, events, plans, steps, taskMessages, tasks } from '../../db/schema.ts';
-import { cancelTask, createTask, sendMessage } from '../../engine/commands.ts';
+import { agents, approvals, events, plans, steps, taskMessages, tasks } from '../../db/schema.ts';
+import { cancelTask, createTask, extendTask, sendMessage } from '../../engine/commands.ts';
 import { stepThreadId } from '../../engine/threads.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
@@ -42,6 +42,7 @@ const CreateTask = z.object({
     .partial()
     .optional(),
   approveAll: z.boolean().optional(),
+  agentIds: z.array(z.uuid()).max(32).optional(),
 });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 const EventsPage = z.object({
@@ -53,6 +54,18 @@ const FileQuery = z.object({
   encoding: z.enum(['text', 'base64']).default('text'),
 });
 const StepParams = z.object({ id: z.uuid(), stepId: z.uuid() });
+const Extend = z
+  .object({
+    minutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(24 * 60)
+      .optional(),
+    tokens: z.number().int().min(1_000).max(10_000_000).optional(),
+    replans: z.number().int().min(1).max(20).optional(),
+  })
+  .refine((e) => e.minutes || e.tokens || e.replans, 'Give minutes, tokens or replans to add.');
 const MessageBody = z.object({
   text: z.string().trim().min(1).max(4_000),
   stepId: z.uuid().optional(),
@@ -145,6 +158,15 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
 
   app.post('/api/tasks', async (request, reply) => {
     const input = parse(CreateTask, request.body);
+    if (input.agentIds?.length) {
+      const found = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(inArray(agents.id, input.agentIds));
+      if (found.length !== new Set(input.agentIds).size) {
+        throw new HttpError(400, 'Some of the chosen agents do not exist.');
+      }
+    }
     // Drop absent fields so they can't override the defaults with undefined.
     const budget = Object.fromEntries(
       Object.entries(input.budget ?? {}).filter(([, v]) => v !== undefined),
@@ -153,6 +175,7 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       goal: input.goal,
       budget,
       ...(input.approveAll === undefined ? {} : { approveAll: input.approveAll }),
+      ...(input.agentIds?.length ? { agentIds: input.agentIds } : {}),
     });
     return reply.code(201).send(task);
   });
@@ -166,6 +189,21 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       db.select().from(approvals).where(eq(approvals.taskId, task.id)).orderBy(asc(approvals.id)),
     ]);
     return { ...task, plans: planRows, steps: stepRows, approvals: approvalRows };
+  });
+
+  // More time, tokens or replans; a project that stopped on its budget starts again.
+  app.post('/api/tasks/:id/extend', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const add = parse(Extend, request.body);
+    const r = await extendTask(deps, task.id, {
+      ...(add.minutes ? { minutes: add.minutes } : {}),
+      ...(add.tokens ? { tokens: add.tokens } : {}),
+      ...(add.replans ? { replans: add.replans } : {}),
+    });
+    if (r.status === 'finished') {
+      throw new HttpError(409, 'This project has finished; start a new one to keep going.');
+    }
+    return r;
   });
 
   app.post('/api/tasks/:id/cancel', async (request) => {

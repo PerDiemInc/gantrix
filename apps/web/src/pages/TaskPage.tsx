@@ -8,6 +8,7 @@ import {
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { FilePreview, previewKind } from '../components/FilePreview.tsx';
+import { Gallery } from '../components/Gallery.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
@@ -234,6 +235,7 @@ export function TaskPage({ id }: { id: string }) {
   const [raw, setRaw] = useState(false);
   const [tab, setTab] = useState<'progress' | 'chat' | 'files'>('progress');
   const [chatTarget, setChatTarget] = useState('');
+  const [extendError, setExtendError] = useState('');
   const now = useNow(1000, Boolean(task && !isTerminal(task.status)));
 
   if (error) {
@@ -257,6 +259,15 @@ export function TaskPage({ id }: { id: string }) {
   const decide = async (approvalId: string, approved: boolean) => {
     await api.post(`/api/approvals/${approvalId}`, { approved });
     reload();
+  };
+  const extend = async (add: { minutes?: number; tokens?: number; replans?: number }) => {
+    setExtendError('');
+    try {
+      await api.post(`/api/tasks/${task.id}/extend`, add);
+      reload();
+    } catch (err) {
+      setExtendError((err as Error).message);
+    }
   };
   const cancel = async () => {
     if (!confirm('Cancel this project? Running tasks stop; finished work stays in its folder.'))
@@ -317,10 +328,54 @@ export function TaskPage({ id }: { id: string }) {
             <Meter name="Time" used={elapsedMin} max={task.budget.maxMinutes} unit=" min" />
             <Meter name="Replans" used={task.replans} max={task.budget.maxReplans} />
           </div>
+          {(!isTerminal(task.status) || task.status === 'needs_attention') && (
+            <fieldset className="extend">
+              <legend className="muted small">Add time</legend>
+              {[15, 30, 60].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="ghost small"
+                  onClick={() => void extend({ minutes: m })}
+                >
+                  +{m < 60 ? `${m} min` : '1 h'}
+                </button>
+              ))}
+            </fieldset>
+          )}
         </div>
-        {task.error && (
+        {task.status === 'needs_attention' && (
+          <section className="resume" aria-label="Continue the project">
+            <p>
+              <Icon name="alert" /> <b>Stopped:</b> {task.error ?? 'it needs your attention.'} Add
+              budget to continue where it stopped; finished work is kept.
+            </p>
+            <div className="row-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => void extend({ minutes: 30, tokens: 100_000, replans: 2 })}
+              >
+                <Icon name="play" size={14} /> Continue: +30 min, +100k tokens, +2 replans
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void extend({ minutes: 60, tokens: 200_000, replans: 3 })}
+              >
+                +1 h, +200k tokens, +3 replans
+              </button>
+            </div>
+          </section>
+        )}
+        {task.error && task.status !== 'needs_attention' && (
           <p className="error" role="alert">
             {task.error}
+          </p>
+        )}
+        {extendError && (
+          <p className="error" role="alert">
+            {extendError}
           </p>
         )}
         {task.result && (
@@ -362,6 +417,7 @@ export function TaskPage({ id }: { id: string }) {
                 <QuestionCard
                   key={a.id}
                   id={a.id}
+                  taskId={task.id}
                   who={`${(() => {
                     const st = task.steps.find((x) => x.id === a.stepId);
                     return (st?.agentId && agents.get(st.agentId)?.name) || 'An agent';
@@ -438,14 +494,20 @@ export function TaskPage({ id }: { id: string }) {
             </section>
           </div>
 
-          <section className="card panel-files">
-            <h2>Files</h2>
-            <p className="muted mono small">{task.workspacePath}</p>
-            <Files
+          <div className="panel-files stack">
+            <Gallery
               taskId={task.id}
-              version={task.steps.filter((s) => s.status === 'succeeded').length}
+              version={task.steps.filter((s) => s.status === 'succeeded').length + events.length}
             />
-          </section>
+            <section className="card">
+              <h2>Files</h2>
+              <p className="muted mono small">{task.workspacePath}</p>
+              <Files
+                taskId={task.id}
+                version={task.steps.filter((s) => s.status === 'succeeded').length}
+              />
+            </section>
+          </div>
         </div>
 
         <aside className="card chat-panel panel-chat" id="chat" aria-label="Project chat">

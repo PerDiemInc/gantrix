@@ -179,6 +179,7 @@ export async function runTask(
     maxReplans?: string;
     approveAll?: boolean;
     ask?: boolean;
+    agents?: string;
     detach?: boolean;
   },
 ): Promise<void> {
@@ -188,9 +189,21 @@ export async function runTask(
     ...(o.maxReplans ? { maxReplans: Number(o.maxReplans) } : {}),
   };
   if (o.ask && o.approveAll) throw new Error('Use --ask or --approve-all, not both.');
+  let agentIds: string[] | undefined;
+  if (o.agents) {
+    const all = await client.get<AgentDto[]>('/api/agents');
+    const names = o.agents
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    const unknown = names.filter((n) => !all.some((a) => a.name === n));
+    if (unknown.length) throw new Error(`No agent named ${unknown.join(', ')}.`);
+    agentIds = all.filter((a) => names.includes(a.name)).map((a) => a.id);
+  }
   const task = await client.post<TaskDto>('/api/tasks', {
     goal,
     budget,
+    ...(agentIds ? { agentIds } : {}),
     ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });
   console.log(`Task ${paint('bold', short(task.id))} created. Workspace: ${task.workspacePath}`);
@@ -620,6 +633,26 @@ export async function runExample(
   }
   await runTask(client, example.goal, {
     maxMinutes: String(example.maxMinutes),
+    agents: example.agents.join(','),
     ...(o.detach ? { detach: true } : {}),
   });
+}
+
+export async function extend(
+  client: Client,
+  ref: string,
+  o: { minutes?: string; tokens?: string; replans?: string },
+): Promise<void> {
+  const id = await resolveTask(client, ref);
+  const r = await client.post<{
+    status: string;
+    budget: { maxMinutes: number; maxTokens: number; maxReplans: number };
+  }>(`/api/tasks/${id}/extend`, {
+    ...(o.minutes ? { minutes: Number(o.minutes) } : {}),
+    ...(o.tokens ? { tokens: Number(o.tokens) } : {}),
+    ...(o.replans ? { replans: Number(o.replans) } : {}),
+  });
+  console.log(
+    `${r.status === 'resumed' ? 'Continuing' : 'Extended'}: ${r.budget.maxMinutes} min, ${r.budget.maxTokens.toLocaleString()} tokens, ${r.budget.maxReplans} replans.`,
+  );
 }

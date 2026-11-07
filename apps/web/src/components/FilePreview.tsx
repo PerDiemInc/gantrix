@@ -44,10 +44,10 @@ const MD_STYLE = `
   img { max-width: 100%; }
   blockquote { margin: 0; padding-left: 14px; border-left: 3px solid color-mix(in srgb, CanvasText 25%, Canvas); }`;
 
-async function fileText(taskId: string, path: string) {
+export async function fileText(taskId: string, path: string) {
   return api.get<string>(`/api/tasks/${taskId}/files/content?path=${encodeURIComponent(path)}`);
 }
-async function fileDataUrl(taskId: string, path: string): Promise<string | null> {
+export async function fileDataUrl(taskId: string, path: string): Promise<string | null> {
   try {
     const r = await api.get<{ mime: string; base64: string }>(
       `/api/tasks/${taskId}/files/content?path=${encodeURIComponent(path)}&encoding=base64`,
@@ -59,7 +59,7 @@ async function fileDataUrl(taskId: string, path: string): Promise<string | null>
 }
 
 /** Puts the stylesheets and images a page links to (inside the workspace) into the page itself. */
-async function inlineAssets(taskId: string, path: string, html: string): Promise<string> {
+export async function inlineAssets(taskId: string, path: string, html: string): Promise<string> {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   for (const link of doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet"][href]')) {
     const target = resolveRelative(path, link.getAttribute('href') ?? '');
@@ -166,5 +166,55 @@ export function FilePreview({ taskId, path }: { taskId: string; path: string }) 
       {mode === 'source' && source !== null && <pre className="output">{source}</pre>}
       {!error && !image && !page && source === null && <p className="muted small">Loading…</p>}
     </div>
+  );
+}
+
+/**
+ * A small live preview of an HTML page or an image, for galleries and question options.
+ * Pages render at desktop width and are scaled down, in the same sandbox as the full preview.
+ */
+export function Thumbnail({
+  taskId,
+  path,
+  label,
+}: {
+  taskId: string;
+  path: string;
+  label?: string;
+}) {
+  const kind = previewKind(path);
+  const [src, setSrc] = useState<{ page?: string; image?: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      if (kind === 'image') {
+        const image = await fileDataUrl(taskId, path);
+        if (live && image) setSrc({ image });
+      } else if (kind === 'html') {
+        const page = await inlineAssets(taskId, path, await fileText(taskId, path));
+        if (live) setSrc({ page });
+      }
+    })().catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [taskId, path, kind]);
+  return (
+    <figure className="thumb">
+      <div className="thumb-frame">
+        {src?.image && <img src={src.image} alt={`Preview of ${path}`} />}
+        {src?.page && (
+          <iframe
+            title={`Preview of ${path}`}
+            sandbox=""
+            srcDoc={src.page}
+            tabIndex={-1}
+            aria-hidden="true"
+            referrerPolicy="no-referrer"
+          />
+        )}
+      </div>
+      <figcaption className="mono small">{label ?? path}</figcaption>
+    </figure>
   );
 }

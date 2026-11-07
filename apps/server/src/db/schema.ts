@@ -114,6 +114,8 @@ export const tasks = pgTable(
     workspacePath: text('workspace_path').notNull(),
     // God mode: every tool call runs without asking, including shell.
     approveAll: boolean('approve_all').notNull().default(false),
+    // The agents this project may use; null = every agent.
+    agentIds: uuid('agent_ids').array(),
     result: text('result'),
     error: text('error'),
     createdAt: createdAt(),

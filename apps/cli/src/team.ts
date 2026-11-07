@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import type { AgentDto, SkillDto } from '@gantrix/shared';
@@ -77,7 +78,19 @@ export async function addTeam(
       `Unknown role(s): ${unknown.join(', ')}. Choose from ${TEAM.map((m) => m.name).join(', ')}.`,
     );
   }
-  const members = TEAM.filter((m) => !wanted || wanted.includes(m.name));
+  // The designer also makes images when the local image server command is installed
+  // (npm run media:link); without it the skill would fail to start, so leave it out.
+  const hasMedia = (() => {
+    try {
+      execFileSync('which', ['gantrix-media-mcp'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const members = TEAM.filter((m) => !wanted || wanted.includes(m.name)).map((m) =>
+    m.name === 'designer' && hasMedia ? { ...m, skills: [...m.skills, 'media-images'] } : m,
+  );
   const dir = o.skillsDir ?? SKILLS_DIR;
   const [skills, agents] = await Promise.all([
     client.get<SkillDto[]>('/api/skills'),

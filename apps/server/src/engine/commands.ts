@@ -1,6 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
 import { type Budget, isTerminal, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
-import { and, eq, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
 import { approvals, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
@@ -11,7 +11,7 @@ import type { EngineDeps } from './deps.ts';
 
 export async function createTask(
   deps: EngineDeps,
-  input: { goal: string; budget?: Partial<Budget>; approveAll?: boolean },
+  input: { goal: string; budget?: Partial<Budget>; approveAll?: boolean; agentIds?: string[] },
 ) {
   const id = randomUUIDv7();
   const workspacePath = await createWorkspace(deps.config.GANTRIX_WORKSPACES_DIR, id);
@@ -25,6 +25,7 @@ export async function createTask(
         budget,
         workspacePath,
         approveAll: input.approveAll ?? deps.config.GANTRIX_APPROVE_ALL,
+        agentIds: input.agentIds?.length ? input.agentIds : null,
       })
       .returning();
     await emit(tx, id, { type: 'task.status', status: 'planning' });
@@ -173,4 +174,73 @@ export async function sendMessage(
   });
   if (!input.stepId) await deps.queues.tick(taskId);
   return { status: 'sent', id };
+}
+
+/**
+ * More time or tokens for a project. A project that stopped because it ran out of budget
+ * starts again: its unfinished tasks go back to waiting and a fresh supervisor picks it up
+ * (the supervisor rebuilds its view from the database, so nothing is lost).
+ */
+export async function extendTask(
+  deps: EngineDeps,
+  taskId: string,
+  add: { minutes?: number; tokens?: number; replans?: number },
+): Promise<{ status: 'extended' | 'resumed' | 'finished'; budget: Budget }> {
+  const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  if (!task) throw new Error('Task not found');
+  const budget: Budget = {
+    ...task.budget,
+    maxMinutes: task.budget.maxMinutes + (add.minutes ?? 0),
+    maxTokens: task.budget.maxTokens + (add.tokens ?? 0),
+    maxReplans: task.budget.maxReplans + (add.replans ?? 0),
+  };
+  // Only a project stopped for attention (budget, replans) can go on; done is done.
+  if (isTerminal(task.status) && task.status !== 'needs_attention') {
+    return { status: 'finished', budget: task.budget };
+  }
+  const resume = task.status === 'needs_attention';
+  await deps.db.transaction(async (tx) => {
+    await tx
+      .update(tasks)
+      .set({
+        budget,
+        ...(resume ? { status: 'running', finishedAt: null, error: null } : {}),
+      })
+      .where(eq(tasks.id, taskId));
+    if (!resume) return;
+    // Tasks that were stopped mid-way wait to run again (as a new attempt).
+    const stopped = await tx
+      .update(steps)
+      .set({ status: 'pending', finishedAt: null })
+      .where(
+        and(
+          eq(steps.taskId, taskId),
+          inArray(steps.status, ['cancelled', 'queued', 'running', 'judging', 'awaiting_approval']),
+        ),
+      )
+      .returning();
+    await tx
+      .update(approvals)
+      .set({ status: 'denied', decidedAt: new Date() })
+      .where(and(eq(approvals.taskId, taskId), eq(approvals.status, 'pending')));
+    for (const s of stopped) {
+      await emit(
+        tx,
+        taskId,
+        { type: 'step.status', stepId: s.id, key: s.key, status: 'pending', attempt: s.attempt },
+        s.id,
+      );
+    }
+    await emit(tx, taskId, {
+      type: 'task.status',
+      status: 'running',
+      reason: `Resumed with more budget: ${budget.maxMinutes} min, ${budget.maxTokens.toLocaleString()} tokens`,
+    });
+  });
+  if (resume) {
+    // The old supervisor thread ended when the project stopped; start a new one.
+    await deps.checkpointer.deleteThread(`task-${taskId}`);
+  }
+  await deps.queues.tick(taskId);
+  return { status: resume ? 'resumed' : 'extended', budget };
 }

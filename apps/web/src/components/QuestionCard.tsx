@@ -1,15 +1,31 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import { previewKind, Thumbnail } from './FilePreview.tsx';
 import { Icon } from './Icon.tsx';
 
 /** An agent's ask_user question: pick an option, write an answer, or skip. */
+/** The workspace file an answer option names, if it is a page or an image we can preview. */
+function fileFor(option: string, files: string[]): string | undefined {
+  const o = option.trim().toLowerCase();
+  return files.find((f) => {
+    const kind = previewKind(f);
+    if (kind !== 'html' && kind !== 'image') return false;
+    const path = f.toLowerCase();
+    const base = path.split('/').pop() ?? '';
+    return path === o || base === o || base.replace(/\.[a-z]+$/, '') === o;
+  });
+}
+
 export function QuestionCard({
   id,
+  taskId,
   who,
   args,
   onDone,
 }: {
   id: string;
+  /** Lets options that name a mockup or image show a preview. */
+  taskId?: string;
   /** The agent or task asking, e.g. "designer · pick_style". */
   who: string;
   args: Record<string, unknown>;
@@ -21,6 +37,16 @@ export function QuestionCard({
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [files, setFiles] = useState<string[]>([]);
+  useEffect(() => {
+    if (!taskId || !options.length) return;
+    api
+      .get<{ files: string[] }>(`/api/tasks/${taskId}/files`)
+      .then((r) => setFiles(r.files))
+      .catch(() => setFiles([]));
+  }, [taskId, options.length]);
+  const previews = options.map((o) => fileFor(o, files));
+  const visual = previews.some(Boolean);
 
   const send = async (answer: string | null) => {
     setBusy(true);
@@ -49,18 +75,21 @@ export function QuestionCard({
       <p className="question-text">{question}</p>
       {why && <p className="muted small">{why}</p>}
       {options.length > 0 && (
-        <div className="question-options">
-          {options.map((o) => (
-            <button
-              key={o}
-              type="button"
-              className="ghost"
-              disabled={busy}
-              onClick={() => void send(o)}
-            >
-              {o}
-            </button>
-          ))}
+        <div className={visual ? 'question-options visual' : 'question-options'}>
+          {options.map((o, i) => {
+            const file = previews[i];
+            return (
+              <button
+                key={o}
+                type="button"
+                className="ghost"
+                disabled={busy}
+                onClick={() => void send(o)}
+              >
+                {file && taskId ? <Thumbnail taskId={taskId} path={file} label={o} /> : o}
+              </button>
+            );
+          })}
         </div>
       )}
       <form className="question-answer" onSubmit={submit}>

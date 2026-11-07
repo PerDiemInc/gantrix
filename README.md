@@ -100,6 +100,20 @@ Or watch it on the dashboard. In the dashboard a run is a **project**, and its s
   agent, approvals, the Gantt timeline and the files. The chat runs beside them, or as a tab on
   a phone.
 
+**Setting up a project.** In the New project form you set the goal, a time budget and, if you
+like, which agents may work on it. None picked means all of them. On the command line:
+`gantrix run --agents cpo,designer,engineer --max-minutes 90 "…"`.
+
+**More time while it runs.** Use **+15 min / +30 min / +1 h** under the budget meters, or run
+`gantrix extend <project> --minutes 30`. If a project stopped because it ran out of time,
+tokens or replans, **Continue** gives it more and picks up where it stopped. Finished tasks are
+kept; tasks that were cut off run again. From the terminal: `gantrix extend last --minutes 30
+--tokens 100000 --replans 2`.
+
+**Seeing the design work.** **Designs and images** on the project page shows a thumbnail of
+every mockup under `design/` and `site/` and of every image. Click one to open it full size. When
+the designer asks which style to build, the question shows a preview of each option.
+
 **The chat reads like a meeting.** Next to the Gantt chart and the status, the planner, each
 agent, the judge and you talk in turn. You can join in at any time:
 - To one running step: the agent reads your note before its next turn.
@@ -213,7 +227,10 @@ npm run gantrix -- example website     # or: New project → "Build me a website
 1. **The product manager (`cpo`) asks you** what the site is for, who it's for and which pages
    it needs, one question at a time, then writes `product/brief.md`.
 2. **The designer sketches three different styles** as `design/styles/*.html` and asks you
-   which one to build. Open them in the project's Files panel to compare.
+   which one to build; the question shows a preview of each. If you've set up images
+   (`npm run media:link`, ComfyUI running), it also makes real images such as a hero photo or a
+   logo, saved as PNG, JPEG or WebP under `design/assets/`. `team add` gives the designer the
+   images skill when it finds the `gantrix-media-mcp` command.
 3. **The engineer builds the site** in `site/` in the style you chose and **deploys it** to
    the local preview server. The link is in its reply and under **Open deployed site** on the
    project page, at `http://127.0.0.1:4702/<name>/`.
@@ -330,6 +347,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 | Setting | Default | Meaning |
 |---|---|---|
 | `MEDIA_MODELS` | `z-image-turbo` | Which models this skill can use, comma-separated |
+| (file extension) | `.png` | `generate_image` saves PNG, JPEG (`.jpg`) or WebP (`.webp`), picked by the path's extension |
 | `MEDIA_DEFAULT_IMAGE`, `MEDIA_DEFAULT_VIDEO` | the first enabled | Default model per kind |
 | `MEDIA_VIDEO_QUALITY` | `standard` | `fast`, `standard` or `high` |
 | `MEDIA_UNLOAD_AFTER` | `true` | Free ComfyUI's RAM after each job; set `false` for faster back-to-back jobs |
@@ -370,9 +388,10 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connectio
 gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
-gantrix run "<goal>" [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
+gantrix run "<goal>" [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
+gantrix extend <task> [--minutes n] [--tokens n] [--replans n]
 gantrix approvals | approve <id> | deny <id> | answer <id> "<answer>"
 gantrix example website
 ```

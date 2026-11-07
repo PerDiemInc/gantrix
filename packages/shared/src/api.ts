@@ -45,6 +45,8 @@ export interface TaskDto {
   workspacePath: string;
   /** God mode: tool calls run without asking. */
   approveAll: boolean;
+  /** The agents this project may use; null = every agent. */
+  agentIds: string[] | null;
   result: string | null;
   error: string | null;
   createdAt: string;

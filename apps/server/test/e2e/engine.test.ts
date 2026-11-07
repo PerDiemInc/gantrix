@@ -5,8 +5,14 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { agents, approvals, connections, events, steps } from '../../src/db/schema.ts';
-import { cancelTask, createTask, decideApproval, sendMessage } from '../../src/engine/commands.ts';
+import { agents, approvals, connections, events, steps, tasks } from '../../src/db/schema.ts';
+import {
+  cancelTask,
+  createTask,
+  decideApproval,
+  extendTask,
+  sendMessage,
+} from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 const step = (key: string, agent: string, dependsOn: string[] = []) => ({
@@ -343,6 +349,39 @@ describe('engine', () => {
     expect(await readFile(join(done.workspacePath, 'brief.md'), 'utf8')).toBe(
       'The user answered: Blue',
     );
+  });
+
+  it('plans with only the agents a project chose', async () => {
+    const writer = await e.addAgent('writer');
+    await e.addAgent('artist');
+    let prompt = '';
+    e.fake.script.plan = (p) => {
+      prompt = p;
+      return { steps: [step('notes', 'writer')] };
+    };
+    const task = await createTask(e.deps, { goal: 'Notes', agentIds: [writer.id] });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    expect(prompt).toContain('- writer:');
+    expect(prompt).not.toContain('- artist:');
+  });
+
+  it('extends a project that stopped on its budget and runs it to the end', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [step('a', 'writer'), step('b', 'writer', ['a'])] });
+    const task = await createTask(e.deps, { goal: 'Two notes' });
+    await e.waitFor(task.id, (t) => t.status === 'running');
+    // Stop it as the budget check would, with one task left unstarted.
+    await cancelTask(e.deps, task.id);
+    await e.waitFor(task.id);
+    await e.db.update(tasks).set({ status: 'needs_attention' }).where(eq(tasks.id, task.id));
+
+    const r = await extendTask(e.deps, task.id, { minutes: 30 });
+    expect(r.status).toBe('resumed');
+    expect(r.budget.maxMinutes).toBe(task.budget.maxMinutes + 30);
+    const done = await e.waitFor(task.id);
+    expect(done.status).toBe('succeeded');
+    expect((await stepsOf(task.id)).map((s) => s.status)).toEqual(['succeeded', 'succeeded']);
+    expect((await extendTask(e.deps, task.id, { minutes: 5 })).status).toBe('finished');
   });
 
   it('tells the agent when an approval is denied', async () => {

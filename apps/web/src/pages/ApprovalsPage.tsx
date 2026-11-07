@@ -25,7 +25,13 @@ export function ApprovalsPage() {
               <a href={`#/projects/${a.taskId}`}>project {short(a.taskId)}</a> ·{' '}
               {a.goal.slice(0, 80)}
             </div>
-            <QuestionCard id={a.id} who={a.stepTitle} args={a.args} onDone={reload} />
+            <QuestionCard
+              id={a.id}
+              taskId={a.taskId}
+              who={a.stepTitle}
+              args={a.args}
+              onDone={reload}
+            />
           </div>
         ) : (
           <div key={a.id} className="approval">
