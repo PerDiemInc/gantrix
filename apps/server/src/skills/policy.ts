@@ -1,8 +1,9 @@
 const AUTO_APPROVED = new Set(['read_file', 'write_file', 'list_files']);
-// A skill is data, not user authorization. Only read-only web fetch can be waived by one;
-// shell, publication and unknown MCP tools (which may send/pay/delete) must still ask.
-const SKILL_APPROVABLE = new Set(['web_fetch']);
+// A skill can't waive these, so importing someone else's skill can't unlock them:
+// shell runs anything, and deploy_site publishes.
+const NEVER_AUTO_APPROVED = new Set(['shell', 'deploy_site']);
 
 export function requiresApproval(tool: string, autoApprove: ReadonlySet<string>): boolean {
-  return !AUTO_APPROVED.has(tool) && !(SKILL_APPROVABLE.has(tool) && autoApprove.has(tool));
+  if (NEVER_AUTO_APPROVED.has(tool)) return true;
+  return !AUTO_APPROVED.has(tool) && !autoApprove.has(tool);
 }

@@ -32,7 +32,11 @@ export async function createTask(
   },
 ) {
   const id = randomUUIDv7();
-  const workspacePath = await createWorkspace(deps.config.GANTRIX_WORKSPACES_DIR, id);
+  const workspacePath = await createWorkspace(
+    deps.config.GANTRIX_WORKSPACES_DIR,
+    id,
+    deps.config.GANTRIX_ISOLATED_STEPS,
+  );
   const budget = resolveBudget(input.budget, deps.config);
   const task = await deps.db.transaction(async (tx) => {
     const [row] = await tx

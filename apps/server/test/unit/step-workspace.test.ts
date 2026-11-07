@@ -13,7 +13,7 @@ const roots: string[] = [];
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'gantrix-isolation-'));
   roots.push(root);
-  return createWorkspace(root, 'project');
+  return createWorkspace(root, 'project', true);
 }
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true })));
@@ -30,6 +30,26 @@ describe('step workspaces', () => {
     expect(await stepWorkspace(task, 'a')).toBe(a);
     await expect(resolveInWorkspace(a, '../b/result.txt')).rejects.toThrow(/outside/);
     await expect(stepWorkspace(task, '../escape')).rejects.toThrow(/Invalid/);
+  });
+  it('keeps a nested folder called inputs, and still skips the top-level one', async () => {
+    const task = await fixture();
+    const a = await stepWorkspace(task, 'a');
+    const b = await stepWorkspace(task, 'b');
+    await mkdir(join(a, 'src', 'components', 'inputs'), { recursive: true });
+    await writeFile(join(a, 'src', 'components', 'inputs', 'TextField.tsx'), 'export {}');
+    await mkdir(join(a, 'inputs'));
+    await writeFile(join(a, 'inputs', 'copy.txt'), 'a copy of someone else');
+    await snapshotStepInput(task, b, 'a');
+    expect(
+      await pathExists(join(b, 'inputs', 'a', 'src', 'components', 'inputs', 'TextField.tsx')),
+    ).toBe(true);
+    expect(await pathExists(join(b, 'inputs', 'a', 'inputs'))).toBe(false);
+  });
+  it('leaves new projects on the shared folder unless isolation is asked for', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gantrix-shared-'));
+    roots.push(root);
+    const task = await createWorkspace(root, 'shared');
+    expect(await stepWorkspace(task, 'a')).toBe(task);
   });
   it('snapshots dependency artifacts without links, recursive inputs, or mutable sharing', async () => {
     const task = await fixture();

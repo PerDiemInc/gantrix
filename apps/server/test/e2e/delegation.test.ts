@@ -52,7 +52,9 @@ describe('delegation (sub-agents)', () => {
       expect(tools).not.toContain('delegate'); // one level only
       return 'main.tf written; output url = https://example.test';
     };
-    const task = await createTask(e.deps, { goal: 'Deploy to AWS', approveAll: true });
+    // Isolated steps: the lead is told where the sub-agent's files were copied.
+    const isolated = { ...e.deps, config: { ...e.config, GANTRIX_ISOLATED_STEPS: true } };
+    const task = await createTask(isolated, { goal: 'Deploy to AWS', approveAll: true });
     expect((await e.waitFor(task.id)).status).toBe('succeeded');
 
     const [lead, sub] = await stepsOf(task.id);

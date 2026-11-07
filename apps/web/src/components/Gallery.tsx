@@ -14,7 +14,11 @@ export function Gallery({ taskId, version }: { taskId: string; version: number }
         setFiles(
           r.files.filter((f) => {
             const kind = previewKind(f);
-            return kind === 'image' || (kind === 'html' && /^(design|site)\//.test(f));
+            // Isolated projects keep each step's files in steps/<id>/; inputs/ holds copies.
+            if (/(^|\/)inputs\//.test(f)) return false;
+            return (
+              kind === 'image' || (kind === 'html' && /^(steps\/[^/]+\/)?(design|site)\//.test(f))
+            );
           }),
         ),
       )

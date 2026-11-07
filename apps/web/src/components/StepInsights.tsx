@@ -11,7 +11,8 @@ export function dependenciesOf(step: StepDto, steps: StepDto[]) {
 }
 
 export function ownerOf(step: StepDto, agents: Map<string, AgentDto>): string {
-  return step.agentId ? (agents.get(step.agentId)?.name ?? 'Deleted agent') : 'Unassigned';
+  // agentId becomes null when the agent is deleted; a missing entry means agents are loading.
+  return step.agentId ? (agents.get(step.agentId)?.name ?? '…') : 'Deleted agent';
 }
 
 export function StepInsights({

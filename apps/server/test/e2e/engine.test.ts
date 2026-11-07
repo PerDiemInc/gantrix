@@ -50,7 +50,9 @@ describe('engine', () => {
     e.fake.script.plan = () => ({
       steps: [step('a', 'writer'), step('b', 'writer'), step('c', 'writer', ['a', 'b'])],
     });
-    const task = await createTask(e.deps, { goal: 'Write a, b, then c' });
+    // Isolated steps (GANTRIX_ISOLATED_STEPS): each step writes in steps/<id>/.
+    const isolated = { ...e.deps, config: { ...e.config, GANTRIX_ISOLATED_STEPS: true } };
+    const task = await createTask(isolated, { goal: 'Write a, b, then c' });
     const done = await e.waitFor(task.id);
 
     expect(done.status).toBe('succeeded');
@@ -199,9 +201,9 @@ describe('engine', () => {
     const [notes] = await stepsOf(task.id);
     expect(notes).toMatchObject({ status: 'succeeded', output: 'Wrote claude-notes.md.' });
     expect(notes?.tokensUsed).toBe(125 + 15); // Claude Code, then the judge
-    expect(
-      await readFile(join(done.workspacePath, 'steps', notes!.id, 'claude-notes.md'), 'utf8'),
-    ).toContain('Claude Code');
+    expect(await readFile(join(done.workspacePath, 'claude-notes.md'), 'utf8')).toContain(
+      'Claude Code',
+    );
     expect(e.fake.calls.worker).toBe(0); // the fake Ollama only planned and judged
   });
 
@@ -316,10 +318,7 @@ describe('engine', () => {
       const done = await e.waitFor(task.id);
 
       expect(done.status).toBe('succeeded');
-      const [httpStep] = await stepsOf(task.id);
-      expect(
-        await readFile(join(done.workspacePath, 'steps', httpStep!.id, 'http.md'), 'utf8'),
-      ).toBe('# From HTTP');
+      expect(await readFile(join(done.workspacePath, 'http.md'), 'utf8')).toBe('# From HTTP');
       expect(seen[0]).toMatchObject({ url: '/v1/run/tiny', key: 'k-123' });
       expect(seen[0]?.body.input.text).toContain('write_file'); // the tool instructions
       const [notes] = await stepsOf(task.id);
@@ -359,10 +358,9 @@ describe('engine', () => {
     expect(await decideApproval(e.deps, question!.id, true, 'Blue')).toBe('decided');
     const done = await e.waitFor(task.id);
     expect(done.status).toBe('succeeded');
-    const [briefStep] = await stepsOf(task.id);
-    expect(
-      await readFile(join(done.workspacePath, 'steps', briefStep!.id, 'brief.md'), 'utf8'),
-    ).toBe('The user answered: Blue');
+    expect(await readFile(join(done.workspacePath, 'brief.md'), 'utf8')).toBe(
+      'The user answered: Blue',
+    );
   });
 
   it('plans with only the agents a project chose', async () => {
@@ -478,6 +476,21 @@ describe('engine', () => {
     const models = new Set(e.fake.bodies.map((b) => b.model));
     expect(models.has('fake-big')).toBe(true); // the worker
     expect(models.has('fake')).toBe(true); // the planner and judge keep the default
+  });
+
+  it('gives an isolated step the files of every step it builds on, not only direct ones', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({
+      steps: [step('a', 'writer'), step('b', 'writer', ['a']), step('c', 'writer', ['b'])],
+    });
+    const isolated = { ...e.deps, config: { ...e.config, GANTRIX_ISOLATED_STEPS: true } };
+    const task = await createTask(isolated, { goal: 'a then b then c' });
+    const done = await e.waitFor(task.id);
+    expect(done.status).toBe('succeeded');
+    const [a, , c] = await stepsOf(task.id);
+    expect(
+      await readFile(join(done.workspacePath, 'steps', c!.id, 'inputs', a!.id, 'a.md'), 'utf8'),
+    ).toContain('# a');
   });
 
   it('tells the agent when an approval is denied', async () => {

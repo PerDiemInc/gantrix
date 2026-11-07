@@ -162,6 +162,7 @@ export async function finishDelegations(deps: EngineDeps, taskId: string): Promi
     .leftJoin(steps, eq(steps.id, delegations.childStepId))
     .leftJoin(agents, eq(agents.id, steps.agentId))
     .where(and(eq(delegations.taskId, taskId), eq(delegations.status, 'running')));
+  if (!open.length) return []; // most ticks: skip the lookups below
   const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
   const isolated =
     !!task && (await pathExists(join(task.workspacePath, ISOLATED_WORKSPACE_MARKER)));

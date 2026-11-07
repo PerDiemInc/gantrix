@@ -351,6 +351,8 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
           <li><b>Local only.</b> The API listens on 127.0.0.1 and needs your token on every request; tokens are never accepted in URLs.</li>
           <li><b>No secrets for tools.</b> Shell commands and MCP servers don't get the server's environment, so they can't read the token or database password.</li>
           <li><b>Confined files.</b> File tools can't leave the task's folder, through <code>..</code>, absolute paths or symlinks.</li>
+          <li><b>Separate folders per step (optional).</b> With <code>GANTRIX_ISOLATED_STEPS=true</code> each step works in its own folder with copies of what it builds on, so agents can't overwrite each other's files. It isn't a sandbox for shell.</li>
+          <li><b>Measure it.</b> <code>npm run evaluate</code> runs two small business workflows on your model and checks the results independently of the judge.</li>
         </ul>
       </div>
     </section>

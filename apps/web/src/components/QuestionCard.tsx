@@ -7,7 +7,11 @@ import { Icon } from './Icon.tsx';
 /** The workspace file an answer option names, if it is a page or an image we can preview. */
 export function fileFor(option: string, files: string[], stepId?: string): string | undefined {
   const o = option.trim().replace(/^\.\//, '').toLowerCase();
-  const isolated = files.includes('.isolated-steps') || files.some((f) => f.startsWith('steps/'));
+  // The marker, or this step's own folder when a long listing was cut off before the marker.
+  // A legacy project that merely has a steps/ folder doesn't count.
+  const isolated =
+    files.includes('.isolated-steps') ||
+    (!!stepId && files.some((f) => f.startsWith(`steps/${stepId}/`)));
   // A question belongs to one execution workspace, never another agent's mutable output.
   // Legacy projects without isolation keep their original root-relative preview behavior.
   if (isolated && !stepId) return undefined;

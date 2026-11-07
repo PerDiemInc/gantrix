@@ -39,9 +39,9 @@ describe('step execution insights', () => {
     ]);
   });
 
-  it('distinguishes missing ownership from an agent that has been deleted', () => {
-    expect(ownerOf(step({ agentId: null }), new Map())).toBe('Unassigned');
-    expect(ownerOf(step(), new Map())).toBe('Deleted agent');
+  it('shows a deleted agent (agentId null) apart from agents that are still loading', () => {
+    expect(ownerOf(step({ agentId: null }), new Map())).toBe('Deleted agent');
+    expect(ownerOf(step(), new Map())).toBe('…');
   });
 
   it('renders token usage, dependency status and judge feedback as text', () => {

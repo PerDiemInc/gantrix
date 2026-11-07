@@ -121,14 +121,31 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
       : [];
 
   await snapshotProjectInput(task.workspacePath, workspace, step.attempt);
-  const sources = await db.select().from(steps).where(eq(steps.taskId, task.id));
-  for (const source of sources) {
-    if (
-      (source.status === 'succeeded' &&
-        (step.dependsOn.includes(source.key) || source.parentStepId === step.id)) ||
-      source.id === step.parentStepId
-    )
-      await snapshotStepInput(task.workspacePath, workspace, source.id, step.attempt);
+  if (workspace !== task.workspacePath) {
+    const sources = await db.select().from(steps).where(eq(steps.taskId, task.id));
+    // Everything this step builds on, not only direct dependencies: A → B → C means C also
+    // gets A's files (B's copies of them aren't passed along).
+    const byKey = new Map(
+      sources.filter((s) => s.status === 'succeeded' && !s.parentStepId).map((s) => [s.key, s]),
+    );
+    const upstream = new Set<string>();
+    const visit = (keys: string[]) => {
+      for (const k of keys) {
+        const s = byKey.get(k);
+        if (!s || upstream.has(s.id)) continue;
+        upstream.add(s.id);
+        visit(s.dependsOn);
+      }
+    };
+    visit(step.dependsOn);
+    for (const source of sources) {
+      if (
+        upstream.has(source.id) ||
+        (source.status === 'succeeded' && source.parentStepId === step.id) ||
+        source.id === step.parentStepId
+      )
+        await snapshotStepInput(task.workspacePath, workspace, source.id, step.attempt);
+    }
   }
   const mcp = await openMcpTools(toolkit.mcpServers, workspace);
   try {
@@ -224,7 +241,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     };
     const before = await graph.getState(run);
     const tokensBefore = summarize(before.values.messages ?? []).tokens;
-    const input = await nextInput(deps, graph, run, task, step, agent, toolkit);
+    const input = await nextInput(deps, graph, run, task, step, agent, toolkit, workspace);
     if (input === 'waiting') return undefined;
 
     if (step.status !== 'running') {
@@ -273,6 +290,7 @@ async function nextInput(
   step: Step,
   agent: Agent,
   toolkit: AgentToolkit,
+  workspace: string,
 ): Promise<AgentInput | 'waiting' | 'finished'> {
   const snapshot = await graph.getState(run);
   const interrupts = snapshot.tasks.flatMap((t) => t.interrupts);
@@ -301,7 +319,7 @@ async function nextInput(
   }
   if (snapshot.next.length) return null;
   if (snapshot.values.messages?.length) return 'finished';
-  return { messages: await firstMessages(deps.db, task, step, agent, toolkit) };
+  return { messages: await firstMessages(deps.db, task, step, agent, toolkit, workspace) };
 }
 
 async function firstMessages(
@@ -310,6 +328,8 @@ async function firstMessages(
   step: Step,
   agent: Agent,
   toolkit: AgentToolkit,
+  /** The step's folder: the project folder, or steps/<id>/ when steps are isolated. */
+  workspace: string,
 ): Promise<BaseMessage[]> {
   const inputs = step.dependsOn.length
     ? await db
@@ -323,7 +343,7 @@ async function firstMessages(
           ),
         )
     : [];
-  const isolated = (await stepWorkspace(task.workspacePath, step.id)) !== task.workspacePath;
+  const isolated = workspace !== task.workspacePath;
   const workspaceInstructions = isolated
     ? `Use your tools in your separate step workspace. Project inputs are in inputs/project/.
 Completed dependency artifacts and delegated results are copied into inputs/<step-id>/.

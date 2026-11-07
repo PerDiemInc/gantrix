@@ -10,18 +10,16 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { pathExists, resolveInWorkspace } from './workspace.ts';
+import { ISOLATED_MARKER, pathExists, resolveInWorkspace } from './workspace.ts';
 
 /** Workspace separation prevents accidental file collisions, not arbitrary-code execution. */
-export const ISOLATED_WORKSPACE_MARKER = '.isolated-steps';
+export const ISOLATED_WORKSPACE_MARKER = ISOLATED_MARKER;
 const SNAPSHOT_ATTEMPT = '.gantrix-snapshot-attempt';
-const SKIP = new Set([
-  'inputs',
-  'node_modules',
-  '.git',
-  ISOLATED_WORKSPACE_MARKER,
-  SNAPSHOT_ATTEMPT,
-]);
+// Skipped at any depth.
+const SKIP = new Set(['node_modules', '.git', ISOLATED_WORKSPACE_MARKER, SNAPSHOT_ATTEMPT]);
+// Skipped only at the top: a step's own inputs/ (copies of other steps), not a nested
+// folder that happens to be called "inputs", like src/components/inputs/.
+const SKIP_AT_TOP = new Set(['inputs']);
 
 export async function stepWorkspace(taskWorkspace: string, stepId: string): Promise<string> {
   // Old projects keep their shared layout so paused checkpoints resume in the same cwd.
@@ -72,7 +70,7 @@ async function snapshot(
   const temp = await mkdtemp(join(inputs, '.snapshot-'));
   try {
     for (const entry of await readdir(source)) {
-      if (SKIP.has(entry) || (project && entry === 'steps')) continue;
+      if (SKIP.has(entry) || SKIP_AT_TOP.has(entry) || (project && entry === 'steps')) continue;
       await cp(join(source, entry), join(temp, entry), {
         recursive: true,
         filter: async (path) => {

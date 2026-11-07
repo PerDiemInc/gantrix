@@ -103,9 +103,10 @@ describe('installing skills', () => {
 });
 
 describe('approval policy', () => {
-  it('auto-approves file tools and allows skills to waive only web reads', () => {
-    const allowed = new Set(['shell', 'web_fetch', 'deploy_site', 'email_send']);
+  it('auto-approves file tools, always asks for shell and publishing, and lets skills waive the rest', () => {
+    const allowed = new Set(['shell', 'web_fetch', 'deploy_site', 'media_list_media_models']);
     expect(requiresApproval('deploy_site', allowed)).toBe(true);
+    expect(requiresApproval('media_list_media_models', allowed)).toBe(false);
     expect(requiresApproval('email_send', allowed)).toBe(true);
     expect(requiresApproval('read_file', new Set())).toBe(false);
     expect(requiresApproval('shell', allowed)).toBe(true);

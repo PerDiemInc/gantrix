@@ -1,6 +1,9 @@
 import { mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
+/** Marks a project whose steps each get their own folder (see step-workspace.ts). */
+export const ISOLATED_MARKER = '.isolated-steps';
+
 /** An error the model caused and can fix; returned to it as text instead of failing the step. */
 export class ToolError extends Error {
   override name = 'ToolError';
@@ -15,10 +18,15 @@ export async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-export async function createWorkspace(workspacesDir: string, taskId: string): Promise<string> {
+export async function createWorkspace(
+  workspacesDir: string,
+  taskId: string,
+  isolated = false,
+): Promise<string> {
   const dir = join(workspacesDir, taskId);
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, '.isolated-steps'), '1\n');
+  // Same name as ISOLATED_WORKSPACE_MARKER (step-workspace.ts imports this module).
+  if (isolated) await writeFile(join(dir, ISOLATED_MARKER), '1\n');
   return realpath(dir);
 }
 

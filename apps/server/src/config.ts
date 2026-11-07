@@ -38,8 +38,12 @@ const ConfigSchema = z.object({
   GANTRIX_MAX_REPLANS: positiveInt(5),
   GANTRIX_MAX_TOKENS: positiveInt(200_000),
   GANTRIX_MAX_MINUTES: positiveInt(60),
-  // Risky tools ask first unless the operator explicitly opts into unattended execution.
-  GANTRIX_APPROVE_ALL: z.stringbool().default(false),
+  // Tool calls run without asking unless a task turns approvals on ("ask first"). Set false
+  // to make every new task ask before shell, web, MCP and email tools.
+  GANTRIX_APPROVE_ALL: z.stringbool().default(true),
+  // Give each step its own folder (steps/<id>/) with copies of its inputs, instead of one
+  // shared project folder. Off by default: new projects keep the shared layout.
+  GANTRIX_ISOLATED_STEPS: z.stringbool().default(false),
   // Slack (optional). Bot token + channel: projects post progress to a thread.
   // Add the app-level token (Socket Mode) and replies in the thread steer the project.
   SLACK_BOT_TOKEN: optionalMatch(/^xoxb-/, 'SLACK_BOT_TOKEN starts with xoxb-'),
