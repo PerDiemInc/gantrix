@@ -444,6 +444,25 @@ describe('engine', () => {
     await cancelTask(e.deps, task.id);
   });
 
+  it("uses the project's model for an agent and gives the planner the description", async () => {
+    const writer = await e.addAgent('writer');
+    let prompt = '';
+    e.fake.script.plan = (p) => {
+      prompt = p;
+      return { steps: [step('notes', 'writer')] };
+    };
+    const task = await createTask(e.deps, {
+      goal: 'Notes',
+      description: 'For the bakery team',
+      agentModels: { [writer.id]: { connectionId: null, model: 'fake-big' } },
+    });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    expect(prompt).toContain('Project: For the bakery team');
+    const models = new Set(e.fake.bodies.map((b) => b.model));
+    expect(models.has('fake-big')).toBe(true); // the worker
+    expect(models.has('fake')).toBe(true); // the planner and judge keep the default
+  });
+
   it('tells the agent when an approval is denied', async () => {
     await e.addAgent('fetcher', ['web_fetch']);
     e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });

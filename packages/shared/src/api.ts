@@ -1,6 +1,6 @@
 import type { GantrixEvent } from './events.ts';
 import type { ApprovalStatus, ModelProvider, StepStatus, TaskStatus } from './status.ts';
-import type { Budget, HttpRequestConfig, SkillManifest } from './types.ts';
+import type { AgentModelChoice, Budget, HttpRequestConfig, SkillManifest } from './types.ts';
 
 /** JSON shapes of the HTTP API, shared by the CLI and the web app. Dates are ISO strings. */
 
@@ -38,6 +38,10 @@ export interface SkillDto extends SkillRef {
 export interface TaskDto {
   id: string;
   goal: string;
+  /** What the project is, in the user's words. */
+  description: string | null;
+  /** Per-project model choices: agentId → connection + model. */
+  agentModels: Record<string, AgentModelChoice> | null;
   status: TaskStatus;
   budget: Budget;
   tokensUsed: number;

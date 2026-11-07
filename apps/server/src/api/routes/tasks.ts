@@ -14,6 +14,7 @@ import {
   sendMessage,
   setTeam,
 } from '../../engine/commands.ts';
+import { suggestGoal } from '../../engine/goal.ts';
 import { stepThreadId } from '../../engine/threads.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
@@ -50,7 +51,15 @@ const CreateTask = z.object({
     .optional(),
   approveAll: z.boolean().optional(),
   agentIds: z.array(z.uuid()).max(32).optional(),
+  description: z.string().trim().max(8_000).optional(),
+  agentModels: z
+    .record(
+      z.uuid(),
+      z.object({ connectionId: z.uuid().nullable(), model: z.string().min(1).max(200).nullable() }),
+    )
+    .optional(),
 });
+const SuggestGoal = z.object({ description: z.string().trim().min(10).max(8_000) });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 const EventsPage = z.object({
   after: z.coerce.number().int().min(0).default(0),
@@ -193,6 +202,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       budget,
       ...(input.approveAll === undefined ? {} : { approveAll: input.approveAll }),
       ...(input.agentIds?.length ? { agentIds: input.agentIds } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.agentModels ? { agentModels: input.agentModels } : {}),
     });
     return reply.code(201).send(task);
   });
@@ -294,6 +305,19 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       attempts,
     };
     return dto;
+  });
+
+  // Drafts an OKR (objective + measurable key results) from a description, to edit before starting.
+  app.post('/api/tasks/suggest-goal', async (request) => {
+    const { description } = parse(SuggestGoal, request.body);
+    try {
+      return await suggestGoal(deps, description);
+    } catch (error) {
+      throw new HttpError(
+        502,
+        `The model couldn't write a goal: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   });
 
   app.get('/api/tasks/:id/messages', async (request) => {

@@ -69,6 +69,7 @@ export async function runPlanJob(
   let tokens = 0;
   for (let i = 0; i < PLAN_ATTEMPTS; i++) {
     const prompt = [
+      task.description ? `Project: ${task.description}` : '',
       `Goal: ${task.goal}`,
       `Agents:\n${team.map((a) => `- ${a.name}: ${a.description || '(no description)'} Tools: ${a.tools.join(', ') || 'none'}`).join('\n')}`,
       done.length

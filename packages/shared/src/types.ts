@@ -46,3 +46,9 @@ export const DEFAULT_HTTP_REQUEST: HttpRequestConfig = {
   bodyTemplate: '{"model": "{{model}}", "prompt": "{{prompt}}"}',
   replyPath: '',
 };
+
+/** A model choice for one agent in one project: a saved connection (or null = Ollama) and model. */
+export interface AgentModelChoice {
+  connectionId: string | null;
+  model: string | null;
+}

@@ -1,5 +1,10 @@
 import { randomUUIDv7 } from 'node:crypto';
-import { type Budget, isTerminal, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
+import {
+  type AgentModelChoice,
+  type Budget,
+  isTerminal,
+  TERMINAL_TASK_STATUSES,
+} from '@gantrix/shared';
 import { and, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
 import { agents, approvals, steps, taskMessages, tasks } from '../db/schema.ts';
@@ -11,7 +16,14 @@ import type { EngineDeps } from './deps.ts';
 
 export async function createTask(
   deps: EngineDeps,
-  input: { goal: string; budget?: Partial<Budget>; approveAll?: boolean; agentIds?: string[] },
+  input: {
+    goal: string;
+    description?: string;
+    budget?: Partial<Budget>;
+    approveAll?: boolean;
+    agentIds?: string[];
+    agentModels?: Record<string, AgentModelChoice>;
+  },
 ) {
   const id = randomUUIDv7();
   const workspacePath = await createWorkspace(deps.config.GANTRIX_WORKSPACES_DIR, id);
@@ -26,6 +38,9 @@ export async function createTask(
         workspacePath,
         approveAll: input.approveAll ?? deps.config.GANTRIX_APPROVE_ALL,
         agentIds: input.agentIds?.length ? input.agentIds : null,
+        description: input.description?.trim() || null,
+        agentModels:
+          input.agentModels && Object.keys(input.agentModels).length ? input.agentModels : null,
       })
       .returning();
     await emit(tx, id, { type: 'task.status', status: 'planning' });

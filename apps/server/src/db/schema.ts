@@ -1,4 +1,5 @@
 import {
+  type AgentModelChoice,
   APPROVAL_STATUSES,
   type ApprovalStatus,
   type Budget,
@@ -107,6 +108,8 @@ export const tasks = pgTable(
   {
     id: id(),
     goal: text('goal').notNull(),
+    // What the project is, in the user's words; the goal (often an OKR) says what done means.
+    description: text('description'),
     status: text('status').$type<TaskStatus>().notNull().default('planning'),
     budget: jsonb('budget').$type<Budget>().notNull(),
     tokensUsed: integer('tokens_used').notNull().default(0),
@@ -116,6 +119,8 @@ export const tasks = pgTable(
     approveAll: boolean('approve_all').notNull().default(false),
     // The agents this project may use; null = every agent.
     agentIds: uuid('agent_ids').array(),
+    // Per-project model choices that override an agent's own: agentId → connection + model.
+    agentModels: jsonb('agent_models').$type<Record<string, AgentModelChoice>>(),
     result: text('result'),
     error: text('error'),
     createdAt: createdAt(),

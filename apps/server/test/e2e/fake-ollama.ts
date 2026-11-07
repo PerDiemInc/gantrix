@@ -67,6 +67,11 @@ export async function startFakeOllama() {
       if ('steps' in props) {
         calls.plan++;
         content = JSON.stringify(script.plan(last));
+      } else if ('objective' in props) {
+        content = JSON.stringify({
+          objective: `Launch: ${last.slice(-40)}`,
+          keyResults: ['site/index.html exists', 'product/brief.md lists the pages'],
+        });
       } else if ('passed' in props) {
         calls.judge++;
         content = JSON.stringify(script.judge(last));

@@ -96,7 +96,17 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
     const graph = buildStepAgent({
       model: createChatModel(
         {
-          ...(await resolveModelSpec(db, config, agent)),
+          // The project's own choice for this agent wins over the agent's setting.
+          ...(await resolveModelSpec(db, config, {
+            ...agent,
+            ...(task.agentModels?.[agent.id]
+              ? {
+                  connectionId: task.agentModels[agent.id]?.connectionId ?? null,
+                  model: task.agentModels[agent.id]?.model ?? null,
+                  modelBaseUrl: null,
+                }
+              : {}),
+          })),
           workspace: task.workspacePath,
           approveAll: task.approveAll,
         },

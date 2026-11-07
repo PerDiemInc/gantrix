@@ -313,6 +313,48 @@ describe('api', () => {
     }
   });
 
+  it('drafts an OKR from a description and saves description and per-project models', async () => {
+    const draft = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/suggest-goal',
+      headers: auth,
+      payload: { description: 'A website for a small bakery in Austin' },
+    });
+    expect(draft.statusCode).toBe(200);
+    expect(draft.json()).toMatchObject({ objective: expect.stringContaining('bakery in Austin') });
+    expect(draft.json().keyResults).toHaveLength(2);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/tasks/suggest-goal',
+          headers: auth,
+          payload: { description: 'x' },
+        })
+      ).statusCode,
+    ).toBe(400);
+
+    const writer = await e.addAgent('writer');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: auth,
+      payload: {
+        goal: 'Objective: a site',
+        description: 'A website for a small bakery',
+        agentIds: [writer.id],
+        agentModels: { [writer.id]: { connectionId: null, model: 'fake-big' } },
+        budget: { maxMinutes: 180 },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      description: 'A website for a small bakery',
+      agentModels: { [writer.id]: { model: 'fake-big' } },
+      budget: { maxMinutes: 180 },
+    });
+  });
+
   it('creates a task with a merged budget and returns its detail', async () => {
     const res = await app.inject({
       method: 'POST',
