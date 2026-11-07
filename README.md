@@ -100,9 +100,19 @@ Or watch it on the dashboard. In the dashboard a run is a **project**, and its s
   agent, approvals, the Gantt timeline and the files. The chat runs beside them, or as a tab on
   a phone.
 
-**Setting up a project.** In the New project form you set the goal, a time budget and, if you
-like, which agents may work on it. None picked means all of them. On the command line:
-`gantrix run --agents cpo,designer,engineer --max-minutes 90 "…"`.
+**Setting up a project.** The New project form has five parts:
+
+1. **Description:** what the project is, for whom, and what you already have.
+2. **Goal:** an OKR works best, meaning one objective and 3 or 4 measurable key results. The box
+   shows an example. **Generate from description** has the default model draft an OKR from your
+   description for you to edit. The judge checks the finished work against the goal.
+3. **Team:** the agents who work on it. None picked means all of them.
+4. **Models:** each team member uses its usual model, or **Change for this project** to pick
+   another (for example local Claude Code) for this project only.
+5. **Time limit:** 3 hours by default. You can add more while it runs.
+
+On the command line: `gantrix run --description "…" --agents cpo,designer,engineer
+--max-minutes 180 "<goal>"`.
 
 **More time while it runs.** Use **+15 min / +30 min / +1 h** under the budget meters, or run
 `gantrix extend <project> --minutes 30`. If a project stopped because it ran out of time,
@@ -403,7 +413,7 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connectio
 gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
-gantrix run "<goal>" [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
+gantrix run "<goal>" [--description text] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
 gantrix extend <task> [--minutes n] [--tokens n] [--replans n]

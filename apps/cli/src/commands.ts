@@ -180,6 +180,7 @@ export async function runTask(
     approveAll?: boolean;
     ask?: boolean;
     agents?: string;
+    description?: string;
     detach?: boolean;
   },
 ): Promise<void> {
@@ -204,6 +205,7 @@ export async function runTask(
     goal,
     budget,
     ...(agentIds ? { agentIds } : {}),
+    ...(o.description ? { description: o.description } : {}),
     ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });
   console.log(`Task ${paint('bold', short(task.id))} created. Workspace: ${task.workspacePath}`);

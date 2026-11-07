@@ -2015,3 +2015,89 @@ button.chip {
   display: grid;
   gap: 6px;
 }
+
+/* New project: numbered sections */
+.new-project {
+  display: grid;
+  gap: 16px;
+}
+.np-section {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.np-section h3,
+.np-section legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  padding: 0;
+}
+.np-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.np-step {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mono-ish {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 14px;
+}
+.okr-help summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.np-models {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.new-project .np-models > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.np-model-edit {
+  flex-basis: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.np-foot {
+  align-items: center;
+}
+
+.project-description {
+  margin: 4px 0 6px;
+  color: var(--muted);
+  max-width: 75ch;
+}
+.project-goal-text {
+  white-space: pre-line;
+}
+.new-project .np-model-edit > button {
+  justify-self: start;
+}

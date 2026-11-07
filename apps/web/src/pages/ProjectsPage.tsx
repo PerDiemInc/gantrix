@@ -1,21 +1,41 @@
-import { EXAMPLES, isTerminal, type TaskDto, type TaskListItem } from '@gantrix/shared';
+import {
+  type AgentModelChoice,
+  EXAMPLES,
+  isTerminal,
+  OKR_EXAMPLE,
+  type TaskDto,
+  type TaskListItem,
+} from '@gantrix/shared';
 import { type FormEvent, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { ModelPicker } from '../components/ModelPicker.tsx';
 import { Avatar, nowText, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { ago, duration, label } from '../format.ts';
 import { go, useAgents, useLive } from '../hooks.ts';
 
+const TIME_PRESETS: [number, string][] = [
+  [60, '1 h'],
+  [180, '3 h'],
+  [480, '8 h'],
+];
+
 function NewProject({ onClose }: { onClose: () => void }) {
+  const [description, setDescription] = useState('');
   const [goal, setGoal] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
   const [askFirst, setAskFirst] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState('');
+  const [draftError, setDraftError] = useState('');
   const agents = useAgents();
   // Empty = every agent may work on the project.
   const [team, setTeam] = useState<Set<string>>(new Set());
+  // agentId → this project's model choice, when it differs from the agent's own.
+  const [models, setModels] = useState<Record<string, AgentModelChoice>>({});
+  const [editingModel, setEditingModel] = useState<string | null>(null);
   const toggle = (id: string) =>
     setTeam((s) => {
       const next = new Set(s);
@@ -23,16 +43,42 @@ function NewProject({ onClose }: { onClose: () => void }) {
       else next.add(id);
       return next;
     });
+  const members = [...agents.values()].filter((a) => team.has(a.id));
+
+  const draftGoal = async () => {
+    setDrafting(true);
+    setDraftError('');
+    try {
+      const okr = await api.post<{ objective: string; keyResults: string[] }>(
+        '/api/tasks/suggest-goal',
+        {
+          description,
+        },
+      );
+      setGoal(
+        `Objective: ${okr.objective}\nKey results:\n${okr.keyResults.map((k, i) => `${i + 1}. ${k}`).join('\n')}`,
+      );
+    } catch (err) {
+      setDraftError((err as Error).message);
+    }
+    setDrafting(false);
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError('');
     try {
+      const chosenModels = Object.fromEntries(
+        Object.entries(models).filter(([id]) => team.has(id)),
+      );
       const task = await api.post<TaskDto>('/api/tasks', {
         goal,
+        ...(description.trim() ? { description } : {}),
         budget: minutes ? { maxMinutes: Number(minutes) } : {},
         approveAll: !askFirst,
         ...(team.size ? { agentIds: [...team] } : {}),
+        ...(Object.keys(chosenModels).length ? { agentModels: chosenModels } : {}),
       });
       go(`/projects/${task.id}`);
     } catch (err) {
@@ -40,6 +86,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
       setBusy(false);
     }
   };
+
   return (
     <form className="card new-project" onSubmit={(e) => void submit(e)}>
       <div className="card-head">
@@ -49,13 +96,14 @@ function NewProject({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="examples">
-        <span className="muted small">Try an example:</span>
+        <span className="muted small">Start from an example:</span>
         {Object.entries(EXAMPLES).map(([key, ex]) => (
           <button
             key={key}
             type="button"
             className="chip"
             onClick={() => {
+              setDescription(ex.description);
               setGoal(ex.goal);
               setMinutes(String(ex.maxMinutes));
               setTeam(
@@ -70,24 +118,71 @@ function NewProject({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
-      <label>
-        Goal
-        <textarea
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder="Plan the v2 launch: a PRD, a build estimate, a launch post and a deck"
-          rows={3}
-          required
-          // biome-ignore lint/a11y/noAutofocus: the form opens because the user asked for it
-          autoFocus
-        />
-        <span className="muted small">
-          The planner splits it into tasks and gives each one to the agent that fits.
-        </span>
-      </label>
-      <fieldset className="team-picker">
+
+      <section className="np-section">
+        <h3>
+          <span className="np-step">1</span> Description
+        </h3>
+        <label>
+          <span className="sr-only">Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What is this project, for whom, and what do you already have? E.g. A website for Crumb & Co, a bakery in Austin, for neighbours and office catering."
+            rows={3}
+            // biome-ignore lint/a11y/noAutofocus: the form opens because the user asked for it
+            autoFocus
+          />
+        </label>
+      </section>
+
+      <section className="np-section">
+        <div className="np-head">
+          <h3>
+            <span className="np-step">2</span> Goal{' '}
+            <span className="muted small">(an OKR works best)</span>
+          </h3>
+          <button
+            type="button"
+            className="ghost small"
+            disabled={drafting || description.trim().length < 10}
+            onClick={() => void draftGoal()}
+            title={description.trim().length < 10 ? 'Write a description first' : undefined}
+          >
+            <Icon name="bolt" size={14} /> {drafting ? 'Writing…' : 'Generate from description'}
+          </button>
+        </div>
+        <label>
+          <span className="sr-only">Goal</span>
+          <textarea
+            className="mono-ish"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder={OKR_EXAMPLE}
+            rows={6}
+            required
+          />
+        </label>
+        <details className="okr-help">
+          <summary className="small">What makes a good goal?</summary>
+          <p className="small muted">
+            One objective, the outcome you want, and 3 or 4 key results that are measurable when the
+            project ends: a file or page that exists, a number, a yes or no. The judge checks the
+            finished work against them.
+          </p>
+          <pre className="output">{OKR_EXAMPLE}</pre>
+        </details>
+        {draftError && (
+          <p className="error small" role="alert">
+            {draftError}
+          </p>
+        )}
+      </section>
+
+      <fieldset className="np-section team-picker">
         <legend>
-          Agents <span className="muted small">({team.size ? `${team.size} chosen` : 'all'})</span>
+          <span className="np-step">3</span> Team{' '}
+          <span className="muted small">({team.size ? `${team.size} chosen` : 'every agent'})</span>
         </legend>
         <div className="team-options">
           {[...agents.values()].map((a) => (
@@ -108,22 +203,120 @@ function NewProject({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <span className="muted small">
-          Pick the agents the planner may use. None picked means all of them.
+          Pick the agents who work on it. None picked means all of them.
         </span>
       </fieldset>
-      <div className="row-actions">
-        <label className="inline">
-          Time budget
-          <input
-            type="number"
-            min={1}
-            max={1440}
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
-            placeholder="60"
-          />
-          min
-        </label>
+
+      <section className="np-section">
+        <h3>
+          <span className="np-step">4</span> Models
+        </h3>
+        {members.length ? (
+          <ul className="np-models">
+            {members.map((a) => {
+              const choice = models[a.id];
+              return (
+                <li key={a.id}>
+                  <Avatar name={a.name} avatar={a.avatar} size={28} />
+                  <b>{a.name}</b>
+                  <span className="muted small">
+                    {choice
+                      ? `${choice.model ?? 'default model'} for this project`
+                      : `${a.model ?? 'default model'} (its usual model)`}
+                  </span>
+                  {editingModel === a.id ? (
+                    <div className="np-model-edit">
+                      <ModelPicker
+                        connectionId={choice?.connectionId ?? a.connectionId ?? ''}
+                        model={choice?.model ?? a.model ?? ''}
+                        onChange={(v) =>
+                          setModels({
+                            ...models,
+                            [a.id]: {
+                              connectionId: v.connectionId || null,
+                              model: v.model || null,
+                            },
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="ghost small"
+                        onClick={() => setEditingModel(null)}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="push">
+                      {choice && (
+                        <button
+                          type="button"
+                          className="ghost small"
+                          onClick={() => {
+                            const { [a.id]: _, ...rest } = models;
+                            setModels(rest);
+                          }}
+                        >
+                          Use its usual model
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="ghost small"
+                        onClick={() => setEditingModel(a.id)}
+                      >
+                        Change for this project
+                      </button>
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted small">
+            Every agent uses its own model (local Ollama unless you changed it on the Agents page).
+            Pick a team above to choose models for this project.
+          </p>
+        )}
+      </section>
+
+      <section className="np-section">
+        <h3>
+          <span className="np-step">5</span> Time limit
+        </h3>
+        <div className="row-actions">
+          <div className="segmented small-seg">
+            {TIME_PRESETS.map(([m, text]) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={Number(minutes) === m}
+                className={Number(minutes) === m ? 'active' : ''}
+                onClick={() => setMinutes(String(m))}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <label className="inline">
+            or
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              aria-label="Time limit in minutes"
+            />
+            min
+          </label>
+          <span className="muted small">You can add more time while it runs.</span>
+        </div>
+      </section>
+
+      <div className="row-actions np-foot">
         <label className="inline switch" title="Shell, web, MCP and email tools wait for your OK">
           <input
             type="checkbox"
@@ -135,7 +328,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
           <Icon name="hand" />
           Ask me before risky tools
         </label>
-        <button type="submit" className="primary" disabled={busy || !goal.trim()}>
+        <button type="submit" className="primary push" disabled={busy || !goal.trim()}>
           {busy ? 'Starting…' : 'Start project'}
         </button>
       </div>

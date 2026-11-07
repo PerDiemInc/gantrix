@@ -187,7 +187,8 @@ export function TaskPage({ id }: { id: string }) {
               project {short(task.id)} · plan v{task.plans.length || '–'} ·{' '}
               {duration(end - Date.parse(task.createdAt))}
             </div>
-            <h1>{task.goal}</h1>
+            {task.description && <p className="project-description">{task.description}</p>}
+            <h1 className="project-goal-text">{task.goal}</h1>
           </div>
           <div className="task-actions">
             {!task.approveAll && (

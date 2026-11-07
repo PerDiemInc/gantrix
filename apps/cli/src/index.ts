@@ -121,6 +121,7 @@ program
   .option('--max-minutes <n>', 'time budget')
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
+  .option('--description <text>', 'what the project is; the goal says what done means')
   .option('--agents <names>', 'only these agents may work on it, e.g. cpo,designer,engineer')
   .option('--ask', 'ask before shell, web, MCP and email tools (approvals on)')
   .option(
