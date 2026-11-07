@@ -19,6 +19,33 @@ It retries and replans until the goal is met or a budget runs out.
                      0                                               1m6s
 ```
 
+### See it
+
+<p align="center"><img src="site/assets/screenshots/projects.webp" alt="The Projects page: four project cards with progress bars, agent avatars and a Now line; one card is highlighted because an agent is waiting for the user" width="900"></p>
+
+<details>
+<summary><b>More screenshots</b>: a project page, the task board with sub-agents, New project, Agents</summary>
+
+**A project, its team and its questions.** Name, description and OKR goal, budgets you can extend, Stop and Cancel, and a question an agent asked you with options to pick.
+
+<img src="site/assets/screenshots/project.webp" alt="The Crumb & Co website project page: title with rename, Stop and Cancel buttons, token and time budgets, a question from the cpo agent with three answer options, the team panel and the chat" width="800">
+
+**A task board with sub-agents.** To do, In progress, Needs you and Done. The devops lead waits while its aws-engineer sub-agent writes Terraform; designs show as previews below.
+
+<img src="site/assets/screenshots/board.webp" alt="The task board: cards for each task with assignee avatars, including a sub-task for aws-engineer marked as a sub-task of Set up hosting on AWS, and three design style previews below" width="800">
+
+**Describe it, set an OKR, pick the team.** Name and description, a goal with an OKR example and Generate from description, the team, each member’s model and a time limit.
+
+<img src="site/assets/screenshots/new-project.webp" alt="The New project form with numbered sections: name and description, goal with a Generate from description button, and the team picker with ten agents" width="800">
+
+**Each agent on its own model.** Local Ollama by default; switch any agent to Claude Code, OpenAI, Anthropic or your own server.
+
+<img src="site/assets/screenshots/agents.webp" alt="The Agents page: agent cards showing Runs on the default model with a Change button, and the Add agent form with Runs on and Model pickers" width="800">
+
+</details>
+
+The screenshots come from a demo with a made-up bakery.
+
 **Site:** https://perdieminc.github.io/gantrix/ has an overview and the same getting-started steps.
 Compare: [Gantrix vs CrewAI](https://perdieminc.github.io/gantrix/vs/crewai/) ·
 [Gantrix vs LangGraph.js](https://perdieminc.github.io/gantrix/vs/langgraph/).

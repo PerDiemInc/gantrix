@@ -1869,11 +1869,10 @@ button.chip {
 
 /* task board: columns by status */
 .board {
+  /* Columns share the width and wrap on narrow screens, so none is cut off. */
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(200px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
-  overflow-x: auto;
   padding-bottom: 4px;
 }
 .board-col {

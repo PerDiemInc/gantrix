@@ -329,3 +329,17 @@ footer .foot-links a { color: var(--muted); }
 .crumbs a { color: var(--muted); }
 .note { font-size: 14px; color: var(--muted); }
 .prereq td code { white-space: nowrap; }
+
+/* Screenshot tour */
+.shots { display: grid; gap: 22px; }
+.shot { margin: 0; }
+.shot img {
+  display: block; width: 100%; height: auto; border-radius: 12px;
+  border: 2px solid var(--edge); box-shadow: 5px 5px 0 var(--drop); background: var(--surface);
+}
+.shot figcaption { margin-top: 10px; color: var(--muted); font-size: 15px; max-width: var(--measure); }
+.shot figcaption b { color: var(--ink); }
+@media (min-width: 900px) {
+  .shots { grid-template-columns: 1fr 1fr; }
+  .shot:first-child { grid-column: 1 / -1; }
+}
