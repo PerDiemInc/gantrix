@@ -32,7 +32,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
-  const [askFirst, setAskFirst] = useState(false);
+  const [askFirst, setAskFirst] = useState(true);
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState('');

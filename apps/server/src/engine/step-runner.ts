@@ -20,6 +20,11 @@ import { resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
+import {
+  snapshotProjectInput,
+  snapshotStepInput,
+  stepWorkspace,
+} from '../skills/step-workspace.ts';
 import { ASK_USER } from '../skills/tools/ask.ts';
 import { DELEGATE, delegateTool } from '../skills/tools/delegate.ts';
 import { fileTools } from '../skills/tools/files.ts';
@@ -98,6 +103,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     .innerJoin(skills, eq(agentSkills.skillId, skills.id))
     .where(eq(agentSkills.agentId, agent.id));
   const toolkit = combineSkills(await Promise.all(skillRows.map(loadVerifiedSkill)));
+  const workspace = await stepWorkspace(task.workspacePath, step.id);
   // A sub-task can't hand out sub-tasks of its own: one level keeps it understandable.
   const delegates =
     toolkit.builtinTools.has(DELEGATE) && !step.parentStepId
@@ -109,11 +115,22 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
                 .from(agents)
                 .where(ne(agents.id, agent.id))
             ).filter((a) => a.name),
+            workspace !== task.workspacePath ? step.id : undefined,
           ),
         ]
       : [];
 
-  const mcp = await openMcpTools(toolkit.mcpServers, task.workspacePath);
+  await snapshotProjectInput(task.workspacePath, workspace, step.attempt);
+  const sources = await db.select().from(steps).where(eq(steps.taskId, task.id));
+  for (const source of sources) {
+    if (
+      (source.status === 'succeeded' &&
+        (step.dependsOn.includes(source.key) || source.parentStepId === step.id)) ||
+      source.id === step.parentStepId
+    )
+      await snapshotStepInput(task.workspacePath, workspace, source.id, step.attempt);
+  }
+  const mcp = await openMcpTools(toolkit.mcpServers, workspace);
   try {
     const graph = buildStepAgent({
       model: createChatModel(
@@ -129,14 +146,14 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
                 }
               : {}),
           })),
-          workspace: task.workspacePath,
+          workspace,
           approveAll: task.approveAll,
         },
         'worker',
         modelDefaults(config),
       ),
       tools: [
-        ...builtinTools(toolkit.builtinTools, task.workspacePath, {
+        ...builtinTools(toolkit.builtinTools, workspace, {
           sitesDir: config.GANTRIX_SITES_DIR,
           previewUrl: `http://${config.GANTRIX_HOST}:${config.GANTRIX_PREVIEW_PORT}`,
         }),
@@ -224,7 +241,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     }
 
     await setStep(db, task.id, step, 'judging', {});
-    const workspaceFiles = await describeWorkspace(task.workspacePath, after.values.messages ?? []);
+    const workspaceFiles = await describeWorkspace(workspace, after.values.messages ?? []);
     const judge = createChatModel(
       await resolveModelSpec(db, config, null),
       'judge',
@@ -296,7 +313,7 @@ async function firstMessages(
 ): Promise<BaseMessage[]> {
   const inputs = step.dependsOn.length
     ? await db
-        .select({ title: steps.title, output: steps.output })
+        .select({ id: steps.id, title: steps.title, output: steps.output })
         .from(steps)
         .where(
           and(
@@ -306,6 +323,12 @@ async function firstMessages(
           ),
         )
     : [];
+  const isolated = (await stepWorkspace(task.workspacePath, step.id)) !== task.workspacePath;
+  const workspaceInstructions = isolated
+    ? `Use your tools in your separate step workspace. Project inputs are in inputs/project/.
+Completed dependency artifacts and delegated results are copied into inputs/<step-id>/.
+Use list_files to discover their paths; predecessor paths are not at this workspace's root.`
+    : 'Use your tools in the shared task workspace. Other agents may also write there.';
   const system = [
     agent.systemPrompt,
     `You are "${agent.name}", one agent in a team working toward this goal:
@@ -319,7 +342,9 @@ Do only this step: other agents handle the other steps, so don't do their work.$
         ? '\nAnother agent handed you this step as a sub-task and waits for your reply: make it complete and specific (what you did, files, URLs, values, anything that failed).'
         : ''
     }
-Use your tools to do the work in the task workspace. When you finish, reply with a summary that
+${workspaceInstructions}
+Shell and MCP are NOT sandboxed; stay within this workspace.
+When you finish, reply with a summary that
 includes the key content and the paths of any files you wrote. A reviewer checks that reply
 against "Done when".`,
     toolkit.instructions,
@@ -329,7 +354,7 @@ against "Done when".`,
   const user = [
     step.instructions,
     inputs.length
-      ? `Results of the steps this one depends on:\n${inputs.map((i) => `### ${i.title}\n${clip(i.output, DEP_OUTPUT_CHARS)}`).join('\n\n')}`
+      ? `Results of the steps this one depends on:\n${inputs.map((i) => `### ${i.title}${isolated ? ` (files: inputs/${i.id}/)` : ''}\n${clip(i.output, DEP_OUTPUT_CHARS)}`).join('\n\n')}`
       : '',
     step.attempt > 1 && step.judgeReason
       ? `Your previous attempt was rejected: ${step.judgeReason}\nPrevious reply:\n${clip(step.output, DEP_OUTPUT_CHARS)}`

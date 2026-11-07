@@ -1,7 +1,10 @@
+import { join } from 'node:path';
 import { and, eq, inArray } from 'drizzle-orm';
-import { agents, approvals, delegations, steps, type tasks } from '../db/schema.ts';
+import { agents, approvals, delegations, steps, tasks } from '../db/schema.ts';
 import { type DbExecutor, emit } from '../events.ts';
+import { ISOLATED_WORKSPACE_MARKER } from '../skills/step-workspace.ts';
 import { DelegateArgs, MAX_DELEGATIONS_PER_STEP } from '../skills/tools/delegate.ts';
+import { pathExists } from '../skills/workspace.ts';
 import type { EngineDeps } from './deps.ts';
 
 type Step = typeof steps.$inferSelect;
@@ -159,6 +162,9 @@ export async function finishDelegations(deps: EngineDeps, taskId: string): Promi
     .leftJoin(steps, eq(steps.id, delegations.childStepId))
     .leftJoin(agents, eq(agents.id, steps.agentId))
     .where(and(eq(delegations.taskId, taskId), eq(delegations.status, 'running')));
+  const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  const isolated =
+    !!task && (await pathExists(join(task.workspacePath, ISOLATED_WORKSPACE_MARKER)));
   const resumed: Step[] = [];
   for (const d of open) {
     const c = d.child;
@@ -166,7 +172,7 @@ export async function finishDelegations(deps: EngineDeps, taskId: string): Promi
     const agent = d.agent ?? 'The sub-agent';
     const ok = c?.status === 'succeeded';
     const answer = ok
-      ? `${agent} finished "${c.title}". Its result:\n${clip(c.output, RESULT_CHARS)}`
+      ? `${agent} finished "${c.title}". ${isolated ? `Files from child step ${c.id} are available in inputs/${c.id}/ in your workspace. Prefix any relative paths in its reply with that directory. ` : ''}Its result:\n${clip(c.output, RESULT_CHARS)}`
       : `${agent} couldn't finish "${c?.title ?? 'the sub-task'}"${c ? ` (${c.status})` : ''}: ${clip(c?.error ?? c?.judgeReason ?? 'no reason given', 1_000)}. Decide whether to try again differently, do it yourself, or report the problem.`;
     const step = await deps.db.transaction(async (tx) => {
       const [done] = await tx

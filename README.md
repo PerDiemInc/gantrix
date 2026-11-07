@@ -248,21 +248,21 @@ version: 1.0.0                  # optional, default 0.0.0
 tools: [web_fetch, write_file]  # optional built-in tools
 mcp-servers:                    # optional MCP servers, started for each step
   search: { command: npx, args: [-y, some-search-mcp], env: { REGION: us } }
-auto-approve: [web_fetch]       # optional; tools that run without asking (never shell)
+auto-approve: [web_fetch]       # optional; only read-only web fetch can be waived
 ---
 Instructions the agent gets whenever it has this skill.
 ```
 
 | Built-in tool | What it does | Waits for you |
 |---|---|---|
-| `read_file`, `write_file`, `list_files` | Text files in the task's folder only | never |
+| `read_file`, `write_file`, `list_files` | Text files in the step's folder only | never |
 | `web_fetch` | Public web pages; refuses local and private addresses | on projects that ask first, unless a skill auto-approves it |
 | `shell` | A shell command in the task's folder, 2-minute limit | on projects that ask first (no skill can skip that) |
 | `ask_user` | Asks you a question, optionally with answers to pick from, and waits for your reply | always waits for you |
 | `deploy_site` | Publishes a workspace folder with an `index.html` on the local preview server (port 4702) | on projects that ask first |
 
-MCP tools are named `<server>_<tool>` (for example `search_query`) and need approval unless a
-skill lists them in `auto-approve`.
+MCP tools are named `<server>_<tool>` (for example `search_query`) and need approval on
+ask-first projects. Skill `auto-approve` entries cannot waive arbitrary MCP actions.
 
 Examples are in [`examples/skills`](examples/skills): `workspace-files`, `shell-commands`,
 `web-reader`, and `media-images` / `media-video` (see below).
@@ -493,21 +493,30 @@ Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. To
 
 ## Approvals and safety
 
-- **By default, agents don't ask.** Every tool call runs without an approval, including shell
-  commands, web requests, MCP tools and the CRO's emails. Each call is still logged, so you can
-  see it in the chat and on the Logs page.
-- **Turn approvals on for a project** with "Ask me before risky tools" on the dashboard, or
-  `gantrix run --ask "…"`. Then shell, web, MCP and email calls wait for you, and only that step
-  pauses. Decide with the Approve and Deny buttons on the project page, on the Approvals page,
-  in `gantrix tail <task>`, or with `gantrix approve <id>` / `gantrix deny <id>`.
-- To make every new project ask first, set `GANTRIX_APPROVE_ALL=false`.
-- **`shell` is not sandboxed.** It can do anything your user account can. Without approvals,
-  give agents shell only for goals and skills you trust.
+- **New projects ask before consequential tools by default.** Shell, publication and MCP
+  calls pause for a decision. File tools inside the step workspace run automatically; a
+  trusted skill may also allow read-only web fetches. Importing a skill cannot silently
+  authorize shell, publication or arbitrary external MCP actions.
+- Decide with Approve/Deny on the project or Approvals page, in `gantrix tail <task>`, or
+  with `gantrix approve <id>` / `gantrix deny <id>`. Only the waiting step pauses.
+- `GANTRIX_APPROVE_ALL=true` or `gantrix run --approve-all "…"` explicitly opts into
+  unattended execution. Existing `.env` files and existing projects retain their choice;
+  upgrading does not revoke prior opt-ins. Use `--ask` to override an unattended default.
+- **New projects give each step a separate folder** at `steps/<step-id>/`. Completed
+  dependency artifacts and delegation results are copied into `inputs/<source-step-id>/`;
+  a delegated step also gets a snapshot of its parent's files. Project-root input files
+  are copied to `inputs/project/` when a step first runs. Copies exclude symlinks,
+  nested inputs, `.git` and `node_modules`. Step output folders persist; snapshots refresh
+  on a new attempt, while approval/crash resumes keep their current inputs. Old projects keep their shared folder so paused checkpoints remain compatible.
+- **Workspace separation is not an OS sandbox.** Built-in file tools reject paths escaping
+  the step folder. Shell commands, MCP servers and model-provider CLIs still execute with
+  your account's permissions and can access other paths or the network. Run untrusted
+  agents in a separate container/VM; approvals do not make arbitrary code safe.
 - Web pages and MCP results can contain text that tries to steer the agent. Approval is where
   you catch that.
 - The API listens on `127.0.0.1` only and needs the token on every request.
-- Shell commands and MCP servers don't get the server's environment, so they can't read the
-  token or the database password.
+- Shell commands and MCP servers get a reduced environment, not the server's complete
+  environment. This does not prevent them from reading files accessible to your OS account.
 
 ## CLI
 
@@ -677,3 +686,10 @@ MIT
 ---
 
 <p align="center">Powered by <a href="https://tryperdiem.com"><b>Per Diem</b></a></p>
+
+### Workflow evaluations
+
+Run the live model through two small business workflows and check artifacts independently
+of the judge with `npm run evaluate -- <file-only-agent-uuid>`. Reports include correctness,
+tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. See
+[the evaluation guide](docs/evaluation.md) for setup, safety limits and comparison guidance.

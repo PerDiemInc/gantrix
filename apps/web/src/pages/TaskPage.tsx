@@ -353,6 +353,7 @@ export function TaskPage({ id }: { id: string }) {
                   key={a.id}
                   id={a.id}
                   taskId={task.id}
+                  stepId={a.stepId}
                   who={`${(() => {
                     const st = task.steps.find((x) => x.id === a.stepId);
                     return (st?.agentId && agents.get(st.agentId)?.name) || 'An agent';

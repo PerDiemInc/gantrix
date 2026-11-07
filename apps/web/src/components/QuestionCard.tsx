@@ -5,20 +5,33 @@ import { Icon } from './Icon.tsx';
 
 /** An agent's ask_user question: pick an option, write an answer, or skip. */
 /** The workspace file an answer option names, if it is a page or an image we can preview. */
-function fileFor(option: string, files: string[]): string | undefined {
-  const o = option.trim().toLowerCase();
-  return files.find((f) => {
+export function fileFor(option: string, files: string[], stepId?: string): string | undefined {
+  const o = option.trim().replace(/^\.\//, '').toLowerCase();
+  const isolated = files.includes('.isolated-steps') || files.some((f) => f.startsWith('steps/'));
+  // A question belongs to one execution workspace, never another agent's mutable output.
+  // Legacy projects without isolation keep their original root-relative preview behavior.
+  if (isolated && !stepId) return undefined;
+  const prefix = isolated ? `steps/${stepId}/` : '';
+  const candidates = files.filter((f) => {
+    if (prefix && !f.startsWith(prefix)) return false;
     const kind = previewKind(f);
-    if (kind !== 'html' && kind !== 'image') return false;
-    const path = f.toLowerCase();
-    const base = path.split('/').pop() ?? '';
-    return path === o || base === o || base.replace(/\.[a-z]+$/, '') === o;
+    return kind === 'html' || kind === 'image';
   });
+  const relative = (file: string) => file.slice(prefix.length).toLowerCase();
+  const exact = candidates.find((f) => relative(f) === o);
+  if (exact) return exact;
+  // Basename shortcuts are useful, but an ambiguous thumbnail is worse than no thumbnail.
+  const matches = candidates.filter((f) => {
+    const base = relative(f).split('/').pop() ?? '';
+    return base === o || base.replace(/\.[a-z]+$/, '') === o;
+  });
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 export function QuestionCard({
   id,
   taskId,
+  stepId,
   who,
   args,
   onDone,
@@ -26,6 +39,8 @@ export function QuestionCard({
   id: string;
   /** Lets options that name a mockup or image show a preview. */
   taskId?: string;
+  /** The execution workspace of the question, for isolated projects. */
+  stepId?: string;
   /** The agent or task asking, e.g. "designer · pick_style". */
   who: string;
   args: Record<string, unknown>;
@@ -45,7 +60,7 @@ export function QuestionCard({
       .then((r) => setFiles(r.files))
       .catch(() => setFiles([]));
   }, [taskId, options.length]);
-  const previews = options.map((o) => fileFor(o, files));
+  const previews = options.map((o) => fileFor(o, files, stepId));
   const visual = previews.some(Boolean);
 
   const send = async (answer: string | null) => {
