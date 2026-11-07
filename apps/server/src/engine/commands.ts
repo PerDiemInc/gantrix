@@ -2,7 +2,7 @@ import { randomUUIDv7 } from 'node:crypto';
 import { type Budget, isTerminal, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
 import { and, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
-import { approvals, steps, taskMessages, tasks } from '../db/schema.ts';
+import { agents, approvals, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
 import type { EngineDeps } from './deps.ts';
@@ -243,4 +243,127 @@ export async function extendTask(
   }
   await deps.queues.tick(taskId);
   return { status: resume ? 'resumed' : 'extended', budget };
+}
+
+const EDITABLE: ReadonlySet<string> = new Set([
+  'pending',
+  'queued',
+  'failed',
+  'succeeded',
+  'cancelled',
+]);
+const BUSY: ReadonlySet<string> = new Set(['running', 'judging', 'awaiting_approval']);
+
+export type EditStepResult =
+  | { status: 'edited'; reopened: boolean }
+  | { status: 'not_found' }
+  | { status: 'busy' }
+  | { status: 'project_closed' }
+  | { status: 'bad_agent' };
+
+/**
+ * The user edits a task: its title, instructions, "done when" or who does it. With rerun,
+ * a finished or failed task runs again (a new attempt); a finished or stopped project opens
+ * again for it. A task that is running can't change until it stops: message its agent instead.
+ */
+export async function editStep(
+  deps: EngineDeps,
+  taskId: string,
+  stepId: string,
+  input: {
+    title?: string;
+    instructions?: string;
+    acceptance?: string;
+    agentId?: string;
+    rerun?: boolean;
+  },
+): Promise<EditStepResult> {
+  const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  const step = await deps.db.query.steps.findFirst({
+    where: and(eq(steps.id, stepId), eq(steps.taskId, taskId)),
+  });
+  if (!task || !step || step.status === 'superseded') return { status: 'not_found' };
+  if (BUSY.has(step.status)) return { status: 'busy' };
+  if (task.status === 'cancelled') return { status: 'project_closed' };
+  if (!EDITABLE.has(step.status)) return { status: 'busy' };
+  if (input.agentId) {
+    const agent = await deps.db.query.agents.findFirst({ where: eq(agents.id, input.agentId) });
+    const inTeam = !task.agentIds?.length || task.agentIds.includes(input.agentId);
+    if (!agent || !inTeam) return { status: 'bad_agent' };
+  }
+  const changes = {
+    ...(input.title !== undefined && input.title !== step.title ? { title: input.title } : {}),
+    ...(input.instructions !== undefined && input.instructions !== step.instructions
+      ? { instructions: input.instructions }
+      : {}),
+    ...(input.acceptance !== undefined && input.acceptance !== step.acceptance
+      ? { acceptance: input.acceptance }
+      : {}),
+    ...(input.agentId !== undefined && input.agentId !== step.agentId
+      ? { agentId: input.agentId }
+      : {}),
+  };
+  const rerun = Boolean(input.rerun) && step.status !== 'pending' && step.status !== 'queued';
+  const reopen = rerun && isTerminal(task.status);
+  await deps.db.transaction(async (tx) => {
+    await tx
+      .update(steps)
+      .set({
+        ...changes,
+        ...(rerun ? { status: 'pending', finishedAt: null, error: null, judgeReason: null } : {}),
+      })
+      .where(eq(steps.id, step.id));
+    if (reopen) {
+      await tx
+        .update(tasks)
+        .set({ status: 'running', finishedAt: null, error: null, result: null })
+        .where(eq(tasks.id, taskId));
+      await emit(tx, taskId, {
+        type: 'task.status',
+        status: 'running',
+        reason: `You reran ${step.key}`,
+      });
+    }
+    await emit(
+      tx,
+      taskId,
+      {
+        type: 'step.edited',
+        stepId: step.id,
+        key: step.key,
+        fields: Object.keys(changes).map((k) => (k === 'agentId' ? 'agent' : k)),
+        rerun,
+      },
+      step.id,
+    );
+    if (rerun) {
+      await emit(
+        tx,
+        taskId,
+        {
+          type: 'step.status',
+          stepId: step.id,
+          key: step.key,
+          status: 'pending',
+          attempt: step.attempt,
+        },
+        step.id,
+      );
+    }
+  });
+  // A finished project's supervisor thread has ended; start a fresh one (it reads the DB).
+  if (reopen) await deps.checkpointer.deleteThread(`task-${taskId}`);
+  await deps.queues.tick(taskId);
+  return { status: 'edited', reopened: reopen };
+}
+
+/** Who may work on the project from now on; null = every agent. The next plan uses it. */
+export async function setTeam(deps: EngineDeps, taskId: string, agentIds: string[] | null) {
+  await deps.db.transaction(async (tx) => {
+    await tx
+      .update(tasks)
+      .set({ agentIds: agentIds?.length ? agentIds : null })
+      .where(eq(tasks.id, taskId));
+    await emit(tx, taskId, { type: 'task.team', agentIds: agentIds?.length ? agentIds : null });
+  });
 }

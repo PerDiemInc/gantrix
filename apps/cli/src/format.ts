@@ -110,6 +110,10 @@ export function describeEvent(e: StreamEvent, stepKeys: Map<string, string>): st
       return `${at} ${paint('red', `budget exceeded (${e.limit}): ${e.detail}`)}`;
     case 'user.message':
       return `${at} ${paint('cyan', `you → ${e.stepId ? (stepKeys.get(e.stepId) ?? 'a step') : 'the team'}: ${e.text}`)}`;
+    case 'step.edited':
+      return `${at} ${paint('cyan', `you edited ${e.key}${e.fields.length ? ` (${e.fields.join(', ')})` : ''}${e.rerun ? ' and reran it' : ''}`)}`;
+    case 'task.team':
+      return `${at} ${paint('cyan', e.agentIds ? `team changed (${e.agentIds.length} agents)` : 'team: every agent')}`;
     case 'user.message_delivered':
       return `${at}   ${paint('gray', `↳ ${stepKeys.get(e.stepId) ?? 'a step'} read your note`)}`;
   }

@@ -30,6 +30,15 @@ export type GantrixEvent =
     }
   | { type: 'user.message'; messageId: string; text: string; stepId?: string }
   | { type: 'user.message_delivered'; messageId: string; stepId: string }
+  | {
+      type: 'step.edited';
+      stepId: string;
+      key: string;
+      /** Which fields the user changed, e.g. ["instructions", "agent"]. */
+      fields: string[];
+      rerun: boolean;
+    }
+  | { type: 'task.team'; agentIds: string[] | null }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
   | { type: 'budget.exceeded'; limit: 'tokens' | 'time' | 'replans'; detail: string };
 

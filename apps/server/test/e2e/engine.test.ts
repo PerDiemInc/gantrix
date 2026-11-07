@@ -10,8 +10,10 @@ import {
   cancelTask,
   createTask,
   decideApproval,
+  editStep,
   extendTask,
   sendMessage,
+  setTeam,
 } from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
@@ -382,6 +384,64 @@ describe('engine', () => {
     expect(done.status).toBe('succeeded');
     expect((await stepsOf(task.id)).map((s) => s.status)).toEqual(['succeeded', 'succeeded']);
     expect((await extendTask(e.deps, task.id, { minutes: 5 })).status).toBe('finished');
+  });
+
+  it('edits a finished task, reruns it with the new instructions and reopens the project', async () => {
+    const writer = await e.addAgent('writer');
+    const editor = await e.addAgent('editor');
+    e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+    const task = await createTask(e.deps, { goal: 'Notes', agentIds: [writer.id] });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    const [notes] = await stepsOf(task.id);
+
+    // The editor isn't on the team yet.
+    expect(await editStep(e.deps, task.id, notes!.id, { agentId: editor.id })).toEqual({
+      status: 'bad_agent',
+    });
+    await setTeam(e.deps, task.id, [writer.id, editor.id]);
+
+    const seen: string[] = [];
+    e.fake.script.worker = ({ title, toolResults }) => {
+      seen.push(title);
+      return toolResults.length
+        ? 'Rewrote it.'
+        : { name: 'write_file', args: { path: 'n.md', content: 'v2' } };
+    };
+    const r = await editStep(e.deps, task.id, notes!.id, {
+      title: 'Notes, shorter',
+      instructions: 'Write two lines only',
+      agentId: editor.id,
+      rerun: true,
+    });
+    expect(r).toEqual({ status: 'edited', reopened: true });
+    const again = await e.waitFor(task.id, (t) => t.status === 'succeeded' && !!t.finishedAt);
+    expect(again.status).toBe('succeeded');
+    const [rerun] = await stepsOf(task.id);
+    expect(rerun).toMatchObject({
+      title: 'Notes, shorter',
+      agentId: editor.id,
+      status: 'succeeded',
+      attempt: 2,
+    });
+    expect(seen).toContain('Notes, shorter');
+    const edited = (await e.db.select().from(events).where(eq(events.taskId, task.id))).find(
+      (r) => r.type === 'step.edited',
+    );
+    expect(edited?.payload).toMatchObject({
+      fields: ['title', 'instructions', 'agent'],
+      rerun: true,
+    });
+  });
+
+  it("won't edit a task that is waiting on the user", async () => {
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });
+    e.fake.script.worker = () => ({ name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } });
+    const task = await createTask(e.deps, { goal: 'Fetch', approveAll: false });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    const [fetch] = await stepsOf(task.id);
+    expect(await editStep(e.deps, task.id, fetch!.id, { title: 'x' })).toEqual({ status: 'busy' });
+    await cancelTask(e.deps, task.id);
   });
 
   it('tells the agent when an approval is denied', async () => {

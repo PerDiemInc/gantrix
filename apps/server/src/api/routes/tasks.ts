@@ -6,7 +6,14 @@ import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { agents, approvals, events, plans, steps, taskMessages, tasks } from '../../db/schema.ts';
-import { cancelTask, createTask, extendTask, sendMessage } from '../../engine/commands.ts';
+import {
+  cancelTask,
+  createTask,
+  editStep,
+  extendTask,
+  sendMessage,
+  setTeam,
+} from '../../engine/commands.ts';
 import { stepThreadId } from '../../engine/threads.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
@@ -54,6 +61,16 @@ const FileQuery = z.object({
   encoding: z.enum(['text', 'base64']).default('text'),
 });
 const StepParams = z.object({ id: z.uuid(), stepId: z.uuid() });
+const EditStep = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    instructions: z.string().trim().min(1).max(8_000),
+    acceptance: z.string().trim().min(1).max(2_000),
+    agentId: z.uuid(),
+    rerun: z.boolean(),
+  })
+  .partial();
+const Team = z.object({ agentIds: z.array(z.uuid()).max(32).nullable() });
 const Extend = z
   .object({
     minutes: z
@@ -204,6 +221,50 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       throw new HttpError(409, 'This project has finished; start a new one to keep going.');
     }
     return r;
+  });
+
+  // The user edits a task (and can run it again); see editStep for the rules.
+  app.patch('/api/tasks/:id/steps/:stepId', async (request) => {
+    const { id, stepId } = parse(StepParams, request.params);
+    const body = parse(EditStep, request.body);
+    const r = await editStep(deps, id, stepId, {
+      ...(body.title ? { title: body.title } : {}),
+      ...(body.instructions ? { instructions: body.instructions } : {}),
+      ...(body.acceptance ? { acceptance: body.acceptance } : {}),
+      ...(body.agentId ? { agentId: body.agentId } : {}),
+      ...(body.rerun ? { rerun: true } : {}),
+    });
+    if (r.status === 'not_found') throw notFound('Task');
+    if (r.status === 'busy') {
+      throw new HttpError(
+        409,
+        "This task is in progress; send its agent a message instead, or wait until it's done.",
+      );
+    }
+    if (r.status === 'project_closed') throw new HttpError(409, 'This project was cancelled.');
+    if (r.status === 'bad_agent') {
+      throw new HttpError(
+        400,
+        "That agent isn't on this project's team. Add it to the team first.",
+      );
+    }
+    return r;
+  });
+
+  // Who may work on the project from now on (null = every agent).
+  app.put('/api/tasks/:id/team', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const { agentIds } = parse(Team, request.body);
+    if (agentIds?.length) {
+      const found = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(inArray(agents.id, agentIds));
+      if (found.length !== new Set(agentIds).size)
+        throw new HttpError(400, 'Some agents do not exist.');
+    }
+    await setTeam(deps, task.id, agentIds);
+    return { agentIds: agentIds?.length ? agentIds : null };
   });
 
   app.post('/api/tasks/:id/cancel', async (request) => {

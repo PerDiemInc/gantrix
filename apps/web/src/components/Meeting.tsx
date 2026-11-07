@@ -127,6 +127,26 @@ export function meetingLines(
       case 'user.message':
         say(e, 'you', e.stepId ? `You to ${who(e.stepId)}` : 'You to everyone', e.text);
         break;
+      case 'step.edited': {
+        const what = e.fields.length ? `changed ${e.fields.join(', ')} of` : 'touched';
+        say(
+          e,
+          'you',
+          'You',
+          `${e.rerun ? 'Reran' : 'Edited'} ${e.key}${e.fields.length ? ` (${what} it)` : ''}.`,
+        );
+        break;
+      }
+      case 'task.team':
+        say(
+          e,
+          'you',
+          'You',
+          e.agentIds
+            ? `Changed the team to ${e.agentIds.length} agents.`
+            : 'Opened the project to every agent.',
+        );
+        break;
       case 'user.message_delivered':
         say(e, 'agent', who(e.stepId), 'Read your note.', true);
         break;

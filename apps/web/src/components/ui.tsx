@@ -132,6 +132,10 @@ export function nowText(e: StreamEvent | null, agentName: (stepId: string) => st
       return `Budget reached (${e.limit})`;
     case 'user.message':
       return `You: ${clip(e.text)}`;
+    case 'step.edited':
+      return `You ${e.rerun ? 'reran' : 'edited'} ${e.key}`;
+    case 'task.team':
+      return 'You changed the team';
     case 'user.message_delivered':
       return `${agentName(e.stepId)} read your note`;
   }
