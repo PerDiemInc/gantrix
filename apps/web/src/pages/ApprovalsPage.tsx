@@ -28,6 +28,7 @@ export function ApprovalsPage() {
             <QuestionCard
               id={a.id}
               taskId={a.taskId}
+              stepId={a.stepId}
               who={a.stepTitle}
               args={a.args}
               onDone={reload}

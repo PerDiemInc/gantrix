@@ -61,7 +61,15 @@ describe('engine', () => {
     expect(c?.startedAt?.getTime()).toBeGreaterThanOrEqual(
       Math.max(+a!.finishedAt!, +b!.finishedAt!),
     );
-    expect(await readFile(join(done.workspacePath, 'c.md'), 'utf8')).toContain('# c');
+    expect(await readFile(join(done.workspacePath, 'steps', c!.id, 'c.md'), 'utf8')).toContain(
+      '# c',
+    );
+    expect(
+      await readFile(join(done.workspacePath, 'steps', c!.id, 'inputs', a!.id, 'a.md'), 'utf8'),
+    ).toContain('# a');
+    expect(
+      await readFile(join(done.workspacePath, 'steps', c!.id, 'inputs', b!.id, 'b.md'), 'utf8'),
+    ).toContain('# b');
     expect(done.result).toContain('### c'); // the final step's reply
     expect(done.tokensUsed).toBeGreaterThan(0);
     expect(await eventTypes(task.id)).toContain('goal.judged');
@@ -191,9 +199,9 @@ describe('engine', () => {
     const [notes] = await stepsOf(task.id);
     expect(notes).toMatchObject({ status: 'succeeded', output: 'Wrote claude-notes.md.' });
     expect(notes?.tokensUsed).toBe(125 + 15); // Claude Code, then the judge
-    expect(await readFile(join(done.workspacePath, 'claude-notes.md'), 'utf8')).toContain(
-      'Claude Code',
-    );
+    expect(
+      await readFile(join(done.workspacePath, 'steps', notes!.id, 'claude-notes.md'), 'utf8'),
+    ).toContain('Claude Code');
     expect(e.fake.calls.worker).toBe(0); // the fake Ollama only planned and judged
   });
 
@@ -308,7 +316,10 @@ describe('engine', () => {
       const done = await e.waitFor(task.id);
 
       expect(done.status).toBe('succeeded');
-      expect(await readFile(join(done.workspacePath, 'http.md'), 'utf8')).toBe('# From HTTP');
+      const [httpStep] = await stepsOf(task.id);
+      expect(
+        await readFile(join(done.workspacePath, 'steps', httpStep!.id, 'http.md'), 'utf8'),
+      ).toBe('# From HTTP');
       expect(seen[0]).toMatchObject({ url: '/v1/run/tiny', key: 'k-123' });
       expect(seen[0]?.body.input.text).toContain('write_file'); // the tool instructions
       const [notes] = await stepsOf(task.id);
@@ -348,9 +359,10 @@ describe('engine', () => {
     expect(await decideApproval(e.deps, question!.id, true, 'Blue')).toBe('decided');
     const done = await e.waitFor(task.id);
     expect(done.status).toBe('succeeded');
-    expect(await readFile(join(done.workspacePath, 'brief.md'), 'utf8')).toBe(
-      'The user answered: Blue',
-    );
+    const [briefStep] = await stepsOf(task.id);
+    expect(
+      await readFile(join(done.workspacePath, 'steps', briefStep!.id, 'brief.md'), 'utf8'),
+    ).toBe('The user answered: Blue');
   });
 
   it('plans with only the agents a project chose', async () => {

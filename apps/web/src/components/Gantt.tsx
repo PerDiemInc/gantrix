@@ -2,8 +2,9 @@ import type { AgentDto, StepDto } from '@gantrix/shared';
 import { useEffect, useRef, useState } from 'react';
 import { duration, label } from '../format.ts';
 import { useNow } from '../hooks.ts';
+import { ownerOf } from './StepInsights.tsx';
 
-const ROW = 34;
+const ROW = 48;
 const BAR = 18;
 const LABEL_W = 230;
 const AXIS_H = 26;
@@ -119,12 +120,14 @@ export function Gantt({ steps, agents, finishedAt, selected, onSelect }: Props) 
           const queued = ms(s.queuedAt);
           const started = ms(s.startedAt);
           const finished = ms(s.finishedAt) ?? (started ? now : null);
-          const agent = s.agentId ? (agents.get(s.agentId)?.name ?? '…') : 'deleted agent';
+          const agent = ownerOf(s, agents);
           const took = started && finished ? duration(finished - started) : '';
           const tip = [
             s.title,
             `${label(s.status)} · ${agent}${s.attempt > 1 ? ` · try ${s.attempt}` : ''}`,
             took && `running ${took}`,
+            `${s.tokensUsed.toLocaleString()} recorded tokens`,
+            s.judgeReason && `Judge: ${s.judgeReason}`,
             s.dependsOn.length ? `after: ${s.dependsOn.join(', ')}` : '',
           ]
             .filter(Boolean)
@@ -135,15 +138,25 @@ export function Gantt({ steps, agents, finishedAt, selected, onSelect }: Props) 
               key={s.id}
               className={`row ${s.id === selected ? 'selected' : ''} ${s.status === 'superseded' ? 'old' : ''}`}
               onClick={() => onSelect(s.id)}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(s.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(s.id);
+                }
+              }}
+              aria-label={tip}
               tabIndex={0}
               role="button"
             >
               <title>{tip}</title>
               <rect x={0} y={y} width={width} height={ROW} className="row-bg" />
               <circle cx={12} cy={y + ROW / 2} r={5} className={`dot s-${s.status}`} />
-              <text x={24} y={y + ROW / 2 + 4} className="row-label">
+              <text x={24} y={y + 19} className="row-label">
                 {s.key.length > 26 ? `${s.key.slice(0, 25)}…` : s.key}
+              </text>
+              <text x={24} y={y + 36} className="row-owner">
+                {agent.length > 17 ? `${agent.slice(0, 16)}…` : agent} ·{' '}
+                {s.tokensUsed.toLocaleString()} tokens
               </text>
               {queued !== null && (
                 <rect

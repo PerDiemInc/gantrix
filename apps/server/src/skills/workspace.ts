@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
+import { mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 /** An error the model caused and can fix; returned to it as text instead of failing the step. */
@@ -18,6 +18,7 @@ export async function pathExists(path: string): Promise<boolean> {
 export async function createWorkspace(workspacesDir: string, taskId: string): Promise<string> {
   const dir = join(workspacesDir, taskId);
   await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '.isolated-steps'), '1\n');
   return realpath(dir);
 }
 

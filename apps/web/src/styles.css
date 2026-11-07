@@ -2163,3 +2163,20 @@ button.chip {
   align-items: center;
   gap: 4px;
 }
+
+.gantt .row-owner {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.step-insights dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+.step-insights dl dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.step-insights dl dd {
+  margin: 4px 0;
+}

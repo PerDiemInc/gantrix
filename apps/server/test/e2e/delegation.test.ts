@@ -64,6 +64,8 @@ describe('delegation (sub-agents)', () => {
     expect(lead?.status).toBe('succeeded');
     expect(leadSaw[0]).toContain('aws finished "Write main.tf"');
     expect(leadSaw[0]).toContain('https://example.test');
+    expect(leadSaw[0]).toContain(`inputs/${sub!.id}/`);
+    expect(leadSaw[0]).toContain(`child step ${sub!.id}`);
     const types = (await e.db.select().from(events).where(eq(events.taskId, task.id))).map(
       (r) => r.type,
     );

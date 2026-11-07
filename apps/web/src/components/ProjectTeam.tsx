@@ -11,6 +11,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { duration } from '../format.ts';
 import { Icon } from './Icon.tsx';
+import { StepInsights } from './StepInsights.tsx';
 import { type AgentState, Avatar, StatusPill } from './ui.tsx';
 
 /** "CTO: technology and engineering…" → "CTO"; otherwise the first few words. */
@@ -466,12 +467,7 @@ export function TaskDialog({
         )}
       </form>
 
-      {step.judgeReason && (
-        <section>
-          <h3 className="small">Judge</h3>
-          <p className="prose">{step.judgeReason}</p>
-        </section>
-      )}
+      <StepInsights step={step} steps={task.steps} agents={agents} />
       {step.error && <p className="error small">{step.error}</p>}
       {step.output && (
         <section>
