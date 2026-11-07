@@ -1796,3 +1796,15 @@ button.chip {
   height: auto;
   text-align: left;
 }
+
+/* inside the New project form, chips and inline labels stay on one line */
+.new-project .agent-option,
+.new-project .row-actions label.inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.new-project .row-actions label.inline input[type="number"] {
+  width: 90px;
+}
