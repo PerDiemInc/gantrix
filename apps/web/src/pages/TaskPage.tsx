@@ -83,6 +83,8 @@ export function eventText(e: StreamEvent, keys: Map<string, string>): string {
       return `You edited ${e.key}${e.fields.length ? ` (${e.fields.join(', ')})` : ''}${e.rerun ? ' and reran it' : ''}`;
     case 'task.team':
       return e.agentIds ? `Team set to ${e.agentIds.length} agents` : 'Team: every agent';
+    case 'task.updated':
+      return `You changed the project's ${e.fields.join(' and ')}`;
     case 'user.message_delivered':
       return `${keys.get(e.stepId) ?? 'A step'} read your note`;
   }

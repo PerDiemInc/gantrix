@@ -40,6 +40,12 @@ export interface TaskDto {
   goal: string;
   /** What the project is, in the user's words. */
   description: string | null;
+  /** The user's name for the project; null shows the description or goal. */
+  name: string | null;
+  /** Progress goes to the Slack thread. */
+  slack: boolean;
+  slackThreadTs: string | null;
+  slackChannel: string | null;
   /** Per-project model choices: agentId → connection + model. */
   agentModels: Record<string, AgentModelChoice> | null;
   status: TaskStatus;

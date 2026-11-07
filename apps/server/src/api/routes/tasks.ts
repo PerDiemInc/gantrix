@@ -9,10 +9,14 @@ import { agents, approvals, events, plans, steps, taskMessages, tasks } from '..
 import {
   cancelTask,
   createTask,
+  deleteTask,
   editStep,
   extendTask,
+  resumeTask,
   sendMessage,
   setTeam,
+  stopTask,
+  updateTask,
 } from '../../engine/commands.ts';
 import { suggestGoal } from '../../engine/goal.ts';
 import { stepThreadId } from '../../engine/threads.ts';
@@ -52,12 +56,18 @@ const CreateTask = z.object({
   approveAll: z.boolean().optional(),
   agentIds: z.array(z.uuid()).max(32).optional(),
   description: z.string().trim().max(8_000).optional(),
+  name: z.string().trim().max(120).optional(),
+  slack: z.boolean().optional(),
   agentModels: z
     .record(
       z.uuid(),
       z.object({ connectionId: z.uuid().nullable(), model: z.string().min(1).max(200).nullable() }),
     )
     .optional(),
+});
+const UpdateTask = z.object({
+  name: z.string().trim().max(120).nullable().optional(),
+  slack: z.boolean().optional(),
 });
 const SuggestGoal = z.object({ description: z.string().trim().min(10).max(8_000) });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
@@ -203,6 +213,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       ...(input.approveAll === undefined ? {} : { approveAll: input.approveAll }),
       ...(input.agentIds?.length ? { agentIds: input.agentIds } : {}),
       ...(input.description ? { description: input.description } : {}),
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.slack !== undefined ? { slack: input.slack } : {}),
       ...(input.agentModels ? { agentModels: input.agentModels } : {}),
     });
     return reply.code(201).send(task);
@@ -282,6 +294,54 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
     const task = await getTask(parse(IdParams, request.params).id);
     return { cancelled: await cancelTask(deps, task.id) };
   });
+
+  // Pause: running tasks stop at their next model turn; Resume picks it up again.
+  app.post('/api/tasks/:id/stop', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    return { stopped: await stopTask(deps, task.id) };
+  });
+
+  app.post('/api/tasks/:id/resume', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    if (task.status !== 'needs_attention') {
+      throw new HttpError(409, 'Only a stopped project can be resumed.');
+    }
+    return resumeTask(deps, task.id);
+  });
+
+  app.patch('/api/tasks/:id', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const input = parse(UpdateTask, request.body);
+    if (input.slack && !(deps.config.SLACK_BOT_TOKEN && deps.config.SLACK_CHANNEL_ID)) {
+      throw new HttpError(
+        400,
+        "Slack isn't set up: add SLACK_BOT_TOKEN and SLACK_CHANNEL_ID to .env.",
+      );
+    }
+    await updateTask(deps, task.id, input);
+    return getTask(task.id);
+  });
+
+  app.delete('/api/tasks/:id', async (request, reply) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const result = await deleteTask(deps, task.id);
+    if (result === 'busy') {
+      throw new HttpError(
+        409,
+        'Stop the project and wait for running tasks to finish before deleting it.',
+      );
+    }
+    return reply.code(204).send();
+  });
+
+  // Whether Slack is set up, for the dashboard's switch. No tokens are returned.
+  app.get('/api/slack', async () => ({
+    posts: Boolean(deps.config.SLACK_BOT_TOKEN && deps.config.SLACK_CHANNEL_ID),
+    replies: Boolean(
+      deps.config.SLACK_BOT_TOKEN && deps.config.SLACK_CHANNEL_ID && deps.config.SLACK_APP_TOKEN,
+    ),
+    channel: deps.config.SLACK_CHANNEL_ID ?? null,
+  }));
 
   app.get('/api/tasks/:id/steps/:stepId/conversation', async (request) => {
     const { id, stepId } = parse(StepParams, request.params);

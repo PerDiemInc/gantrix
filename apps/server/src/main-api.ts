@@ -6,6 +6,7 @@ import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
 import { createPreviewServer } from './preview.ts';
+import { SlackBridge } from './slack/bridge.ts';
 
 const config = loadConfig();
 if (!config.GANTRIX_TOKEN) {
@@ -33,6 +34,22 @@ const preview = createPreviewServer(config.GANTRIX_SITES_DIR);
 preview.on('error', (error) => console.error(`Preview server: ${error.message}`));
 preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 
+// Slack (optional): progress posts to a thread per project; Socket Mode brings replies back.
+let slack: SlackBridge | null = null;
+if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
+  slack = new SlackBridge({ db, queues, checkpointer, config }, hub);
+  await slack.start().then(
+    () =>
+      console.log(
+        `Slack: posting to ${config.SLACK_CHANNEL_ID}${config.SLACK_APP_TOKEN ? ', listening for replies' : ' (add SLACK_APP_TOKEN for replies)'}`,
+      ),
+    (error: unknown) => {
+      console.error(`Slack is off: ${error instanceof Error ? error.message : String(error)}`);
+      slack = null;
+    },
+  );
+}
+
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -40,6 +57,7 @@ async function shutdown() {
   preview.closeAllConnections();
   preview.close();
   await app.close();
+  await slack?.close();
   await hub.close();
   await queues.close();
   connection.disconnect();

@@ -108,6 +108,13 @@ export const tasks = pgTable(
   {
     id: id(),
     goal: text('goal').notNull(),
+    // A short name the user gives the project; null → shown from the description or goal.
+    name: text('name'),
+    // Post progress to the Slack webhook (SLACK_WEBHOOK_URL) for this project.
+    slack: boolean('slack').notNull().default(false),
+    // The Slack thread this project posts to; replies there steer it.
+    slackChannel: text('slack_channel'),
+    slackThreadTs: text('slack_thread_ts'),
     // What the project is, in the user's words; the goal (often an OKR) says what done means.
     description: text('description'),
     status: text('status').$type<TaskStatus>().notNull().default('planning'),

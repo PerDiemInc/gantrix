@@ -78,6 +78,20 @@
       "when": 1794066967459,
       "tag": "0010_project_details",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794067484074,
+      "tag": "0011_project_name_slack",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794067618819,
+      "tag": "0012_slack_thread",
+      "breakpoints": true
     }
   ]
 }

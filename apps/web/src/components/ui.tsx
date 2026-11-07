@@ -136,6 +136,8 @@ export function nowText(e: StreamEvent | null, agentName: (stepId: string) => st
       return `You ${e.rerun ? 'reran' : 'edited'} ${e.key}`;
     case 'task.team':
       return 'You changed the team';
+    case 'task.updated':
+      return `You changed the project's ${e.fields.join(' and ')}`;
     case 'user.message_delivered':
       return `${agentName(e.stepId)} read your note`;
   }

@@ -1,8 +1,11 @@
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
+import { tasks } from '../../src/db/schema.ts';
 import { createTask } from '../../src/engine/commands.ts';
 import { type Engine, startEngine } from './harness.ts';
 
@@ -352,6 +355,61 @@ describe('api', () => {
       description: 'A website for a small bakery',
       agentModels: { [writer.id]: { model: 'fake-big' } },
       budget: { maxMinutes: 180 },
+    });
+  });
+
+  it('stops, resumes, renames and deletes a project', async () => {
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({
+      steps: [
+        {
+          key: 'fetch',
+          title: 'fetch',
+          agent: 'fetcher',
+          instructions: 'go',
+          acceptance: 'ok',
+          dependsOn: [],
+        },
+      ],
+    });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length ? 'Fetched.' : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const task = await createTask(e.deps, { goal: 'Fetch', approveAll: false });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    const call = (method: 'POST' | 'PATCH' | 'DELETE', url: string, payload?: object) =>
+      app.inject({
+        method,
+        url: `/api/tasks/${task.id}${url}`,
+        headers: auth,
+        ...(payload ? { payload } : {}),
+      });
+
+    expect((await call('DELETE', '')).statusCode).toBe(409); // still running
+    expect((await call('POST', '/resume')).statusCode).toBe(409); // not stopped
+    expect((await call('POST', '/stop')).json()).toEqual({ stopped: true });
+    expect((await e.waitFor(task.id)).error).toBe('Stopped by you.');
+    expect((await call('POST', '/stop')).json()).toEqual({ stopped: false });
+
+    const renamed = await call('PATCH', '', { name: '  Crumb site ' });
+    expect(renamed.json()).toMatchObject({ name: 'Crumb site' });
+    expect((await call('PATCH', '', { slack: true })).statusCode).toBe(400); // Slack isn't set up
+
+    await e.db.update(tasks).set({ approveAll: true }).where(eq(tasks.id, task.id));
+    expect((await call('POST', '/resume')).json()).toMatchObject({ status: 'resumed' });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+
+    const workspace =
+      (await e.db.query.tasks.findFirst({ where: eq(tasks.id, task.id) }))?.workspacePath ?? '';
+    expect(existsSync(workspace)).toBe(true);
+    expect((await call('DELETE', '')).statusCode).toBe(204);
+    expect((await app.inject({ url: `/api/tasks/${task.id}`, headers: auth })).statusCode).toBe(
+      404,
+    );
+    expect(existsSync(workspace)).toBe(false);
+    expect((await app.inject({ url: '/api/slack', headers: auth })).json()).toEqual({
+      posts: false,
+      replies: false,
+      channel: null,
     });
   });
 

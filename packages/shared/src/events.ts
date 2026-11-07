@@ -39,6 +39,8 @@ export type GantrixEvent =
       rerun: boolean;
     }
   | { type: 'task.team'; agentIds: string[] | null }
+  /** The user changed project settings, e.g. ["name"] or ["slack"]. */
+  | { type: 'task.updated'; fields: string[] }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
   | { type: 'budget.exceeded'; limit: 'tokens' | 'time' | 'replans'; detail: string };
 

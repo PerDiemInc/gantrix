@@ -1,4 +1,6 @@
 import { randomUUIDv7 } from 'node:crypto';
+import { realpath, rm } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
 import {
   type AgentModelChoice,
   type Budget,
@@ -11,6 +13,7 @@ import { agents, approvals, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
 import type { EngineDeps } from './deps.ts';
+import { stepThreadId } from './threads.ts';
 
 /** User actions shared by the API and the CLI. */
 
@@ -19,6 +22,8 @@ export async function createTask(
   input: {
     goal: string;
     description?: string;
+    name?: string;
+    slack?: boolean;
     budget?: Partial<Budget>;
     approveAll?: boolean;
     agentIds?: string[];
@@ -39,6 +44,8 @@ export async function createTask(
         approveAll: input.approveAll ?? deps.config.GANTRIX_APPROVE_ALL,
         agentIds: input.agentIds?.length ? input.agentIds : null,
         description: input.description?.trim() || null,
+        name: input.name?.trim() || null,
+        slack: input.slack ?? false,
         agentModels:
           input.agentModels && Object.keys(input.agentModels).length ? input.agentModels : null,
       })
@@ -246,10 +253,13 @@ export async function extendTask(
         s.id,
       );
     }
+    const added = Boolean(add.minutes || add.tokens || add.replans);
     await emit(tx, taskId, {
       type: 'task.status',
       status: 'running',
-      reason: `Resumed with more budget: ${budget.maxMinutes} min, ${budget.maxTokens.toLocaleString()} tokens`,
+      reason: added
+        ? `Resumed with more budget: ${budget.maxMinutes} min, ${budget.maxTokens.toLocaleString()} tokens`
+        : 'Resumed',
     });
   });
   if (resume) {
@@ -380,5 +390,87 @@ export async function setTeam(deps: EngineDeps, taskId: string, agentIds: string
       .set({ agentIds: agentIds?.length ? agentIds : null })
       .where(eq(tasks.id, taskId));
     await emit(tx, taskId, { type: 'task.team', agentIds: agentIds?.length ? agentIds : null });
+  });
+}
+
+export const STOPPED_BY_USER = 'Stopped by you.';
+
+/**
+ * Pauses a project: nothing new starts, running tasks stop at their next model turn, and
+ * it can go on later (resumeTask). Cancel, by contrast, ends it for good.
+ */
+export async function stopTask(deps: EngineDeps, taskId: string): Promise<boolean> {
+  const stopped = await deps.db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(tasks)
+      .set({ status: 'needs_attention', finishedAt: new Date(), error: STOPPED_BY_USER })
+      .where(and(eq(tasks.id, taskId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])))
+      .returning({ id: tasks.id });
+    if (row) {
+      await emit(tx, taskId, {
+        type: 'task.status',
+        status: 'needs_attention',
+        reason: STOPPED_BY_USER,
+      });
+    }
+    return Boolean(row);
+  });
+  if (stopped) await deps.queues.tick(taskId);
+  return stopped;
+}
+
+/** Picks a stopped project up where it left off, with the budget it has. */
+export const resumeTask = (deps: EngineDeps, taskId: string) => extendTask(deps, taskId, {});
+
+export type DeleteResult = 'deleted' | 'not_found' | 'busy';
+
+/**
+ * Deletes a finished or stopped project: its tasks, events, approvals, messages (cascade),
+ * its LangGraph threads and its workspace folder. Deployed sites stay.
+ */
+export async function deleteTask(deps: EngineDeps, taskId: string): Promise<DeleteResult> {
+  const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  if (!task) return 'not_found';
+  if (!isTerminal(task.status)) return 'busy';
+  const all = await deps.db
+    .select({ id: steps.id, attempt: steps.attempt, status: steps.status })
+    .from(steps)
+    .where(eq(steps.taskId, taskId));
+  // A task still finishing its last model turn would write into a deleted project.
+  if (all.some((s) => ['running', 'judging'].includes(s.status))) return 'busy';
+  await deps.db.delete(tasks).where(eq(tasks.id, taskId));
+  await deps.checkpointer.deleteThread(`task-${taskId}`);
+  for (const s of all) {
+    for (let attempt = 1; attempt <= s.attempt; attempt++) {
+      await deps.checkpointer.deleteThread(stepThreadId(s.id, attempt));
+    }
+  }
+  // Only a folder inside the workspaces directory, never anything else.
+  // Workspace paths are stored with symlinks resolved (createWorkspace), so resolve the root too.
+  const root = await realpath(deps.config.GANTRIX_WORKSPACES_DIR).catch(() => null);
+  const folder = resolve(task.workspacePath);
+  if (root && folder.startsWith(root + sep)) await rm(folder, { recursive: true, force: true });
+  return 'deleted';
+}
+
+/** Renames a project or turns its Slack updates on or off. */
+export async function updateTask(
+  deps: EngineDeps,
+  taskId: string,
+  input: { name?: string | null | undefined; slack?: boolean | undefined },
+): Promise<boolean> {
+  const fields = Object.keys(input).filter((k) => input[k as keyof typeof input] !== undefined);
+  if (!fields.length) return true;
+  return deps.db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(tasks)
+      .set({
+        ...(input.name !== undefined ? { name: input.name?.trim() || null } : {}),
+        ...(input.slack !== undefined ? { slack: input.slack } : {}),
+      })
+      .where(eq(tasks.id, taskId))
+      .returning({ id: tasks.id });
+    if (row) await emit(tx, taskId, { type: 'task.updated', fields });
+    return Boolean(row);
   });
 }

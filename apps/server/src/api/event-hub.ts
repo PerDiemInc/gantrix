@@ -7,7 +7,7 @@ import { events } from '../db/schema.ts';
 export type EventRow = typeof events.$inferSelect;
 type Listener = (event: EventRow) => void;
 
-const ALL = '*';
+export const ALL = '*';
 
 /**
  * One Postgres LISTEN connection for the whole API process, fanned out to SSE clients.

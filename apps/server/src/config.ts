@@ -8,6 +8,13 @@ const path = (fallback: string) =>
     .string()
     .default(fallback)
     .transform((p) => (p.startsWith('~/') ? `${homedir()}${p.slice(1)}` : p));
+// An empty value in .env counts as unset.
+const optionalMatch = (re: RegExp, message: string) =>
+  z
+    .string()
+    .optional()
+    .transform((v) => v?.trim() || undefined)
+    .pipe(z.string().regex(re, message).optional());
 const positiveInt = (fallback: number) => z.coerce.number().int().positive().default(fallback);
 
 const ConfigSchema = z.object({
@@ -34,6 +41,27 @@ const ConfigSchema = z.object({
   // Tool calls run without asking unless a task turns approvals on ("ask first"). Set false
   // to make every new task ask before shell, web, MCP and email tools.
   GANTRIX_APPROVE_ALL: z.stringbool().default(true),
+  // Slack (optional). Bot token + channel: projects post progress to a thread.
+  // Add the app-level token (Socket Mode) and replies in the thread steer the project.
+  SLACK_BOT_TOKEN: optionalMatch(/^xoxb-/, 'SLACK_BOT_TOKEN starts with xoxb-'),
+  SLACK_APP_TOKEN: optionalMatch(/^xapp-/, 'SLACK_APP_TOKEN starts with xapp-'),
+  SLACK_CHANNEL_ID: optionalMatch(
+    /^[CG][A-Z0-9]{6,}$/,
+    'SLACK_CHANNEL_ID is a channel id like C0123ABCD',
+  ),
+  // Slack user ids (U…) allowed to steer, answer, add agents or stop. Anyone in the channel can ask.
+  SLACK_ALLOWED_USERS: z
+    .string()
+    .default('')
+    .transform((s) =>
+      s
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
+  SLACK_API_URL: z.url().default('https://slack.com/api'),
+  // Links in Slack messages point here.
+  GANTRIX_DASHBOARD_URL: z.url().default('http://127.0.0.1:4701'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
