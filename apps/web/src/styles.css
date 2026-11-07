@@ -331,6 +331,7 @@ fieldset {
   --c: var(--s-queued);
 }
 .s-running,
+.s-delegating,
 .s-planning {
   --c: var(--s-running);
 }
@@ -910,6 +911,7 @@ a.button.ghost {
   --pill: var(--s-queued);
 }
 .pill.s-running,
+.pill.s-delegating,
 .pill.s-planning {
   --pill: var(--s-running);
 }
@@ -2156,4 +2158,9 @@ button.chip {
   background: #b4231f;
   color: #fff;
   border-color: transparent;
+}
+.task-card .subtask {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }

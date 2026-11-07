@@ -228,6 +228,12 @@ export class SlackBridge {
           broadcast: true,
         };
       }
+      case 'delegation.started': {
+        const s = await this.#stepWithAgent(e.stepId);
+        return {
+          text: `:arrow_right_hook: *${s?.agent ?? 'An agent'}* handed “${esc(e.title)}” to *${e.agent}*`,
+        };
+      }
       case 'goal.judged':
         return e.passed
           ? null

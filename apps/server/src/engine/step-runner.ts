@@ -2,13 +2,14 @@ import { readFile } from 'node:fs/promises';
 import { isTerminal, type StepStatus } from '@gantrix/shared';
 import { type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Command, GraphRecursionError } from '@langchain/langgraph';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { canRetry } from '../budget.ts';
 import type { Db } from '../db/client.ts';
 import {
   agentSkills,
   agents,
   approvals,
+  delegations,
   skills,
   steps,
   taskMessages,
@@ -20,9 +21,11 @@ import { createChatModel } from '../models/provider.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
 import { ASK_USER } from '../skills/tools/ask.ts';
+import { DELEGATE, delegateTool } from '../skills/tools/delegate.ts';
 import { fileTools } from '../skills/tools/files.ts';
 import { builtinTools } from '../skills/tools/index.ts';
 import { resolveInWorkspace } from '../skills/workspace.ts';
+import { startDelegations, stillWaiting } from './delegation.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
 import { judgeStep, type Verdict } from './judge.ts';
 import {
@@ -61,7 +64,12 @@ export async function runStepJob(
   const task = await db.query.tasks.findFirst({ where: eq(tasks.id, step.taskId) });
   if (!task || isTerminal(task.status)) return;
   try {
-    await execute(deps, task, step);
+    // 'again': every delegate request was answered at once (e.g. an unknown agent), so the
+    // agent continues in this job; a new job with the same id would be dropped by BullMQ.
+    for (let i = 0; i < 3; i++) {
+      const fresh = await db.query.steps.findFirst({ where: eq(steps.id, job.stepId) });
+      if (!fresh || (await execute(deps, task, fresh)) !== 'again') break;
+    }
   } catch (error) {
     if (error instanceof StepStopped) return; // the supervisor tidies up the task
     if (error instanceof GraphRecursionError) {
@@ -75,7 +83,7 @@ export async function runStepJob(
   }
 }
 
-async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> {
+async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again' | undefined> {
   const { db, config, checkpointer } = deps;
   const agent = step.agentId
     ? await db.query.agents.findFirst({ where: eq(agents.id, step.agentId) })
@@ -90,6 +98,20 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
     .innerJoin(skills, eq(agentSkills.skillId, skills.id))
     .where(eq(agentSkills.agentId, agent.id));
   const toolkit = combineSkills(await Promise.all(skillRows.map(loadVerifiedSkill)));
+  // A sub-task can't hand out sub-tasks of its own: one level keeps it understandable.
+  const delegates =
+    toolkit.builtinTools.has(DELEGATE) && !step.parentStepId
+      ? [
+          delegateTool(
+            (
+              await db
+                .select({ name: agents.name, description: agents.description })
+                .from(agents)
+                .where(ne(agents.id, agent.id))
+            ).filter((a) => a.name),
+          ),
+        ]
+      : [];
 
   const mcp = await openMcpTools(toolkit.mcpServers, task.workspacePath);
   try {
@@ -118,6 +140,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
           sitesDir: config.GANTRIX_SITES_DIR,
           previewUrl: `http://${config.GANTRIX_HOST}:${config.GANTRIX_PREVIEW_PORT}`,
         }),
+        ...delegates,
         ...mcp.tools,
       ],
       autoApprove: toolkit.autoApprove,
@@ -185,7 +208,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
     const before = await graph.getState(run);
     const tokensBefore = summarize(before.values.messages ?? []).tokens;
     const input = await nextInput(deps, graph, run, task, step, agent, toolkit);
-    if (input === 'waiting') return;
+    if (input === 'waiting') return undefined;
 
     if (step.status !== 'running') {
       await setStep(db, task.id, step, 'running', step.startedAt ? {} : { startedAt: new Date() });
@@ -197,8 +220,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
     await addTokens(db, task.id, step.id, tokens - tokensBefore);
     const interrupts = after.tasks.flatMap((t) => t.interrupts);
     if (interrupts.length) {
-      await requestApprovals(db, task.id, step, interrupts);
-      return;
+      return (await requestApprovals(deps, task, step, interrupts)) ? 'again' : undefined;
     }
 
     await setStep(db, task.id, step, 'judging', {});
@@ -215,6 +237,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<void> 
       workspaceFiles,
     });
     await recordVerdict(deps, task, step, verdict, output);
+    return undefined;
   } finally {
     await mcp.close();
   }
@@ -242,14 +265,21 @@ async function nextInput(
       .select()
       .from(approvals)
       .where(and(eq(approvals.stepId, step.id), inArray(approvals.interruptId, ids)));
-    if (rows.length < ids.length) {
-      await requestApprovals(deps.db, task.id, step, interrupts); // heal a crash before they were saved
+    const subs = await deps.db
+      .select()
+      .from(delegations)
+      .where(and(eq(delegations.stepId, step.id), inArray(delegations.interruptId, ids)));
+    if (rows.length + subs.length < ids.length) {
+      await requestApprovals(deps, task, step, interrupts); // heal a crash before they were saved
       return 'waiting';
     }
-    if (rows.some((r) => r.status === 'pending')) return 'waiting';
-    const decisions: Record<string, ApprovalDecision> = Object.fromEntries(
-      rows.map((r) => [r.interruptId, { approved: r.status === 'approved', answer: r.answer }]),
-    );
+    if (rows.some((r) => r.status === 'pending') || subs.some((d) => d.status === 'running')) {
+      return 'waiting';
+    }
+    const decisions: Record<string, ApprovalDecision> = Object.fromEntries([
+      ...rows.map((r) => [r.interruptId, { approved: r.status === 'approved', answer: r.answer }]),
+      ...subs.map((d) => [d.interruptId, { approved: true, answer: d.answer }]),
+    ]);
     return new Command({ resume: decisions }) as AgentInput;
   }
   if (snapshot.next.length) return null;
@@ -284,7 +314,11 @@ ${task.goal}
 Your step: ${step.title}
 Done when: ${step.acceptance}
 
-Do only this step: other agents handle the other steps, so don't do their work.
+Do only this step: other agents handle the other steps, so don't do their work.${
+      step.parentStepId
+        ? '\nAnother agent handed you this step as a sub-task and waits for your reply: make it complete and specific (what you did, files, URLs, values, anything that failed).'
+        : ''
+    }
 Use your tools to do the work in the task workspace. When you finish, reply with a summary that
 includes the key content and the paths of any files you wrote. A reviewer checks that reply
 against "Done when".`,
@@ -306,33 +340,42 @@ against "Done when".`,
   return [new SystemMessage(system), new HumanMessage(user)];
 }
 
+/**
+ * Saves what a paused step waits for: approvals and questions for the user, and sub-tasks for
+ * other agents. Returns true when nothing is left to wait for (every delegate request was
+ * answered at once), so the caller resumes the agent straight away.
+ */
 async function requestApprovals(
-  db: Db,
-  taskId: string,
+  deps: EngineDeps,
+  task: Task,
   step: Step,
   interrupts: { id?: string; value?: unknown }[],
-): Promise<void> {
-  await db.transaction(async (tx) => {
-    const created = await tx
-      .insert(approvals)
-      .values(
-        interrupts.map((i) => {
-          const request = i.value as ApprovalRequest;
-          return {
-            taskId,
-            stepId: step.id,
-            interruptId: i.id ?? '',
-            tool: request.tool,
-            args: request.args,
-          };
-        }),
-      )
-      .onConflictDoNothing()
-      .returning();
+): Promise<boolean> {
+  const asks = interrupts.filter((i) => (i.value as ApprovalRequest).tool !== DELEGATE);
+  const subs = interrupts.filter((i) => (i.value as ApprovalRequest).tool === DELEGATE);
+  return deps.db.transaction(async (tx) => {
+    const created = asks.length
+      ? await tx
+          .insert(approvals)
+          .values(
+            asks.map((i) => {
+              const request = i.value as ApprovalRequest;
+              return {
+                taskId: task.id,
+                stepId: step.id,
+                interruptId: i.id ?? '',
+                tool: request.tool,
+                args: request.args,
+              };
+            }),
+          )
+          .onConflictDoNothing()
+          .returning()
+      : [];
     for (const a of created) {
       await emit(
         tx,
-        taskId,
+        task.id,
         {
           type: 'approval.requested',
           approvalId: a.id,
@@ -343,19 +386,25 @@ async function requestApprovals(
         step.id,
       );
     }
-    await tx.update(steps).set({ status: 'awaiting_approval' }).where(eq(steps.id, step.id));
+    if (subs.length) {
+      await startDelegations(
+        tx,
+        task,
+        step,
+        subs.map((i) => ({ interruptId: i.id ?? '', args: (i.value as ApprovalRequest).args })),
+      );
+    }
+    const waiting = await stillWaiting(tx, step.id);
+    if (!waiting) return true;
+    const status = waiting === 'user' ? 'awaiting_approval' : 'delegating';
+    await tx.update(steps).set({ status }).where(eq(steps.id, step.id));
     await emit(
       tx,
-      taskId,
-      {
-        type: 'step.status',
-        stepId: step.id,
-        key: step.key,
-        status: 'awaiting_approval',
-        attempt: step.attempt,
-      },
+      task.id,
+      { type: 'step.status', stepId: step.id, key: step.key, status, attempt: step.attempt },
       step.id,
     );
+    return false;
   });
 }
 

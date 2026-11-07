@@ -7,6 +7,7 @@ import { agents, events, plans, steps, taskMessages, tasks } from '../db/schema.
 import { emit } from '../events.ts';
 import { readySteps } from '../plan/dag.ts';
 import { enqueueStep } from './commands.ts';
+import { finishDelegations } from './delegation.ts';
 import type { EngineDeps } from './deps.ts';
 
 const IN_FLIGHT: ReadonlySet<StepStatus> = new Set([
@@ -14,6 +15,7 @@ const IN_FLIGHT: ReadonlySet<StepStatus> = new Set([
   'running',
   'judging',
   'awaiting_approval',
+  'delegating',
 ]);
 
 type Outcome = 'wait' | 'finish';
@@ -70,6 +72,9 @@ async function reconcile(deps: EngineDeps, taskId: string): Promise<Outcome> {
     return 'finish';
   }
 
+  // Sub-tasks that ended hand their result back to the step that delegated them.
+  for (const s of await finishDelegations(deps, taskId)) await enqueueStep(deps, s.id, s.attempt);
+
   const version = await latestPlanVersion(db, taskId);
   if (task.status === 'planning') {
     await queues.plan(taskId, version + 1);
@@ -119,20 +124,22 @@ async function reconcile(deps: EngineDeps, taskId: string): Promise<Outcome> {
     return 'wait';
   }
 
-  if (current.some((s) => s.status === 'failed')) {
+  // A failed sub-task is reported to the step that delegated it, which decides what to do.
+  const planned = current.filter((s) => !s.parentStepId);
+  if (planned.some((s) => s.status === 'failed')) {
     if (inFlight.length) return 'wait'; // let running steps and open approvals finish first
-    const failed = current.filter((s) => s.status === 'failed').map((s) => s.title);
+    const failed = planned.filter((s) => s.status === 'failed').map((s) => s.title);
     return replanOrStop(deps, task, version, `Steps failed: ${failed.join(', ')}`);
   }
 
-  if (current.length && current.every((s) => s.status === 'succeeded')) {
+  if (planned.length && planned.every((s) => s.status === 'succeeded') && !inFlight.length) {
     const verdict = await latestGoalVerdict(db, taskId, version);
     if (!verdict) {
       await queues.goal(taskId, version);
       return 'wait';
     }
     if (verdict.passed) {
-      await finish(deps, taskId, 'succeeded', { result: resultOf(current) });
+      await finish(deps, taskId, 'succeeded', { result: resultOf(planned) });
       return 'finish';
     }
     return replanOrStop(deps, task, version, `Goal not met: ${verdict.reason}`);
@@ -174,8 +181,8 @@ async function reconcile(deps: EngineDeps, taskId: string): Promise<Outcome> {
   // "Awaiting approval" when the only thing left to do is the user's decision.
   const waitingOnUser =
     !toQueue.length &&
-    inFlight.length > 0 &&
-    inFlight.every((s) => s.status === 'awaiting_approval');
+    inFlight.some((s) => s.status === 'awaiting_approval') &&
+    inFlight.every((s) => s.status === 'awaiting_approval' || s.status === 'delegating');
   await setTaskStatus(deps, task, waitingOnUser ? 'awaiting_approval' : 'running');
   return 'wait';
 }

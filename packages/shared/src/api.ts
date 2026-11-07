@@ -93,6 +93,8 @@ export interface StepDto {
   acceptance: string;
   agentId: string | null;
   dependsOn: string[];
+  /** Set on a sub-task: the step that delegated it. */
+  parentStepId: string | null;
   status: StepStatus;
   attempt: number;
   output: string | null;

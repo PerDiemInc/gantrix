@@ -15,6 +15,7 @@ import {
 import { tokensUsed } from '../models/provider.ts';
 import { requiresApproval } from '../skills/policy.ts';
 import { ASK_USER } from '../skills/tools/ask.ts';
+import { DELEGATE } from '../skills/tools/delegate.ts';
 
 export interface ApprovalRequest {
   tool: string;
@@ -58,6 +59,15 @@ export function buildStepAgent(o: StepAgentOptions) {
     const tool = byName.get(call.name);
     if (!tool) {
       return `Error: unknown tool "${call.name}". Available: ${[...byName.keys()].join(', ')}.`;
+    }
+    // delegate waits for a sub-agent: the engine runs the sub-task as its own step.
+    if (call.name === DELEGATE) {
+      const decision = interrupt<ApprovalRequest, ApprovalDecision>({
+        tool: call.name,
+        args: call.args,
+      });
+      await o.onToolCall(call.name, call.args, false);
+      return decision.answer ?? 'The sub-agent returned nothing.';
     }
     // ask_user always waits for the user, whatever the approval setting.
     if (call.name === ASK_USER) {

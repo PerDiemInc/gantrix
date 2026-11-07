@@ -274,7 +274,7 @@ The preview server only serves `~/.gantrix/sites` (`GANTRIX_SITES_DIR`), on its 
 
 ## The executive team (optional)
 
-One command adds six ready-made agents, each with its own skill:
+One command adds ten ready-made agents, each with its own skill:
 
 ```bash
 npm run gantrix -- team add                 # or: team add --only cto,designer   (-m <model> for all)
@@ -289,6 +289,9 @@ npm run gantrix -- run "CPO: plan the v2 launch; CTO: estimate the work; CMO: wr
 | `ciso` | `exec-ciso` | Threat models, code and dependency audits, config checks, authorized tests of your own systems | files, web, shell |
 | `cpo` | `exec-cpo` | PRDs, priorities, milestone timelines with a Mermaid gantt, risks, status updates | files |
 | `engineer` | `exec-engineer` | Builds websites and small tools from the brief and the chosen design, then deploys them to the local preview server | files, web, shell, deploy |
+| `devops` | `exec-devops` | Deploys to the simplest platform that fits: Supabase, Heroku, Vercel, Netlify, Render, Fly.io, Railway, Cloudflare, GitHub Pages. Hands AWS and GCP to its sub-agents | files, web, shell, ask, delegate |
+| `aws-engineer` | `devops-aws` | Sub-agent: Terraform for AWS (S3 + CloudFront, ECS Fargate, Lambda, RDS, IAM, VPC), checked with fmt/validate/tflint/checkov and planned; applies only when allowed and you say yes | files, web, shell, ask |
+| `gcp-engineer` | `devops-gcp` | Sub-agent: Terraform for GCP (Cloud Run, Cloud Storage + CDN, Cloud SQL, Artifact Registry, IAM), checked and planned; applies only when allowed and you say yes | files, web, shell, ask |
 | `designer` | `exec-designer`, `google-slides` | Mobile apps, websites, dashboards, marketing materials (social posts, flyers, emails), business cards and Google Slides decks: brief, wireframes, design tokens, HTML/CSS mockups and print files, checked against WCAG 2.2 | files, web, Google Slides |
 
 It's safe to run again. Team agents you haven't changed move to the newest team skills; any
@@ -299,6 +302,31 @@ other existing agent is left as it is. The skills are plain folders in
 - The CTO and CISO can run shell commands. Use "Ask me before risky tools" to approve each one.
 - The CISO only tests what the task names as yours. Anything else goes under "Not tested".
 - The skills are written for small local models. Ask for one deliverable per step.
+
+**Deployment and sub-agents.** `devops` reads the project, picks where it should run and
+writes `deploy/plan.md`. For Supabase, Heroku, Vercel and the other platforms it uses their CLIs
+itself. For AWS or GCP it uses the `delegate` tool to hand a sub-task to `aws-engineer` or
+`gcp-engineer`, which write Terraform in `infra/aws/` or `infra/gcp/`, check it and run
+`terraform plan`. The sub-task appears on the board as "sub-task for …", with its own
+conversation and review. `devops` waits while it runs, then carries on with the result.
+`terraform apply`, paid resources, DNS and anything destructive wait for your yes (`ask_user`),
+even with approvals off. The CLIs (`supabase`, `heroku`, `vercel`, `fly`, `terraform`,
+`aws`, `gcloud`…) must be installed and logged in by you; the agents never handle keys.
+
+```bash
+npm run gantrix -- team add --only devops,aws-engineer,gcp-engineer
+npm run gantrix -- run --agents devops,aws-engineer "Deploy site/ to AWS as a static site behind CloudFront; plan only"
+```
+
+**Any agent can have sub-agents.** Add `delegate` to a skill's `tools` and its agent can hand
+self-contained sub-tasks to any other agent and wait for the result. Rules:
+
+- Sub-tasks go one level deep: a sub-agent can't delegate further.
+- One task can hand out at most 6 sub-tasks.
+- A failed sub-task goes back to the agent that delegated it, which decides what to do; it
+  doesn't fail the project.
+- Agents that run on Claude Code (`claude -p`) can't delegate, because they don't get Gantrix
+  tools. A Claude Code agent can be a sub-agent.
 
 **Slide decks in Google Slides.** The designer builds decks in your Google Drive. Set it up once:
 
@@ -460,7 +488,7 @@ Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. To
 gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
 gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
-gantrix team add [--only cto,cmo,cro,ciso,cpo,designer] [-m model]
+gantrix team add [--only cto,cmo,cro,ciso,cpo,designer,engineer,devops,aws-engineer,gcp-engineer] [-m model]
 gantrix run "<goal>" [--name text] [--description text] [--slack] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]

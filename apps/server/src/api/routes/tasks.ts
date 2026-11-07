@@ -154,7 +154,7 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
             .orderBy(events.taskId, desc(events.id)),
         ])
       : [[], [], []];
-    const ACTIVE = new Set(['running', 'judging', 'awaiting_approval', 'queued']);
+    const ACTIVE = new Set(['running', 'judging', 'awaiting_approval', 'delegating', 'queued']);
     const stateOf = (statuses: string[]): TaskListItem['team'][number]['state'] => {
       if (statuses.some((s) => s === 'running' || s === 'judging')) return 'working';
       if (statuses.includes('awaiting_approval')) return 'waiting';

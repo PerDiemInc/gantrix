@@ -160,7 +160,14 @@ export function meetingLines(
   return lines;
 }
 
-const OPEN_STEP = new Set(['pending', 'queued', 'running', 'judging', 'awaiting_approval']);
+const OPEN_STEP = new Set([
+  'pending',
+  'queued',
+  'running',
+  'judging',
+  'awaiting_approval',
+  'delegating',
+]);
 
 function Composer({
   task,

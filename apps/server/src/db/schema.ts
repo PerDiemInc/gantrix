@@ -167,6 +167,8 @@ export const steps = pgTable(
     instructions: text('instructions').notNull(),
     acceptance: text('acceptance').notNull(),
     agentId: uuid('agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    // A sub-task another step delegated to this one's agent (see delegations).
+    parentStepId: uuid('parent_step_id'),
     dependsOn: text('depends_on').array().notNull().default(sql`'{}'::text[]`), // keys in the same task
     status: text('status').$type<StepStatus>().notNull().default('pending'),
     attempt: integer('attempt').notNull().default(0),
@@ -247,4 +249,32 @@ export const events = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('events_task_id_idx').on(t.taskId, t.id)],
+);
+
+/**
+ * A step that handed a sub-task to another agent. The step waits (status "delegating") on its
+ * LangGraph interrupt; when the child step ends, the supervisor resumes it with the result.
+ */
+export const delegations = pgTable(
+  'delegations',
+  {
+    id: id(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    stepId: uuid('step_id')
+      .notNull()
+      .references(() => steps.id, { onDelete: 'cascade' }),
+    interruptId: text('interrupt_id').notNull(),
+    childStepId: uuid('child_step_id').references(() => steps.id, { onDelete: 'set null' }),
+    // running → done; answer is what the parent agent gets back as the tool result.
+    status: text('status').$type<'running' | 'done'>().notNull().default('running'),
+    answer: text('answer'),
+    createdAt: createdAt(),
+    finishedAt: ts('finished_at'),
+  },
+  (t) => [
+    uniqueIndex('delegations_step_interrupt_idx').on(t.stepId, t.interruptId),
+    index('delegations_task_status_idx').on(t.taskId, t.status),
+  ],
 );

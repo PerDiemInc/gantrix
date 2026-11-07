@@ -58,6 +58,27 @@ export const TEAM = [
     description:
       'CPO and project manager: product specs (PRDs), priorities, roadmaps, milestone timelines with owners and dates, risks and status updates. Keeps the team aligned.',
   },
+  {
+    name: 'devops',
+    avatar: 'preset:gant-classic',
+    skills: ['exec-devops'],
+    description:
+      'DevOps lead: deploys apps to the simplest platform that fits (Supabase, Heroku, Vercel, Netlify, Render, Fly.io, Railway, Cloudflare, GitHub Pages) and hands AWS and GCP Terraform work to aws-engineer and gcp-engineer.',
+  },
+  {
+    name: 'aws-engineer',
+    avatar: 'preset:gant-sunny',
+    skills: ['devops-aws'],
+    description:
+      'AWS sub-agent for devops: Terraform for S3 + CloudFront, ECS Fargate, Lambda, RDS, IAM and VPCs; plans, checks and applies only when allowed.',
+  },
+  {
+    name: 'gcp-engineer',
+    avatar: 'preset:gant-mint',
+    skills: ['devops-gcp'],
+    description:
+      'GCP sub-agent for devops: Terraform for Cloud Run, Cloud Storage + CDN, Cloud SQL, Artifact Registry and IAM; plans, checks and applies only when allowed.',
+  },
 ] as const;
 
 export type Role = (typeof TEAM)[number]['name'];

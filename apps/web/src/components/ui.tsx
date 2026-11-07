@@ -91,7 +91,9 @@ export function TaskProgress({
         <span className="seg s-succeeded" style={{ width: part(done) }} />
         <span
           className="seg s-running"
-          style={{ width: part((counts.running ?? 0) + (counts.judging ?? 0)) }}
+          style={{
+            width: part((counts.running ?? 0) + (counts.judging ?? 0) + (counts.delegating ?? 0)),
+          }}
         />
         <span
           className="seg s-awaiting_approval"
@@ -147,6 +149,10 @@ export function nowText(e: StreamEvent | null, agentName: (stepId: string) => st
       return `You ${e.rerun ? 'reran' : 'edited'} ${e.key}`;
     case 'task.team':
       return 'You changed the team';
+    case 'delegation.started':
+      return `${agentName(e.stepId)} handed “${e.title}” to ${e.agent}`;
+    case 'delegation.finished':
+      return `${e.agent} ${e.ok ? 'finished' : "couldn't finish"} a sub-task for ${agentName(e.stepId)}`;
     case 'task.updated':
       return `You changed the project's ${e.fields.join(' and ')}`;
     case 'user.message_delivered':

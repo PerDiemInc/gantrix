@@ -8,7 +8,7 @@ const BAR = 18;
 const LABEL_W = 230;
 const AXIS_H = 26;
 const RIGHT_PAD = 24;
-const ACTIVE = new Set(['queued', 'running', 'judging', 'awaiting_approval']);
+const ACTIVE = new Set(['queued', 'running', 'judging', 'awaiting_approval', 'delegating']);
 const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600].map((s) => s * 1000);
 
 const ms = (iso: string | null) => (iso ? Date.parse(iso) : null);

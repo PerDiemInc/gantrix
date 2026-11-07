@@ -7,11 +7,12 @@ import {
   isTerminal,
   TERMINAL_TASK_STATUSES,
 } from '@gantrix/shared';
-import { and, eq, inArray, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
-import { agents, approvals, steps, taskMessages, tasks } from '../db/schema.ts';
+import { agents, approvals, delegations, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
+import { resumeIfReady } from './delegation.ts';
 import type { EngineDeps } from './deps.ts';
 import { stepThreadId } from './threads.ts';
 
@@ -101,31 +102,15 @@ export async function decideApproval(
       { type: 'approval.decided', approvalId, approved, ...(answer ? { answer } : {}) },
       approval.stepId,
     );
-    const open = await tx.query.approvals.findFirst({
-      where: and(eq(approvals.stepId, approval.stepId), eq(approvals.status, 'pending')),
-    });
-    if (open) return { result: 'decided' as const, taskId: approval.taskId };
-    // All of this step's approvals are decided: queue it to resume.
-    const [step] = await tx
+    // Resume once every approval is decided and no sub-agent is still working for it.
+    const step = await resumeIfReady(tx, approval.taskId, approval.stepId);
+    if (step) return { result: 'decided' as const, taskId: approval.taskId, step };
+    // Still waiting on a sub-agent: show that rather than "needs you".
+    await tx
       .update(steps)
-      .set({ status: 'queued' })
-      .where(and(eq(steps.id, approval.stepId), eq(steps.status, 'awaiting_approval')))
-      .returning();
-    if (step) {
-      await emit(
-        tx,
-        approval.taskId,
-        {
-          type: 'step.status',
-          stepId: step.id,
-          key: step.key,
-          status: 'queued',
-          attempt: step.attempt,
-        },
-        step.id,
-      );
-    }
-    return { result: 'decided' as const, taskId: approval.taskId, step };
+      .set({ status: 'delegating' })
+      .where(and(eq(steps.id, approval.stepId), eq(steps.status, 'awaiting_approval')));
+    return { result: 'decided' as const, taskId: approval.taskId };
   });
   if (outcome.result === 'decided') {
     if (outcome.step) await enqueueStep(deps, outcome.step.id, outcome.step.attempt);
@@ -143,10 +128,16 @@ export async function enqueueStep(
   stepId: string,
   attempt: number,
 ): Promise<void> {
-  const decided = await deps.db.$count(
-    approvals,
-    and(eq(approvals.stepId, stepId), ne(approvals.status, 'pending')),
-  );
+  // Each resume needs its own job id: count what has been answered so far.
+  const decided =
+    (await deps.db.$count(
+      approvals,
+      and(eq(approvals.stepId, stepId), ne(approvals.status, 'pending')),
+    )) +
+    (await deps.db.$count(
+      delegations,
+      and(eq(delegations.stepId, stepId), eq(delegations.status, 'done')),
+    ));
   await deps.queues.step(stepId, attempt, decided ? `r${decided}` : undefined);
 }
 
@@ -230,6 +221,22 @@ export async function extendTask(
       })
       .where(eq(tasks.id, taskId));
     if (!resume) return;
+    // Sub-tasks of interrupted steps go: their parent starts a fresh attempt and can hand
+    // them out again.
+    await tx
+      .update(delegations)
+      .set({ status: 'done', answer: 'The project was stopped.', finishedAt: new Date() })
+      .where(and(eq(delegations.taskId, taskId), eq(delegations.status, 'running')));
+    await tx
+      .update(steps)
+      .set({ status: 'superseded', finishedAt: new Date() })
+      .where(
+        and(
+          eq(steps.taskId, taskId),
+          isNotNull(steps.parentStepId),
+          notInArray(steps.status, ['succeeded', 'failed', 'superseded']),
+        ),
+      );
     // Tasks that were stopped mid-way wait to run again (as a new attempt).
     const stopped = await tx
       .update(steps)
@@ -237,7 +244,14 @@ export async function extendTask(
       .where(
         and(
           eq(steps.taskId, taskId),
-          inArray(steps.status, ['cancelled', 'queued', 'running', 'judging', 'awaiting_approval']),
+          inArray(steps.status, [
+            'cancelled',
+            'queued',
+            'running',
+            'judging',
+            'awaiting_approval',
+            'delegating',
+          ]),
         ),
       )
       .returning();
@@ -277,7 +291,12 @@ const EDITABLE: ReadonlySet<string> = new Set([
   'succeeded',
   'cancelled',
 ]);
-const BUSY: ReadonlySet<string> = new Set(['running', 'judging', 'awaiting_approval']);
+const BUSY: ReadonlySet<string> = new Set([
+  'running',
+  'judging',
+  'awaiting_approval',
+  'delegating',
+]);
 
 export type EditStepResult =
   | { status: 'edited'; reopened: boolean }

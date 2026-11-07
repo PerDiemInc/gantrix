@@ -67,6 +67,7 @@ export const STATUS_ICON: Record<string, IconName> = {
   planning: 'list',
   running: 'play',
   awaiting_approval: 'hand',
+  delegating: 'users',
   succeeded: 'check',
   failed: 'x',
   needs_attention: 'alert',

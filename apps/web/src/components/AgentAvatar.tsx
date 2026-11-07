@@ -192,6 +192,9 @@ export const ROLE_PRESETS: Record<string, string> = {
   researcher: 'gant-mint',
   editor: 'gant-bow',
   analyst: 'gant-grape',
+  devops: 'gant-classic',
+  'aws-engineer': 'gant-sunny',
+  'gcp-engineer': 'gant-mint',
 };
 
 export type AvatarChoice =

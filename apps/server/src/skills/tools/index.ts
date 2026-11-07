@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { ASK_USER, askUserTool } from './ask.ts';
+import { DELEGATE } from './delegate.ts';
 import { type DeployOptions, deploySiteTool } from './deploy.ts';
 import { fileTools } from './files.ts';
 import { shellTool } from './shell.ts';
@@ -13,6 +14,8 @@ export const BUILTIN_TOOL_NAMES: readonly string[] = [
   'shell',
   ASK_USER,
   'deploy_site',
+  // Built per step (it lists the other agents), not here: see delegateTool.
+  DELEGATE,
 ];
 
 /** The built-in tools named by an agent's skills, bound to one task workspace. */

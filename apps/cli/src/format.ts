@@ -11,6 +11,7 @@ const STEP_LOOK: Record<StepStatus, [string, Style]> = {
   running: ['▶', 'cyan'],
   judging: ['⚖', 'magenta'],
   awaiting_approval: ['✋', 'yellow'],
+  delegating: ['↪', 'cyan'],
   succeeded: ['✔', 'green'],
   failed: ['✖', 'red'],
   superseded: ['↷', 'gray'],
@@ -114,6 +115,10 @@ export function describeEvent(e: StreamEvent, stepKeys: Map<string, string>): st
       return `${at} ${paint('cyan', `you edited ${e.key}${e.fields.length ? ` (${e.fields.join(', ')})` : ''}${e.rerun ? ' and reran it' : ''}`)}`;
     case 'task.team':
       return `${at} ${paint('cyan', e.agentIds ? `team changed (${e.agentIds.length} agents)` : 'team: every agent')}`;
+    case 'delegation.started':
+      return `${at} ${stepKeys.get(e.stepId) ?? 'a step'} ${paint('cyan', `handed "${e.title}" to ${e.agent}`)}`;
+    case 'delegation.finished':
+      return `${at} ${paint(e.ok ? 'green' : 'red', `${e.agent} ${e.ok ? 'finished' : "couldn't finish"} its sub-task`)} for ${stepKeys.get(e.stepId) ?? 'a step'}`;
     case 'task.updated':
       return `${at} ${paint('cyan', `you changed ${e.fields.join(', ')}`)}`;
     case 'user.message_delivered':

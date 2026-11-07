@@ -23,6 +23,7 @@ export const STEP_STATUSES = [
   'queued',
   'running',
   'awaiting_approval',
+  'delegating', // waiting for a sub-task it handed to another agent
   'judging',
   'succeeded',
   'failed',

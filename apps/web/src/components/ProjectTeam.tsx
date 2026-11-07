@@ -205,7 +205,7 @@ const COLUMNS: {
   statuses: StepStatus[];
 }[] = [
   { title: 'To do', icon: 'clock', statuses: ['pending', 'queued', 'cancelled'] },
-  { title: 'In progress', icon: 'play', statuses: ['running', 'judging'] },
+  { title: 'In progress', icon: 'play', statuses: ['running', 'judging', 'delegating'] },
   { title: 'Needs you', icon: 'hand', statuses: ['awaiting_approval'] },
   { title: 'Done', icon: 'check', statuses: ['succeeded'] },
   { title: 'Failed', icon: 'x', statuses: ['failed'] },
@@ -244,6 +244,15 @@ export function TaskBoard({
                   <li key={s.id}>
                     <button type="button" className="task-card" onClick={() => onOpen(s.id)}>
                       <span className="task-card-title">{s.title}</span>
+                      {s.parentStepId && (
+                        <span className="muted small subtask">
+                          <Icon name="users" size={12} /> sub-task for{' '}
+                          {steps.find((p) => p.id === s.parentStepId)?.title ?? 'another task'}
+                        </span>
+                      )}
+                      {s.status === 'delegating' && (
+                        <span className="muted small">waiting for its sub-agent</span>
+                      )}
                       {s.dependsOn.length > 0 && (
                         <span className="muted small">
                           after {s.dependsOn.map((k) => keyTitle.get(k) ?? k).join(', ')}
@@ -273,7 +282,12 @@ export function TaskBoard({
   );
 }
 
-const BUSY: ReadonlySet<StepStatus> = new Set(['running', 'judging', 'awaiting_approval']);
+const BUSY: ReadonlySet<StepStatus> = new Set([
+  'running',
+  'judging',
+  'awaiting_approval',
+  'delegating',
+]);
 
 /** One task: what it is, who does it and how it went, with editing and rerun. */
 export function TaskDialog({

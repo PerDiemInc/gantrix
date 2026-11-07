@@ -39,6 +39,15 @@ export type GantrixEvent =
       rerun: boolean;
     }
   | { type: 'task.team'; agentIds: string[] | null }
+  /** An agent handed a sub-task to another agent (a sub-agent) and waits for it. */
+  | {
+      type: 'delegation.started';
+      stepId: string;
+      childStepId: string;
+      agent: string;
+      title: string;
+    }
+  | { type: 'delegation.finished'; stepId: string; childStepId: string; agent: string; ok: boolean }
   /** The user changed project settings, e.g. ["name"] or ["slack"]. */
   | { type: 'task.updated'; fields: string[] }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
