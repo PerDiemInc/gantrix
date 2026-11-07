@@ -110,6 +110,21 @@ tokens or replans, **Continue** gives it more and picks up where it stopped. Fin
 kept; tasks that were cut off run again. From the terminal: `gantrix extend last --minutes 30
 --tokens 100000 --replans 2`.
 
+**Your agents are the project's employees.** The **Team** panel shows each one with its role,
+the model it runs on, what it's doing now (working on a task, waiting for you, up next or done)
+and how many of its tasks are finished. Add or remove employees while the project runs; new
+ones get work from the next plan or a reassigned task.
+
+**Tasks on a board.** **Tasks** shows a board with To do, In progress, Needs you, Done and
+Failed columns, each card showing who does it. Switch to **Timeline** for the Gantt chart.
+Click any task to change its title, instructions, "done when" or who it's assigned to. Use **Run
+again** to redo a finished or failed task; a finished or stopped project opens again for it. A
+task in progress can't change, so message its agent instead.
+
+**Which model each agent uses.** On the Agents page, every agent has **Runs on**: local Ollama by
+default, or **Change** to any connection, such as OpenAI, Anthropic, a custom server, or your
+local Claude Code (`claude -p`) for the agents that need a stronger model.
+
 **Seeing the design work.** **Designs and images** on the project page shows a thumbnail of
 every mockup under `design/` and `site/` and of every image. Click one to open it full size. When
 the designer asks which style to build, the question shows a preview of each option.

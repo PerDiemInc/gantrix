@@ -1808,3 +1808,210 @@ button.chip {
 .new-project .row-actions label.inline input[type="number"] {
   width: 90px;
 }
+
+/* project team: one card per employee */
+.employees {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 10px;
+}
+.employee {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.employee.state-working {
+  border-color: color-mix(in srgb, var(--s-running) 55%, var(--border));
+}
+.employee.state-waiting {
+  border-color: var(--s-awaiting);
+  background: var(--warn-bg);
+}
+.employee-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.employee-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.employee-main p {
+  margin: 0;
+}
+.employee-now .link {
+  text-align: left;
+  padding: 0;
+  min-height: 0;
+}
+.employee-actions {
+  display: flex;
+  gap: 4px;
+}
+.team-add {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  justify-items: start;
+}
+
+/* task board: columns by status */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(200px, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.board-col {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 10px;
+  min-width: 0;
+}
+.board-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.board-col-head .count {
+  margin-left: auto;
+}
+.board-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.task-card {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  min-height: 44px;
+}
+.task-card:hover {
+  border-color: var(--primary);
+}
+.task-card-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.task-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.board-empty {
+  padding: 6px 2px;
+}
+
+/* the task dialog */
+.task-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  display: grid;
+  gap: 14px;
+}
+.task-dialog::backdrop {
+  background: rgb(19 18 28 / 0.5);
+}
+.task-dialog:not([open]) {
+  display: none;
+}
+.task-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.task-dialog-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.task-dialog-head h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.task-dialog-head p {
+  margin: 0;
+}
+.task-form {
+  display: grid;
+  gap: 12px;
+}
+.task-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 500;
+}
+.task-dialog h3 {
+  margin: 0 0 6px;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .task-dialog[open] {
+    animation: dialog-in 180ms var(--ease);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* which model an agent runs on */
+.runs-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+.runs-on-edit {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.runs-on-edit label {
+  display: grid;
+  gap: 6px;
+}

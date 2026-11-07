@@ -1,10 +1,4 @@
-import {
-  isTerminal,
-  type StepDto,
-  type StepStatus,
-  type StreamEvent,
-  type TaskDetailDto,
-} from '@gantrix/shared';
+import { isTerminal, type StepStatus, type StreamEvent } from '@gantrix/shared';
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { FilePreview, previewKind } from '../components/FilePreview.tsx';
@@ -12,8 +6,9 @@ import { Gallery } from '../components/Gallery.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
+import { TaskBoard, TaskDialog, TeamPanel } from '../components/ProjectTeam.tsx';
 import { QuestionCard } from '../components/QuestionCard.tsx';
-import { type AgentState, Avatar, StatusPill, TaskProgress } from '../components/ui.tsx';
+import { type AgentState, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { duration, label, short } from '../format.ts';
 import { useAgents, useNow, useTask } from '../hooks.ts';
 
@@ -53,74 +48,14 @@ function Meter({
   );
 }
 
-const ACTIVE: ReadonlySet<StepStatus> = new Set([
+const _ACTIVE: ReadonlySet<StepStatus> = new Set([
   'running',
   'judging',
   'awaiting_approval',
   'queued',
 ]);
-const stateOf = (status: StepStatus): AgentState =>
+const _stateOf = (status: StepStatus): AgentState =>
   status === 'awaiting_approval' ? 'waiting' : status === 'queued' ? 'queued' : 'working';
-
-/** One card per task that's moving: who, what, for how long, and the last thing it did. */
-function WorkingNow({
-  task,
-  events,
-  agents,
-  now,
-  onMessage,
-}: {
-  task: TaskDetailDto;
-  events: StreamEvent[];
-  agents: Map<string, { name: string; avatar?: string | null }>;
-  now: number;
-  onMessage: (stepId: string) => void;
-}) {
-  const active = task.steps.filter((s) => ACTIVE.has(s.status));
-  if (!active.length) return null;
-  return (
-    <section className="card" aria-labelledby="working-now">
-      <h2 id="working-now">Working now</h2>
-      <ul className="working">
-        {active.map((s) => {
-          const name = (s.agentId && agents.get(s.agentId)?.name) || 'agent';
-          const lastTool = events.findLast((e) => e.type === 'step.tool_call' && e.stepId === s.id);
-          const since = s.startedAt ?? s.queuedAt;
-          return (
-            <li key={s.id} className="worker">
-              <Avatar
-                name={name}
-                avatar={s.agentId ? agents.get(s.agentId)?.avatar : null}
-                state={stateOf(s.status)}
-                size={36}
-              />
-              <div className="worker-main">
-                <div className="worker-head">
-                  <b>{name}</b>
-                  <StatusPill status={s.status} />
-                  {since && (
-                    <span className="muted small num push">
-                      <Icon name="clock" size={12} /> {duration(now - Date.parse(since))}
-                    </span>
-                  )}
-                </div>
-                <p className="worker-task">{s.title}</p>
-                {lastTool?.type === 'step.tool_call' && (
-                  <p className="muted small mono worker-tool">
-                    {lastTool.tool} {lastTool.summary}
-                  </p>
-                )}
-              </div>
-              <button type="button" className="ghost small" onClick={() => onMessage(s.id)}>
-                <Icon name="chat" size={14} /> Message
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
 
 export function eventText(e: StreamEvent, keys: Map<string, string>): string {
   switch (e.type) {
@@ -151,51 +86,6 @@ export function eventText(e: StreamEvent, keys: Map<string, string>): string {
     case 'user.message_delivered':
       return `${keys.get(e.stepId) ?? 'A step'} read your note`;
   }
-}
-
-export function StepPanel({ step, agentName }: { step: StepDto; agentName: string }) {
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h3>{step.title}</h3>
-        <StatusPill status={step.status} />
-        <a className="small push" href={`#/projects/${step.taskId}/logs/${step.id}`}>
-          <Icon name="chat" size={12} /> Full conversation
-        </a>
-      </div>
-      <dl className="facts">
-        <dt>Key</dt>
-        <dd className="mono">{step.key}</dd>
-        <dt>Agent</dt>
-        <dd>{agentName}</dd>
-        <dt>Attempt</dt>
-        <dd>{step.attempt}</dd>
-        <dt>Plan</dt>
-        <dd>v{step.planVersion}</dd>
-        <dt>Waits for</dt>
-        <dd className="mono">{step.dependsOn.join(', ') || '—'}</dd>
-        <dt>Tokens</dt>
-        <dd>{step.tokensUsed.toLocaleString()}</dd>
-      </dl>
-      <h4>Instructions</h4>
-      <p className="prose">{step.instructions}</p>
-      <h4>Done when</h4>
-      <p className="prose">{step.acceptance}</p>
-      {step.judgeReason && (
-        <>
-          <h4>Judge</h4>
-          <p className="prose">{step.judgeReason}</p>
-        </>
-      )}
-      {step.error && <p className="error">{step.error}</p>}
-      {step.output && (
-        <>
-          <h4>Agent reply</h4>
-          <pre className="output">{step.output}</pre>
-        </>
-      )}
-    </div>
-  );
 }
 
 export function Files({ taskId, version }: { taskId: string; version: number }) {
@@ -235,6 +125,7 @@ export function TaskPage({ id }: { id: string }) {
   const { task, events, error, reload } = useTask(id);
   const agents = useAgents();
   const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<'board' | 'timeline'>('board');
   const [showOld, setShowOld] = useState(false);
   const [raw, setRaw] = useState(false);
   const [tab, setTab] = useState<'progress' | 'chat' | 'files'>('progress');
@@ -458,44 +349,67 @@ export function TaskPage({ id }: { id: string }) {
               ),
             )}
 
-            <WorkingNow task={task} events={events} agents={agents} now={now} onMessage={message} />
+            <TeamPanel
+              task={task}
+              agents={agents}
+              now={now}
+              onMessage={message}
+              onOpenTask={setSelected}
+            />
 
-            <section className="card">
+            <section className="card" aria-labelledby="tasks-title">
               <div className="card-head">
-                <h2>Timeline</h2>
-                <label className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={showOld}
-                    onChange={(e) => setShowOld(e.target.checked)}
-                  />{' '}
-                  show replaced tasks
-                </label>
+                <h2 id="tasks-title">Tasks</h2>
+                <div className="segmented small-seg" role="tablist" aria-label="Task view">
+                  {(['board', 'timeline'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="tab"
+                      aria-selected={view === v}
+                      className={view === v ? 'active' : ''}
+                      onClick={() => setView(v)}
+                    >
+                      {v === 'board' ? 'Board' : 'Timeline'}
+                    </button>
+                  ))}
+                </div>
               </div>
-              {steps.length ? (
-                <Gantt
-                  steps={steps}
-                  agents={agents}
-                  finishedAt={task.finishedAt}
-                  selected={selected}
-                  onSelect={(s) => setSelected(s === selected ? null : s)}
-                />
-              ) : (
+              {!steps.length ? (
                 <p className="muted">The planner is splitting the goal into tasks…</p>
-              )}
-              {step ? (
-                <StepPanel
-                  step={step}
-                  agentName={
-                    step.agentId ? (agents.get(step.agentId)?.name ?? '…') : 'deleted agent'
-                  }
-                />
+              ) : view === 'board' ? (
+                <TaskBoard steps={current} agents={agents} onOpen={setSelected} />
               ) : (
-                steps.length > 0 && (
-                  <p className="muted small">Select a task on the timeline to see its work.</p>
-                )
+                <>
+                  <label className="toggle">
+                    <input
+                      type="checkbox"
+                      checked={showOld}
+                      onChange={(e) => setShowOld(e.target.checked)}
+                    />{' '}
+                    show replaced tasks
+                  </label>
+                  <Gantt
+                    steps={steps}
+                    agents={agents}
+                    finishedAt={task.finishedAt}
+                    selected={selected}
+                    onSelect={(s) => setSelected(s)}
+                  />
+                </>
               )}
+              <p className="muted small">Click a task to see it, change it or run it again.</p>
             </section>
+            {step && (
+              <TaskDialog
+                key={step.id}
+                task={task}
+                step={step}
+                agents={agents}
+                onClose={() => setSelected(null)}
+                onMessage={message}
+              />
+            )}
           </div>
 
           <div className="panel-files stack">

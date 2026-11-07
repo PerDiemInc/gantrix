@@ -97,6 +97,79 @@ function ModelPicker({
   );
 }
 
+/** Which model an existing agent runs on: local Ollama by default, or any connection. */
+function RunsOn({
+  agent,
+  connections,
+  onSaved,
+}: {
+  agent: AgentDto;
+  connections: ConnectionDto[];
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState({
+    connectionId: agent.connectionId ?? '',
+    model: agent.model ?? '',
+  });
+  const [error, setError] = useState('');
+  const conn = connections.find((c) => c.id === agent.connectionId);
+  const save = async () => {
+    setError('');
+    try {
+      await api.patch(`/api/agents/${agent.id}`, {
+        connectionId: value.connectionId || null,
+        model: value.model || null,
+      });
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  if (!editing) {
+    return (
+      <p className="runs-on small">
+        <span className="muted">Runs on</span> <b>{agent.model ?? 'the default model'}</b>{' '}
+        <span className="muted">
+          ·{' '}
+          {conn
+            ? `${conn.name} (${conn.provider}${conn.isLocal ? ', local' : ', cloud'})`
+            : 'local Ollama'}
+        </span>{' '}
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() => {
+            setValue({ connectionId: agent.connectionId ?? '', model: agent.model ?? '' });
+            setEditing(true);
+          }}
+        >
+          Change
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="runs-on-edit">
+      <ModelPicker connectionId={value.connectionId} model={value.model} onChange={setValue} />
+      <div className="row-actions">
+        <button type="button" className="primary small" onClick={() => void save()}>
+          Save
+        </button>
+        <button type="button" className="ghost small" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="error small" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function AgentsPage() {
   const [agents, setAgents] = useState<AgentDto[]>([]);
   const [skills, setSkills] = useState<SkillDto[]>([]);
@@ -159,17 +232,12 @@ export function AgentsPage() {
               <div className="item-head">
                 <AvatarPicker agent={a} onSaved={load} />
                 <strong>{a.name}</strong>
-                <span className="muted mono small">
-                  {a.model ?? 'default model'}
-                  {a.connectionId
-                    ? ` on ${connections.find((c) => c.id === a.connectionId)?.name ?? '…'}`
-                    : ''}{' '}
-                  · {a.maxConcurrency} at a time
-                </span>
+                <span className="muted small">{a.maxConcurrency} at a time</span>
                 <button type="button" className="ghost danger small" onClick={() => void remove(a)}>
                   Remove
                 </button>
               </div>
+              <RunsOn agent={a} connections={connections} onSaved={load} />
               <p>
                 {a.description || (
                   <span className="muted">
