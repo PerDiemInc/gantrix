@@ -670,7 +670,7 @@ export async function stop(client: Client, ref: string): Promise<void> {
   const { stopped } = await client.post<{ stopped: boolean }>(`/api/tasks/${id}/stop`);
   console.log(
     stopped
-      ? `Stopped ${short(id)}. Running tasks stop at their next model turn. Continue with: gantrix resume ${short(id)}`
+      ? `Stopped ${short(id)}. Running tasks stop within seconds. Continue with: gantrix resume ${short(id)}`
       : `${short(id)} isn't running.`,
   );
 }

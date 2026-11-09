@@ -24,7 +24,7 @@ It retries and replans until the goal is met or a budget runs out.
 <p align="center"><img src="site/assets/screenshots/projects.webp" alt="The Projects page: four project cards with progress bars, agent avatars and a Now line; one card is highlighted because an agent is waiting for the user" width="900"></p>
 
 <details>
-<summary><b>More screenshots</b>: a project page, the task board with sub-agents, New project, Agents</summary>
+<summary><b>More screenshots</b>: a project page, the task board with sub-agents, New project, offloading, Agents</summary>
 
 **A project, its team and its questions.** Name, description and OKR goal, budgets you can extend, Stop and Cancel, and a question an agent asked you with options to pick.
 
@@ -37,6 +37,10 @@ It retries and replans until the goal is met or a budget runs out.
 **Describe it, set an OKR, pick the team.** Name and description, a goal with an OKR example and Generate from description, the team, each member’s model and a time limit.
 
 <img src="site/assets/screenshots/new-project.webp" alt="The New project form with numbered sections: name and description, goal with a Generate from description button, and the team picker with ten agents" width="800">
+
+**Hand the work to Claude or ChatGPT.** One switch runs the team on the coding agents you already have on this machine, with your own login. The planner and judge stay on your default model.
+
+<img src="site/assets/screenshots/offload.webp" alt="The Models section of the New project form: Run the work on set to ChatGPT, with cpo, designer and engineer each showing ChatGPT for this project, then a 3 hour time limit" width="800">
 
 **Each agent on its own model.** Local Ollama by default; switch any agent to Claude Code, OpenAI, Anthropic or your own server.
 
@@ -454,7 +458,8 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 
 - **Name** a project in the New project form, or rename it with the pencil next to its title.
   Without a name it shows the start of its description or goal.
-- **Stop** pauses it: nothing new starts and running tasks stop at their next model turn.
+- **Stop** pauses it: nothing new starts and running tasks stop within seconds, even a long
+  Claude or ChatGPT turn. Time spent stopped doesn't count against the time limit.
   **Resume** picks it up where it stopped. **Cancel** ends it for good.
 - **Delete** (finished or stopped projects only) removes the project, its tasks, chat and
   history, and its workspace folder. Sites it deployed stay. The dashboard asks first; the CLI
@@ -633,6 +638,9 @@ choice you make for one agent in that form still wins.
   available to them. They make an assumption and say so instead of asking you.
 - Prompts and files go to Anthropic or OpenAI, and the work counts against your plan.
 - Token budgets count new tokens only, not the cached context each run reads again.
+- Offload is a project setting, so agents you add later follow it. The Team panel shows the model
+  each agent uses on that project, and the judge reads the files these agents changed.
+- An OpenAI or Anthropic connection needs a model name; Gantrix asks for one when you save.
 
 To use one for a single agent instead, click **Change** next to **Runs on** on the Agents page.
 
@@ -650,7 +658,8 @@ npm run gantrix -- agents add coder -d "Writes and edits code" -c chatgpt-local
   projects that ask first it can't.
 - Gantrix can't see or approve the commands it runs inside a run.
 - Each run skips your `~/.codex/config.toml` (so no MCP servers from it) and saves no session. It
-  doesn't get the Gantrix token, database URLs or Slack tokens in its environment.
+  gets only a short list of environment variables (like `PATH` and `HOME`), so no API keys or
+  Gantrix secrets.
 
 ### Claude Code as an agent
 
@@ -668,7 +677,7 @@ npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -
   don't ask first (the default), it gets file tools plus Bash, WebFetch and WebSearch. On
   projects that ask first, it gets file tools only (Read, Write, Edit, Glob, Grep).
 - Each run is started without MCP servers and without a saved session. It doesn't get the
-  Gantrix token or database URLs in its environment.
+  API keys or Gantrix secrets in its environment, so it always uses your Claude login.
 - The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
   `GANTRIX_DEFAULT_CONNECTION`.
 - The step's tokens come from Claude Code's own report (new tokens only), and its usage counts

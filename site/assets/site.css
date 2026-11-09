@@ -341,5 +341,5 @@ footer .foot-links a { color: var(--muted); }
 .shot figcaption b { color: var(--ink); }
 @media (min-width: 900px) {
   .shots { grid-template-columns: 1fr 1fr; }
-  .shot:first-child { grid-column: 1 / -1; }
+  .shot:first-child, .shot:last-child:nth-child(even) { grid-column: 1 / -1; }
 }

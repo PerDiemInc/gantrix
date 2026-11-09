@@ -130,6 +130,10 @@
           <figcaption><b>Describe it, set an OKR, pick the team.</b> Name and description, a goal with an OKR example and Generate from description, the team, each member’s model and a time limit.</figcaption>
         </figure>
         <figure class="shot">
+          <a href="assets/screenshots/offload.webp"><img src="assets/screenshots/offload.webp" alt="The Models section of the New project form: Run the work on set to ChatGPT, with cpo, designer and engineer each showing ChatGPT for this project, then a 3 hour time limit" width="1600" height="1000" loading="lazy"></a>
+          <figcaption><b>Hand the work to Claude or ChatGPT.</b> One switch runs the team on the coding agents you already have on this machine, with your own login. The planner and judge stay on your default model.</figcaption>
+        </figure>
+        <figure class="shot">
           <a href="assets/screenshots/agents.webp"><img src="assets/screenshots/agents.webp" alt="The Agents page: agent cards showing Runs on the default model with a Change button, and the Add agent form with Runs on and Model pickers" width="1600" height="1000" loading="lazy"></a>
           <figcaption><b>Each agent on its own model.</b> Local Ollama by default; switch any agent to Claude Code, OpenAI, Anthropic or your own server.</figcaption>
         </figure>
@@ -349,7 +353,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
         </ul>
         <ul class="safety">
           <li><b>Local only.</b> The API listens on 127.0.0.1 and needs your token on every request; tokens are never accepted in URLs.</li>
-          <li><b>No secrets for tools.</b> Shell commands and MCP servers don't get the server's environment, so they can't read the token or database password.</li>
+          <li><b>No secrets for tools.</b> Shell commands, MCP servers and local Claude or ChatGPT runs don't get the server's environment, so they can't read API keys, the token or the database password.</li>
           <li><b>Confined files.</b> File tools can't leave the task's folder, through <code>..</code>, absolute paths or symlinks.</li>
           <li><b>Separate folders per step (optional).</b> With <code>GANTRIX_ISOLATED_STEPS=true</code> each step works in its own folder with copies of what it builds on, so agents can't overwrite each other's files. It isn't a sandbox for shell.</li>
           <li><b>Measure it.</b> <code>npm run evaluate</code> runs two small business workflows on your model and checks the results independently of the judge.</li>

@@ -241,7 +241,7 @@ export function TaskPage({ id }: { id: string }) {
                   type="button"
                   className="ghost"
                   onClick={() => void control('stop')}
-                  title="Pause it: running tasks stop at their next step; resume any time"
+                  title="Pause it: running tasks stop within seconds; resume any time"
                 >
                   <Icon name="pause" size={14} /> Stop
                 </button>
