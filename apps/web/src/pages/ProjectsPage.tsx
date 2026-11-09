@@ -2,12 +2,15 @@ import {
   type AgentModelChoice,
   EXAMPLES,
   isTerminal,
+  LOCAL_AGENTS,
+  type LocalAgentDto,
+  type LocalAgentId,
   OKR_EXAMPLE,
   projectTitle,
   type TaskDto,
   type TaskListItem,
 } from '@gantrix/shared';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
@@ -32,7 +35,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
-  const [askFirst, setAskFirst] = useState(true);
+  const [askFirst, setAskFirst] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState('');
@@ -51,6 +54,14 @@ function NewProject({ onClose }: { onClose: () => void }) {
       return next;
     });
   const members = [...agents.values()].filter((a) => team.has(a.id));
+  const [offload, setOffload] = useState<LocalAgentId | ''>('');
+  const [localAgents, setLocalAgents] = useState<LocalAgentDto[]>([]);
+  useEffect(() => {
+    api
+      .get<LocalAgentDto[]>('/api/local-agents')
+      .then(setLocalAgents)
+      .catch(() => setLocalAgents([]));
+  }, []);
 
   const draftGoal = async () => {
     setDrafting(true);
@@ -88,6 +99,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
         approveAll: !askFirst,
         ...(team.size ? { agentIds: [...team] } : {}),
         ...(Object.keys(chosenModels).length ? { agentModels: chosenModels } : {}),
+        ...(offload ? { offload } : {}),
       });
       go(`/projects/${task.id}`);
     } catch (err) {
@@ -230,6 +242,43 @@ function NewProject({ onClose }: { onClose: () => void }) {
         <h3>
           <span className="np-step">4</span> Models
         </h3>
+        <div className="row-actions">
+          <span className="small">Run the work on</span>
+          <div className="segmented small-seg">
+            <button
+              type="button"
+              aria-pressed={offload === ''}
+              className={offload === '' ? 'active' : ''}
+              onClick={() => setOffload('')}
+            >
+              Usual models
+            </button>
+            {localAgents.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                aria-pressed={offload === a.id}
+                className={offload === a.id ? 'active' : ''}
+                disabled={!a.installed}
+                title={
+                  a.installed
+                    ? (a.version ?? undefined)
+                    : `${a.label} isn't installed on this machine`
+                }
+                onClick={() => setOffload(a.id)}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {offload && (
+          <p className="muted small" role="note">
+            Every agent runs on {LOCAL_AGENTS[offload].label} on this machine with your own login.
+            The planner and judge stay on your default model. These agents can't ask you questions,
+            hand off sub-tasks or use deploy_site.
+          </p>
+        )}
         {members.length ? (
           <ul className="np-models">
             {members.map((a) => {
@@ -293,7 +342,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
               );
             })}
           </ul>
-        ) : (
+        ) : offload ? null : (
           <p className="muted small">
             Every agent uses its own model (local Ollama unless you changed it on the Agents page).
             Pick a team above to choose models for this project.

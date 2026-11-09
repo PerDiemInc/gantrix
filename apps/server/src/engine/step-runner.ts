@@ -147,22 +147,24 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
         await snapshotStepInput(task.workspacePath, workspace, source.id, step.attempt);
     }
   }
-  const mcp = await openMcpTools(toolkit.mcpServers, workspace);
+  // The project's own choice for this agent wins over the agent's setting.
+  const spec = await resolveModelSpec(db, config, {
+    ...agent,
+    ...(task.agentModels?.[agent.id]
+      ? {
+          connectionId: task.agentModels[agent.id]?.connectionId ?? null,
+          model: task.agentModels[agent.id]?.model ?? null,
+          modelBaseUrl: null,
+        }
+      : {}),
+  });
+  const localCli = spec.provider === 'claude-code' || spec.provider === 'codex';
+  const mcp = await openMcpTools(localCli ? {} : toolkit.mcpServers, workspace);
   try {
     const graph = buildStepAgent({
       model: createChatModel(
         {
-          // The project's own choice for this agent wins over the agent's setting.
-          ...(await resolveModelSpec(db, config, {
-            ...agent,
-            ...(task.agentModels?.[agent.id]
-              ? {
-                  connectionId: task.agentModels[agent.id]?.connectionId ?? null,
-                  model: task.agentModels[agent.id]?.model ?? null,
-                  modelBaseUrl: null,
-                }
-              : {}),
-          })),
+          ...spec,
           workspace,
           approveAll: task.approveAll,
         },
@@ -241,7 +243,17 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     };
     const before = await graph.getState(run);
     const tokensBefore = summarize(before.values.messages ?? []).tokens;
-    const input = await nextInput(deps, graph, run, task, step, agent, toolkit, workspace);
+    const input = await nextInput(
+      deps,
+      graph,
+      run,
+      task,
+      step,
+      agent,
+      toolkit,
+      workspace,
+      localCli,
+    );
     if (input === 'waiting') return undefined;
 
     if (step.status !== 'running') {
@@ -291,6 +303,7 @@ async function nextInput(
   agent: Agent,
   toolkit: AgentToolkit,
   workspace: string,
+  localCli: boolean,
 ): Promise<AgentInput | 'waiting' | 'finished'> {
   const snapshot = await graph.getState(run);
   const interrupts = snapshot.tasks.flatMap((t) => t.interrupts);
@@ -319,7 +332,9 @@ async function nextInput(
   }
   if (snapshot.next.length) return null;
   if (snapshot.values.messages?.length) return 'finished';
-  return { messages: await firstMessages(deps.db, task, step, agent, toolkit, workspace) };
+  return {
+    messages: await firstMessages(deps.db, task, step, agent, toolkit, workspace, localCli),
+  };
 }
 
 async function firstMessages(
@@ -330,6 +345,8 @@ async function firstMessages(
   toolkit: AgentToolkit,
   /** The step's folder: the project folder, or steps/<id>/ when steps are isolated. */
   workspace: string,
+  /** Claude Code or Codex: they use their own tools, not Gantrix's. */
+  localCli: boolean,
 ): Promise<BaseMessage[]> {
   const inputs = step.dependsOn.length
     ? await db
@@ -363,7 +380,11 @@ Do only this step: other agents handle the other steps, so don't do their work.$
         : ''
     }
 ${workspaceInstructions}
-Shell and MCP are NOT sandboxed; stay within this workspace.
+Shell and MCP are NOT sandboxed; stay within this workspace.${
+      localCli
+        ? "\nGantrix tools your instructions may name (ask_user, delegate, deploy_site, MCP tools) don't exist in this run: use your own file and shell tools. Don't wait for an answer: make a sensible assumption, say what you assumed, and say what is left for someone else to do."
+        : ''
+    }
 When you finish, reply with a summary that
 includes the key content and the paths of any files you wrote. A reviewer checks that reply
 against "Done when".`,

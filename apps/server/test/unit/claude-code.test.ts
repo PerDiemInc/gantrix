@@ -35,7 +35,7 @@ describe('ClaudeCodeChatModel', () => {
     ]);
 
     expect(reply.content).toBe('Wrote claude-notes.md.');
-    expect(reply.usage_metadata?.total_tokens).toBe(125);
+    expect(reply.usage_metadata?.total_tokens).toBe(120); // cache reads aren't new tokens
     expect(await readFile(join(dir, 'claude-notes.md'), 'utf8')).toContain('Claude Code');
     const call = JSON.parse((await readFile(log, 'utf8')).trim());
     expect(call.cwd).toBe(await import('node:fs/promises').then((f) => f.realpath(dir)));

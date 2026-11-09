@@ -17,7 +17,14 @@ export const CLAUDE_CODE_GOD_MODE_TOOLS = [
   'WebSearch',
 ];
 // Never passed to the child: they'd let a prompt reach the Gantrix API or its data.
-const HIDDEN_ENV = ['GANTRIX_TOKEN', 'DATABASE_URL', 'REDIS_URL', 'POSTGRES_PASSWORD'];
+export const HIDDEN_ENV = [
+  'GANTRIX_TOKEN',
+  'DATABASE_URL',
+  'REDIS_URL',
+  'POSTGRES_PASSWORD',
+  'SLACK_BOT_TOKEN',
+  'SLACK_APP_TOKEN',
+];
 
 export interface ClaudeCodeOptions extends BaseChatModelParams {
   /** e.g. "sonnet" or a full model id; omitted → Claude Code's own default. */
@@ -156,10 +163,9 @@ export class ClaudeCodeChatModel extends BaseChatModel {
     const r = parseResult(stdout);
     if (r.is_error) throw new Error(`Claude Code: ${r.result ?? 'unknown error'}`);
     const u = r.usage ?? {};
-    const input =
-      (u.input_tokens ?? 0) +
-      (u.cache_read_input_tokens ?? 0) +
-      (u.cache_creation_input_tokens ?? 0);
+    // New tokens only. Each run re-reads tens of thousands of cached tokens, which would use
+    // up the project's token budget without any new work.
+    const input = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
     const output = u.output_tokens ?? 0;
     // Through the constructor, so the usage survives LangGraph's checkpoint (which saves the
     // constructor fields). The cast: AIMessage's generic usage type resolves to never under TS 7.

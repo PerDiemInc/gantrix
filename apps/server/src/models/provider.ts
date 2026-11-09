@@ -5,6 +5,7 @@ import type { UsageMetadata } from '@langchain/core/messages';
 import { ChatOllama } from '@langchain/ollama';
 import { ChatOpenAI } from '@langchain/openai';
 import { ClaudeCodeChatModel } from './claude-code.ts';
+import { CodexChatModel } from './codex.ts';
 import { HttpChatModel } from './http-chat.ts';
 
 export type ModelRole = 'planner' | 'worker' | 'judge';
@@ -102,6 +103,20 @@ export function createChatModel(
       );
     }
     return new ClaudeCodeChatModel({
+      model: spec.model,
+      workspace: spec.workspace,
+      approveAll: spec.approveAll ?? false,
+      ...(spec.baseUrl ? { bin: spec.baseUrl } : {}),
+      ...retries,
+    });
+  }
+  if (provider === 'codex') {
+    if (role !== 'worker' || !spec.workspace) {
+      throw new Error(
+        'ChatGPT (Codex) runs agent steps only; the planner and judge need an Ollama, OpenAI or Anthropic model.',
+      );
+    }
+    return new CodexChatModel({
       model: spec.model,
       workspace: spec.workspace,
       approveAll: spec.approveAll ?? false,

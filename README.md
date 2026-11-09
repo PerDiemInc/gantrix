@@ -135,7 +135,9 @@ Or watch it on the dashboard. In the dashboard a run is a **project**, and its s
    shows an example. **Generate from description** has the default model draft an OKR from your
    description for you to edit. The judge checks the finished work against the goal.
 3. **Team:** the agents who work on it. None picked means all of them.
-4. **Models:** each team member uses its usual model, or **Change for this project** to pick
+4. **Models:** **Run the work on** moves the whole team to Claude or ChatGPT on this machine
+   (see [Offload to Claude or ChatGPT](#offload-to-claude-or-chatgpt-on-your-machine)). Or each
+   team member uses its usual model, or **Change for this project** to pick
    another (for example local Claude Code) for this project only.
 5. **Time limit:** 3 hours by default. You can add more while it runs.
 
@@ -528,7 +530,7 @@ gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connectio
 gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer,engineer,devops,aws-engineer,gcp-engineer] [-m model]
-gantrix run "<goal>" [--name text] [--description text] [--slack] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
+gantrix run "<goal>" [--name text] [--description text] [--slack] [--offload claude|chatgpt] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
 gantrix tasks | show <task> [--all] | tail <task> | logs <task> [step] [--full] | cancel <task> | files <task> [path]
 gantrix say <task> "<note>" [--to <step>]
 gantrix extend <task> [--minutes n] [--tokens n] [--replans n]
@@ -611,6 +613,45 @@ npm run gantrix -- connections test mine my-model
 URL, headers or request. Saved header values stay hidden: leave them as they are, or click
 **Replace** to type a new one.
 
+### Offload to Claude or ChatGPT on your machine
+
+Hand a project's work to the coding agents you already have and pay for. In New project, set
+**Run the work on** to **Claude** or **ChatGPT**, or from the terminal:
+
+```bash
+npm run gantrix -- run --offload chatgpt --agents engineer "Add a contact page to site/"
+npm run gantrix -- run --offload claude "Write a test plan to qa/plan.md"
+```
+
+Claude uses [Claude Code](https://claude.com/claude-code) (`claude -p`) and ChatGPT uses the
+[Codex CLI](https://github.com/openai/codex) (`codex exec`). Install them and sign in yourself
+(`claude`, `codex login`); Gantrix detects them and creates the connection the first time. Any
+choice you make for one agent in that form still wins.
+
+- Only the agents' work moves. The planner and judge stay on your default model.
+- These agents use their own tools, so `ask_user`, `delegate`, `deploy_site` and MCP tools aren't
+  available to them. They make an assumption and say so instead of asking you.
+- Prompts and files go to Anthropic or OpenAI, and the work counts against your plan.
+- Token budgets count new tokens only, not the cached context each run reads again.
+
+To use one for a single agent instead, click **Change** next to **Runs on** on the Agents page.
+
+### ChatGPT (Codex CLI) as an agent
+
+```bash
+npm run gantrix -- connections add chatgpt-local --provider codex   # -u /path/to/codex if it isn't on PATH
+npm run gantrix -- connections test chatgpt-local default
+npm run gantrix -- agents add coder -d "Writes and edits code" -c chatgpt-local
+```
+
+- Each model turn runs `codex exec` in the step's folder with your ChatGPT login.
+- It always runs in Codex's `workspace-write` sandbox, so it can read your disk but write only in
+  that folder. On projects that don't ask first (the default) it can use the network; on
+  projects that ask first it can't.
+- Gantrix can't see or approve the commands it runs inside a run.
+- Each run skips your `~/.codex/config.toml` (so no MCP servers from it) and saves no session. It
+  doesn't get the Gantrix token, database URLs or Slack tokens in its environment.
+
 ### Claude Code as an agent
 
 An agent can use your local [Claude Code](https://claude.com/claude-code) instead of a chat model.
@@ -630,7 +671,8 @@ npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -
   Gantrix token or database URLs in its environment.
 - The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
   `GANTRIX_DEFAULT_CONNECTION`.
-- The step's tokens come from Claude Code's own report, and its usage counts against your Claude plan.
+- The step's tokens come from Claude Code's own report (new tokens only), and its usage counts
+  against your Claude plan.
 
 **How headers work:**
 - A header value of `env:NAME` (or `Bearer env:NAME`) is read from the worker's environment

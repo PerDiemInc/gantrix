@@ -15,6 +15,7 @@ const PROVIDERS: { value: ModelProvider; label: string; url: string }[] = [
   { value: 'anthropic', label: 'Anthropic or compatible', url: 'https://api.anthropic.com' },
   { value: 'http', label: 'Custom HTTP server', url: 'https://your-server/v1/generate' },
   { value: 'claude-code', label: 'Claude Code on this machine (claude -p)', url: 'claude' },
+  { value: 'codex', label: 'ChatGPT on this machine (Codex CLI)', url: 'codex' },
 ];
 const CONTENT_TYPES = ['application/json', 'text/plain', 'application/x-www-form-urlencoded'];
 
@@ -157,7 +158,9 @@ interface TestResult {
 }
 
 function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: string) => void }) {
-  const [model, setModel] = useState(c.provider === 'claude-code' ? 'haiku' : '');
+  const [model, setModel] = useState(
+    c.provider === 'claude-code' ? 'haiku' : c.provider === 'codex' ? 'default' : '',
+  );
   const [prompt, setPrompt] = useState('Reply with the single word: OK');
   const [result, setResult] = useState<TestResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -411,7 +414,11 @@ export function ConnectionsPage() {
           </select>
         </label>
         <label>
-          {form.provider === 'claude-code' ? 'Path to claude' : 'URL'}{' '}
+          {form.provider === 'claude-code'
+            ? 'Path to claude'
+            : form.provider === 'codex'
+              ? 'Path to codex'
+              : 'URL'}{' '}
           {!isHttp && <span className="muted small">(blank = {provider?.url})</span>}
           <input
             value={form.baseUrl}
@@ -491,13 +498,19 @@ export function ConnectionsPage() {
           </>
         )}
 
-        {form.provider !== 'claude-code' && (
+        {form.provider !== 'claude-code' && form.provider !== 'codex' && (
           <HeaderRows rows={form.headers} onChange={(rows) => set('headers', rows)} />
         )}
         {form.provider === 'claude-code' && (
           <p className="muted small">
             Runs claude -p in each project's folder with your Claude login. It gets file tools, plus
             the shell and the web unless the project asks first.
+          </p>
+        )}
+        {form.provider === 'codex' && (
+          <p className="muted small">
+            Runs codex exec in each project's folder with your ChatGPT login. It can only write in
+            that folder, and it can use the network unless the project asks first.
           </p>
         )}
         <button type="submit" className="primary">

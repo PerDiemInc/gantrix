@@ -1,5 +1,6 @@
 import type { ModelProvider, ModelSource } from '@gantrix/shared';
 import type { connections } from '../db/schema.ts';
+import { codexModels } from './codex.ts';
 import { effectiveUrl, resolveHeaders } from './connections.ts';
 import { splitAuth } from './provider.ts';
 
@@ -30,6 +31,7 @@ export async function listModels(
   const headers = resolveHeaders(rawHeaders);
   const base = url.replace(/\/+$/, '');
   if (provider === 'claude-code') return CLAUDE_CODE_MODELS;
+  if (provider === 'codex') return codexModels();
   // A custom server has no standard model list; the agent form takes a typed name.
   if (provider === 'http') return [];
   if (provider === 'ollama') {

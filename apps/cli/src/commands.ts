@@ -183,6 +183,7 @@ export async function runTask(
     description?: string;
     name?: string;
     slack?: boolean;
+    offload?: string;
     detach?: boolean;
   },
 ): Promise<void> {
@@ -209,6 +210,7 @@ export async function runTask(
     ...(agentIds ? { agentIds } : {}),
     ...(o.name ? { name: o.name } : {}),
     ...(o.slack ? { slack: true } : {}),
+    ...(o.offload ? { offload: o.offload } : {}),
     ...(o.description ? { description: o.description } : {}),
     ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });

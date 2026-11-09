@@ -52,3 +52,19 @@ export interface AgentModelChoice {
   connectionId: string | null;
   model: string | null;
 }
+
+/** Coding agents that run on this machine with the user's own login. */
+export const LOCAL_AGENTS = {
+  claude: { label: 'Claude', provider: 'claude-code', connectionName: 'claude-local' },
+  chatgpt: { label: 'ChatGPT', provider: 'codex', connectionName: 'chatgpt-local' },
+} as const;
+export type LocalAgentId = keyof typeof LOCAL_AGENTS;
+
+export interface LocalAgentDto {
+  id: LocalAgentId;
+  label: string;
+  provider: string;
+  connectionName: string;
+  installed: boolean;
+  version: string | null;
+}

@@ -364,6 +364,7 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
       <ul class="safety">
         <li><b>Any HTTP server.</b> Set the URL, method, headers, Content-Type, the body with your prompt in it, and where the reply is. Test it before an agent uses it.</li>
         <li><b>Keys stay in your environment.</b> Write <code>env:OPENAI_API_KEY</code> and the worker reads it when a step runs. The API never returns header values.</li>
+        <li><b>Offload to Claude or ChatGPT.</b> One switch runs a project's agents on Claude Code or the Codex CLI on your machine, with your own login. <code>gantrix run --offload chatgpt</code> does the same.</li>
         <li><b>Your Claude Code as an agent.</b> A <code>claude-code</code> connection runs <code>claude -p</code> in the project's folder; on projects that ask first it gets file tools only.</li>
         <li><b>Cloud is labelled.</b> A connection that leaves your machine is marked cloud, so you know where task content goes.</li>
       </ul>

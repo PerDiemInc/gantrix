@@ -75,7 +75,13 @@ export function ModelPicker({
           <input
             value={model}
             onChange={(e) => onChange({ connectionId, model: e.target.value })}
-            placeholder={source?.provider === 'claude-code' ? 'sonnet' : 'model name'}
+            placeholder={
+              source?.provider === 'claude-code'
+                ? 'sonnet'
+                : source?.provider === 'codex'
+                  ? 'gpt-5.6-sol'
+                  : 'model name'
+            }
           />
         )}
         {source?.error && (

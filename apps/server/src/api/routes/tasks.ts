@@ -20,6 +20,7 @@ import {
 } from '../../engine/commands.ts';
 import { suggestGoal } from '../../engine/goal.ts';
 import { stepThreadId } from '../../engine/threads.ts';
+import { detectLocalAgents, ensureLocalConnection } from '../../models/local-agents.ts';
 import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
 import { toConversation } from '../conversation.ts';
@@ -58,6 +59,8 @@ const CreateTask = z.object({
   description: z.string().trim().max(8_000).optional(),
   name: z.string().trim().max(120).optional(),
   slack: z.boolean().optional(),
+  // Run the project's agents on Claude Code or the Codex CLI on this machine.
+  offload: z.enum(['claude', 'chatgpt']).optional(),
   agentModels: z
     .record(
       z.uuid(),
@@ -203,6 +206,25 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
         throw new HttpError(400, 'Some of the chosen agents do not exist.');
       }
     }
+    // Offload: the whole team runs on that local agent; a per-agent choice still wins.
+    let agentModels = input.agentModels;
+    if (input.offload) {
+      const agent = (await detectLocalAgents()).find((a) => a.id === input.offload);
+      if (!agent?.installed) {
+        throw new HttpError(
+          400,
+          `${agent?.label ?? input.offload} isn't installed on this machine, so the project can't be offloaded to it.`,
+        );
+      }
+      const connection = await ensureLocalConnection(db, input.offload);
+      const team = input.agentIds?.length
+        ? input.agentIds
+        : (await db.select({ id: agents.id }).from(agents)).map((a) => a.id);
+      agentModels = {
+        ...Object.fromEntries(team.map((id) => [id, { connectionId: connection.id, model: null }])),
+        ...input.agentModels,
+      };
+    }
     // Drop absent fields so they can't override the defaults with undefined.
     const budget = Object.fromEntries(
       Object.entries(input.budget ?? {}).filter(([, v]) => v !== undefined),
@@ -215,7 +237,7 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       ...(input.description ? { description: input.description } : {}),
       ...(input.name ? { name: input.name } : {}),
       ...(input.slack !== undefined ? { slack: input.slack } : {}),
-      ...(input.agentModels ? { agentModels: input.agentModels } : {}),
+      ...(agentModels ? { agentModels } : {}),
     });
     return reply.code(201).send(task);
   });

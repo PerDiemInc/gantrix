@@ -182,6 +182,33 @@ describe('engine', () => {
     delete process.env.GX_E2E_HEADER;
   });
 
+  it('runs a step with local ChatGPT (Codex) and judges its result', async () => {
+    await e.addAgent('coder');
+    const [conn] = await e.db
+      .insert(connections)
+      .values({
+        name: 'chatgpt-local',
+        provider: 'codex',
+        baseUrl: fileURLToPath(new URL('../fixtures/fake-codex.mjs', import.meta.url)),
+      })
+      .returning();
+    const coder = await e.db.query.agents.findFirst({ where: eq(agents.name, 'coder') });
+    e.fake.script.plan = () => ({ steps: [step('notes', 'coder')] });
+    // Project-level choice: the agent itself stays on its usual model.
+    const task = await createTask(e.deps, {
+      goal: 'Write notes with ChatGPT',
+      agentModels: { [coder!.id]: { connectionId: conn!.id, model: null } },
+    });
+    const done = await e.waitFor(task.id);
+
+    expect(done.status).toBe('succeeded');
+    const [notes] = await stepsOf(task.id);
+    expect(notes).toMatchObject({ status: 'succeeded', output: 'Wrote codex-notes.md.' });
+    expect(notes?.tokensUsed).toBe(120 + 15); // new tokens from Codex, then the judge
+    expect(await readFile(join(done.workspacePath, 'codex-notes.md'), 'utf8')).toContain('Codex');
+    expect(e.fake.calls.worker).toBe(0);
+  });
+
   it('runs a step with local Claude Code and judges its result', async () => {
     await e.addAgent('coder');
     const [conn] = await e.db
@@ -200,7 +227,7 @@ describe('engine', () => {
     expect(done.status).toBe('succeeded');
     const [notes] = await stepsOf(task.id);
     expect(notes).toMatchObject({ status: 'succeeded', output: 'Wrote claude-notes.md.' });
-    expect(notes?.tokensUsed).toBe(125 + 15); // Claude Code, then the judge
+    expect(notes?.tokensUsed).toBe(120 + 15); // new tokens from Claude Code, then the judge
     expect(await readFile(join(done.workspacePath, 'claude-notes.md'), 'utf8')).toContain(
       'Claude Code',
     );

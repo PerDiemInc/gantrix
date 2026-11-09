@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
@@ -411,6 +412,43 @@ describe('api', () => {
       replies: false,
       channel: null,
     });
+  });
+
+  it('offloads a project to a local agent, creating its connection once', async () => {
+    const fake = fileURLToPath(new URL('../fixtures/fake-codex.mjs', import.meta.url));
+    const original = process.env.CODEX_BIN;
+    process.env.CODEX_BIN = fake;
+    try {
+      const a = await e.addAgent('writer');
+      const b = await e.addAgent('editor');
+      const listed = (await app.inject({ url: '/api/local-agents', headers: auth })).json();
+      expect(listed.find((x: { id: string }) => x.id === 'chatgpt')).toMatchObject({
+        installed: true,
+        version: 'codex-cli 0.0.0-test',
+      });
+      const start = (payload: object) =>
+        app.inject({ method: 'POST', url: '/api/tasks', headers: auth, payload });
+      const first = await start({
+        goal: 'One',
+        offload: 'chatgpt',
+        agentModels: { [b.id]: { connectionId: null, model: 'fake-big' } }, // their own choice wins
+      });
+      expect(first.statusCode).toBe(201);
+      const models = first.json().agentModels;
+      expect(models[a.id].connectionId).toEqual(expect.any(String));
+      expect(models[b.id]).toEqual({ connectionId: null, model: 'fake-big' });
+      const second = await start({ goal: 'Two', offload: 'chatgpt', agentIds: [a.id] });
+      expect(Object.keys(second.json().agentModels)).toEqual([a.id]);
+      expect(second.json().agentModels[a.id].connectionId).toBe(models[a.id].connectionId);
+
+      process.env.CODEX_BIN = '/nope/codex';
+      const missing = await start({ goal: 'Three', offload: 'chatgpt' });
+      expect(missing.statusCode).toBe(400);
+      expect(missing.json().error ?? missing.body).toContain("isn't installed");
+    } finally {
+      if (original === undefined) delete process.env.CODEX_BIN;
+      else process.env.CODEX_BIN = original;
+    }
   });
 
   it('creates a task with a merged budget and returns its detail', async () => {

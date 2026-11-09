@@ -16,6 +16,7 @@ import { modelDefaults } from '../../engine/deps.ts';
 import { clearModelCatalog, modelCatalog } from '../../models/catalog.ts';
 import { connectionSpec, toConnectionDto } from '../../models/connections.ts';
 import { callHttp, listPaths } from '../../models/http-request.ts';
+import { detectLocalAgents } from '../../models/local-agents.ts';
 import { createChatModel } from '../../models/provider.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
@@ -82,7 +83,12 @@ const pathsOf = (raw: string) => {
 
 /** A path is only a valid base URL for claude-code, where it names the binary. */
 function checkUrl(provider: ModelProvider, baseUrl: string | null | undefined) {
-  if (baseUrl && provider !== 'claude-code' && !/^https?:\/\//.test(baseUrl)) {
+  if (
+    baseUrl &&
+    provider !== 'claude-code' &&
+    provider !== 'codex' &&
+    !/^https?:\/\//.test(baseUrl)
+  ) {
     throw new HttpError(400, 'baseUrl must be an http(s) URL.');
   }
   if (provider === 'http' && !baseUrl) {
@@ -112,6 +118,9 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
   app.get('/api/connections/:id', async (request) =>
     dto(await get(parse(IdParams, request.params).id)),
   );
+
+  // Claude Code and the Codex CLI, if this machine has them (for "offload to").
+  app.get('/api/local-agents', async () => detectLocalAgents());
 
   app.post('/api/connections', async (request, reply) => {
     const body = parse(Create, request.body);
@@ -233,7 +242,9 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
     }
     // Claude Code needs a folder to work in; give it an empty one that is removed afterwards.
     const scratch =
-      c.provider === 'claude-code' ? await mkdtemp(join(tmpdir(), 'gantrix-test-')) : null;
+      c.provider === 'claude-code' || c.provider === 'codex'
+        ? await mkdtemp(join(tmpdir(), 'gantrix-test-'))
+        : null;
     try {
       const chat = createChatModel(
         { ...connectionSpec(c, model), ...(scratch ? { workspace: scratch } : {}) },
