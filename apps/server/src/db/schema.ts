@@ -128,6 +128,12 @@ export const tasks = pgTable(
     agentIds: uuid('agent_ids').array(),
     // Per-project model choices that override an agent's own: agentId → connection + model.
     agentModels: jsonb('agent_models').$type<Record<string, AgentModelChoice>>(),
+    // Offload: every agent without its own choice above runs on this connection.
+    offloadConnectionId: uuid('offload_connection_id').references(() => connections.id, {
+      onDelete: 'set null',
+    }),
+    // Time the project was stopped, which doesn't count against its time limit.
+    pausedMs: bigint('paused_ms', { mode: 'number' }).notNull().default(0),
     result: text('result'),
     error: text('error'),
     createdAt: createdAt(),

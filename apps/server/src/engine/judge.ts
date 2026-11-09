@@ -1,6 +1,6 @@
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { z } from 'zod';
-import { tokensUsed } from '../models/provider.ts';
+import { structuredMethod, tokensUsed } from '../models/provider.ts';
 
 const VerdictSchema = z.object({
   passed: z.boolean(),
@@ -26,7 +26,11 @@ const GOAL_JUDGE = `You decide whether a goal has been achieved, based on the re
 taken. If it hasn't, say what is still missing so a planner can add steps.`;
 
 async function verdict(model: BaseChatModel, system: string, prompt: string): Promise<Verdict> {
-  const judge = model.withStructuredOutput(VerdictSchema, { name: 'verdict', includeRaw: true });
+  const judge = model.withStructuredOutput(VerdictSchema, {
+    name: 'verdict',
+    includeRaw: true,
+    ...structuredMethod(model),
+  });
   const { raw, parsed } = await judge.invoke([
     { role: 'system', content: system },
     { role: 'user', content: prompt },

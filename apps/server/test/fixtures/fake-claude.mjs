@@ -4,9 +4,9 @@
 import { appendFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
-if (process.env.FAKE_CLAUDE_LOG) {
+if (process.env.CLAUDE_CODE_FAKE_LOG) {
   appendFileSync(
-    process.env.FAKE_CLAUDE_LOG,
+    process.env.CLAUDE_CODE_FAKE_LOG,
     `${JSON.stringify({ args, cwd: process.cwd(), hasToken: 'GANTRIX_TOKEN' in process.env })}\n`,
   );
 }

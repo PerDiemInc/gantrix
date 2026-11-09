@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stands in for `codex exec` in tests: records how it was called, writes a file, and prints
-// the JSON events Codex prints. FAKE_CODEX_FAIL makes the turn fail.
+// the JSON events Codex prints. CODEX_FAKE_FAIL makes the turn fail.
 import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -9,16 +9,19 @@ if (args[0] === '--version') {
   process.exit(0);
 }
 const prompt = readFileSync(0, 'utf8');
-if (process.env.FAKE_CODEX_LOG) {
+if (process.env.CODEX_FAKE_LOG) {
   appendFileSync(
-    process.env.FAKE_CODEX_LOG,
+    process.env.CODEX_FAKE_LOG,
     `${JSON.stringify({ args, prompt, cwd: process.cwd(), hasToken: 'GANTRIX_TOKEN' in process.env, hasSlack: 'SLACK_BOT_TOKEN' in process.env })}\n`,
   );
 }
 const say = (e) => console.log(JSON.stringify(e));
 say({ type: 'thread.started', thread_id: 't1' });
 say({ type: 'turn.started' });
-if (process.env.FAKE_CODEX_FAIL) {
+if (process.env.CODEX_FAKE_SLEEP_MS) {
+  await new Promise((r) => setTimeout(r, Number(process.env.CODEX_FAKE_SLEEP_MS)));
+}
+if (process.env.CODEX_FAKE_FAIL) {
   say({ type: 'turn.failed', error: { message: 'usage limit reached' } });
   process.exit(1);
 }

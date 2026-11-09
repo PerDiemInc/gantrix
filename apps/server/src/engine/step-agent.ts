@@ -35,6 +35,8 @@ const StepState = Annotation.Root({
 });
 
 export interface StepAgentOptions {
+  /** Stops the model turn in progress (a CLI turn can last many minutes). */
+  signal?: AbortSignal;
   model: BaseChatModel;
   tools: StructuredToolInterface[];
   autoApprove: ReadonlySet<string>;
@@ -105,7 +107,10 @@ export function buildStepAgent(o: StepAgentOptions) {
       .addNode('model', async (s) => {
         const inbox = await o.beforeTurn();
         const notes = inbox?.notes ?? [];
-        const reply = await model.invoke([...s.messages, ...notes]);
+        const reply = await model.invoke(
+          [...s.messages, ...notes],
+          o.signal ? { signal: o.signal } : undefined,
+        );
         await inbox?.delivered();
         return { messages: [...notes, reply] };
       })

@@ -10,11 +10,14 @@ import {
   cancelTask,
   createTask,
   decideApproval,
+  deleteTask,
   editStep,
   extendTask,
   sendMessage,
   setTeam,
+  stopTask,
 } from '../../src/engine/commands.ts';
+import { StepStopped, setStep } from '../../src/engine/step-runner.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 const step = (key: string, agent: string, dependsOn: string[] = []) => ({
@@ -207,6 +210,89 @@ describe('engine', () => {
     expect(notes?.tokensUsed).toBe(120 + 15); // new tokens from Codex, then the judge
     expect(await readFile(join(done.workspacePath, 'codex-notes.md'), 'utf8')).toContain('Codex');
     expect(e.fake.calls.worker).toBe(0);
+  });
+
+  const codexConnection = async () => {
+    const [conn] = await e.db
+      .insert(connections)
+      .values({
+        name: 'chatgpt-local',
+        provider: 'codex',
+        baseUrl: fileURLToPath(new URL('../fixtures/fake-codex.mjs', import.meta.url)),
+      })
+      .returning();
+    return conn!;
+  };
+
+  it('offload: covers agents added later, tells the planner the real tools, shows the judge the files', async () => {
+    const coder = await e.addAgent('coder', ['read_file', 'write_file', 'deploy_site', 'ask_user']);
+    const conn = await codexConnection();
+    let plannerSaw = '';
+    let judgeSaw = '';
+    e.fake.script.plan = (p) => {
+      plannerSaw = p;
+      return { steps: [step('notes', 'coder')] };
+    };
+    e.fake.script.judge = (p) => {
+      judgeSaw += p;
+      return { passed: true, reason: 'ok' };
+    };
+    const task = await createTask(e.deps, {
+      goal: 'Notes',
+      agentIds: [coder.id],
+      offloadConnectionId: conn.id,
+      approveAll: false,
+    });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    expect(plannerSaw).toContain('Tools: read_file, write_file, list_files');
+    expect(plannerSaw).not.toContain('deploy_site');
+    expect(judgeSaw).toContain('# Notes from Codex'); // the file's contents, not just its name
+    const [notes] = await stepsOf(task.id);
+    expect(notes?.output).toBe('Wrote codex-notes.md.');
+    expect(e.fake.calls.worker).toBe(0); // no per-agent entry was needed
+  });
+
+  it('Stop ends a long CLI turn right away, the step closes, and the project can be deleted', async () => {
+    const coder = await e.addAgent('coder');
+    const conn = await codexConnection();
+    e.fake.script.plan = () => ({ steps: [step('notes', 'coder')] });
+    process.env.CODEX_FAKE_SLEEP_MS = '60000';
+    try {
+      const task = await createTask(e.deps, {
+        goal: 'Notes',
+        agentModels: { [coder.id]: { connectionId: conn.id, model: null } },
+      });
+      await e.waitFor(task.id, (t) => t.status === 'running', 20_000);
+      const until = async (check: () => Promise<boolean>) => {
+        for (let i = 0; i < 150; i++) {
+          if (await check()) return true;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return false;
+      };
+      expect(await until(async () => (await stepsOf(task.id))[0]?.status === 'running')).toBe(true);
+      expect(await stopTask(e.deps, task.id)).toBe(true);
+      // Well under the 60 s the fake CLI would take.
+      expect(await until(async () => (await stepsOf(task.id))[0]?.status === 'cancelled')).toBe(
+        true,
+      );
+      expect(await deleteTask(e.deps, task.id)).toBe('deleted');
+    } finally {
+      delete process.env.CODEX_FAKE_SLEEP_MS;
+    }
+  });
+
+  it("a stale attempt can't overwrite the step once a new attempt owns it", async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+    const task = await createTask(e.deps, { goal: 'Notes', approveAll: true });
+    await e.waitFor(task.id);
+    const [row] = await stepsOf(task.id);
+    const stale = { ...row!, attempt: row!.attempt - 1, status: 'judging' as const };
+    await expect(setStep(e.db, task.id, stale, 'failed', { error: 'late' })).rejects.toBeInstanceOf(
+      StepStopped,
+    );
+    expect((await stepsOf(task.id))[0]).toMatchObject({ status: 'succeeded', error: null });
   });
 
   it('runs a step with local Claude Code and judges its result', async () => {

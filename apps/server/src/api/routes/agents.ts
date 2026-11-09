@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { agentSkills, agents, skills } from '../../db/schema.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
+import { requireModelFor } from '../model-checks.ts';
 import type { ApiDeps } from '../server.ts';
 
 // Uploaded avatars are resized to 128px in the browser; 200 KB is plenty and keeps rows small.
@@ -72,6 +73,7 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
 
   app.post('/api/agents', async (request, reply) => {
     const { skillIds, ...fields } = parse(CreateAgent, request.body);
+    await requireModelFor(db, fields.connectionId, fields.model);
     const id = await db.transaction(async (tx) => {
       const [row] = await tx.insert(agents).values(fields).returning({ id: agents.id });
       if (!row) throw new HttpError(500, 'Agent insert returned no row.');
@@ -88,6 +90,14 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
   app.patch('/api/agents/:id', async (request) => {
     const { id } = parse(IdParams, request.params);
     const { skillIds, ...fields } = parse(UpdateAgent, request.body);
+    if (fields.connectionId !== undefined || fields.model !== undefined) {
+      const current = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+      await requireModelFor(
+        db,
+        fields.connectionId !== undefined ? fields.connectionId : current?.connectionId,
+        fields.model !== undefined ? fields.model : current?.model,
+      );
+    }
     await db.transaction(async (tx) => {
       const [row] = await tx
         .update(agents)

@@ -2,11 +2,12 @@ import type { ConnectionDto } from '@gantrix/shared';
 import { eq } from 'drizzle-orm';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
-import { type agents, connections } from '../db/schema.ts';
+import { type agents, connections, type tasks } from '../db/schema.ts';
 import { DEFAULT_URLS, type ModelSpec } from './provider.ts';
 
 type Connection = typeof connections.$inferSelect;
 type Agent = typeof agents.$inferSelect;
+type Task = typeof tasks.$inferSelect;
 
 const ENV_REF = /^env:([A-Za-z_][A-Za-z0-9_]*)$/;
 
@@ -96,6 +97,22 @@ export const connectionSpec = (c: Connection, model: string | null): ModelSpec =
   request: c.request,
 });
 
+/** OpenAI and Anthropic have no default for Gantrix to fall back on. */
+export const needsModel = (provider: string) => provider === 'openai' || provider === 'anthropic';
+
+type ProjectModels = Pick<Task, 'agentModels' | 'offloadConnectionId'>;
+type AgentModel = Pick<Agent, 'id' | 'model' | 'modelBaseUrl' | 'connectionId'>;
+
+/** The model settings an agent uses on this project: its own choice, offload, or its usual. */
+export function agentForProject<A extends AgentModel>(task: ProjectModels, agent: A): A {
+  const choice =
+    task.agentModels?.[agent.id] ??
+    (task.offloadConnectionId ? { connectionId: task.offloadConnectionId, model: null } : null);
+  return choice
+    ? { ...agent, connectionId: choice.connectionId, model: choice.model, modelBaseUrl: null }
+    : agent;
+}
+
 /**
  * The model an agent's steps use. Without an agent (planner and judges) or without its own
  * settings, GANTRIX_DEFAULT_CONNECTION if set, else Ollama.
@@ -110,6 +127,10 @@ export async function resolveModelSpec(
       where: eq(connections.id, agent.connectionId),
     });
     if (!c) throw new Error("The agent's connection was deleted.");
+    // GANTRIX_DEFAULT_MODEL names a model on the default connection, not on this one.
+    if (needsModel(c.provider) && !agent.model && c.name !== config.GANTRIX_DEFAULT_CONNECTION) {
+      throw new Error(`Connection "${c.name}" needs a model: choose one for this agent.`);
+    }
     return connectionSpec(c, agent.model);
   }
   if (agent?.model || agent?.modelBaseUrl) {

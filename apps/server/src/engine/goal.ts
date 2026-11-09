@@ -1,7 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { resolveModelSpec } from '../models/connections.ts';
-import { createChatModel } from '../models/provider.ts';
+import { createChatModel, structuredMethod } from '../models/provider.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
 
 export const GoalSchema = z.object({
@@ -23,12 +23,13 @@ produce, like "product/brief.md lists the audience and the four pages". No vague
 
 /** An OKR drafted by the default model (the planner's) from what the user wrote. */
 export async function suggestGoal(deps: EngineDeps, description: string): Promise<SuggestedGoal> {
-  const model = createChatModel(
+  const chat = createChatModel(
     await resolveModelSpec(deps.db, deps.config, null),
     'planner',
     modelDefaults(deps.config),
     0,
-  ).withStructuredOutput(GoalSchema, { name: 'okr' });
+  );
+  const model = chat.withStructuredOutput(GoalSchema, { name: 'okr', ...structuredMethod(chat) });
   return model.invoke(
     [new SystemMessage(SYSTEM), new HumanMessage(`Project description:\n${description}`)],
     {

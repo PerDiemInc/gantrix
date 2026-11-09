@@ -8,7 +8,7 @@ import { type EngineDeps, modelDefaults } from './deps.ts';
 import { judgeGoal } from './judge.ts';
 import { failTask, runPlanJob } from './planner.ts';
 import type { WorkJob } from './queues.ts';
-import { runStepJob, setStep } from './step-runner.ts';
+import { runStepJob, StepStopped, setStep } from './step-runner.ts';
 import { latestGoalVerdict } from './supervisor.ts';
 
 export function runWorkJob(deps: EngineDeps, job: WorkJob): Promise<void> {
@@ -30,6 +30,8 @@ export async function onWorkJobFailed(deps: EngineDeps, job: WorkJob, error: Err
     await setStep(deps.db, step.taskId, step, 'failed', {
       error: error.message,
       finishedAt: new Date(),
+    }).catch((e: unknown) => {
+      if (!(e instanceof StepStopped)) throw e; // a stale job has nothing left to record
     });
     await deps.queues.tick(step.taskId);
     return;

@@ -7,7 +7,7 @@ import {
   isTerminal,
   TERMINAL_TASK_STATUSES,
 } from '@gantrix/shared';
-import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
 import { agents, approvals, delegations, steps, taskMessages, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
@@ -17,6 +17,9 @@ import type { EngineDeps } from './deps.ts';
 import { stepThreadId } from './threads.ts';
 
 /** User actions shared by the API and the CLI. */
+
+/** A stopped project going again: the time it sat stopped doesn't count against its limit. */
+const stoppedFor = sql`${tasks.pausedMs} + coalesce((extract(epoch from now() - ${tasks.finishedAt}) * 1000)::bigint, 0)`;
 
 export async function createTask(
   deps: EngineDeps,
@@ -29,6 +32,7 @@ export async function createTask(
     approveAll?: boolean;
     agentIds?: string[];
     agentModels?: Record<string, AgentModelChoice>;
+    offloadConnectionId?: string;
   },
 ) {
   const id = randomUUIDv7();
@@ -53,6 +57,7 @@ export async function createTask(
         slack: input.slack ?? false,
         agentModels:
           input.agentModels && Object.keys(input.agentModels).length ? input.agentModels : null,
+        offloadConnectionId: input.offloadConnectionId ?? null,
       })
       .returning();
     await emit(tx, id, { type: 'task.status', status: 'planning' });
@@ -221,7 +226,9 @@ export async function extendTask(
       .update(tasks)
       .set({
         budget,
-        ...(resume ? { status: 'running', finishedAt: null, error: null } : {}),
+        ...(resume
+          ? { status: 'running', finishedAt: null, error: null, pausedMs: stoppedFor }
+          : {}),
       })
       .where(eq(tasks.id, taskId));
     if (!resume) return;
@@ -283,6 +290,13 @@ export async function extendTask(
   if (resume) {
     // The old supervisor thread ended when the project stopped; start a new one.
     await deps.checkpointer.deleteThread(`task-${taskId}`);
+  }
+  // The time limit moved, so wake the supervisor when the new one runs out.
+  if (task.startedAt) {
+    const paused =
+      task.pausedMs + (resume && task.finishedAt ? Date.now() - task.finishedAt.getTime() : 0);
+    const left = budget.maxMinutes * 60_000 - (Date.now() - task.startedAt.getTime() - paused);
+    if (left > 0) await deps.queues.tick(taskId, left + 1_000);
   }
   await deps.queues.tick(taskId);
   return { status: resume ? 'resumed' : 'extended', budget };
@@ -364,7 +378,13 @@ export async function editStep(
     if (reopen) {
       await tx
         .update(tasks)
-        .set({ status: 'running', finishedAt: null, error: null, result: null })
+        .set({
+          status: 'running',
+          finishedAt: null,
+          error: null,
+          result: null,
+          pausedMs: stoppedFor,
+        })
         .where(eq(tasks.id, taskId));
       await emit(tx, taskId, {
         type: 'task.status',

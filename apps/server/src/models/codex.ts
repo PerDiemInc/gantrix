@@ -9,7 +9,8 @@ import {
 } from '@langchain/core/language_models/chat_models';
 import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import type { ChatResult } from '@langchain/core/outputs';
-import { HIDDEN_ENV, toPrompt } from './claude-code.ts';
+import { toPrompt } from './claude-code.ts';
+import { cliEnv } from './cli-env.ts';
 
 export interface CodexOptions extends BaseChatModelParams {
   /** e.g. "gpt-5.6-sol"; omitted (or "default") → Codex's own default. */
@@ -27,12 +28,14 @@ export interface CodexRun {
   /** New input tokens: the cached ones are the same context read again. */
   input: number;
   output: number;
+  /** The run's last turn finished. Anything else means the text is partial. */
+  completed: boolean;
   error: string | null;
 }
 
 /** `codex exec --json` prints one JSON event per line. The last agent message is the reply. */
 export function parseEvents(stdout: string): CodexRun {
-  const run: CodexRun = { text: '', input: 0, output: 0, error: null };
+  const run: CodexRun = { text: '', input: 0, output: 0, completed: false, error: null };
   for (const line of stdout.split('\n')) {
     if (!line.trim().startsWith('{')) continue;
     let e: {
@@ -52,7 +55,15 @@ export function parseEvents(stdout: string): CodexRun {
     } else if (e.type === 'turn.completed' && e.usage) {
       run.input += Math.max(0, (e.usage.input_tokens ?? 0) - (e.usage.cached_input_tokens ?? 0));
       run.output += e.usage.output_tokens ?? 0;
+    }
+    // Only the last word counts: Codex can report a recoverable error and then finish.
+    if (e.type === 'turn.completed') {
+      run.completed = true;
+      run.error = null;
+    } else if (e.type === 'turn.started') {
+      run.completed = false;
     } else if (e.type === 'turn.failed') {
+      run.completed = false;
       run.error = e.error?.message ?? 'the turn failed';
     } else if (e.type === 'error') {
       run.error = e.message ?? 'unknown error';
@@ -122,39 +133,41 @@ export class CodexChatModel extends BaseChatModel {
     _run?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
     const { system, prompt } = toPrompt(messages);
-    const env = { ...process.env };
-    for (const k of HIDDEN_ENV) delete env[k];
-    const stdout = await new Promise<string>((resolve, reject) => {
-      const child = execFile(
-        this.#o.bin ?? process.env.CODEX_BIN ?? 'codex',
-        codexArgs({
-          model: this.#o.model,
-          approveAll: this.#o.approveAll,
-          workspace: this.#o.workspace,
-        }),
-        {
-          cwd: this.#o.workspace,
-          env,
-          timeout: this.#o.timeoutMs ?? 30 * 60_000,
-          maxBuffer: 64 * 1024 * 1024,
-          ...(options.signal ? { signal: options.signal } : {}),
-        },
-        (error, out, err) => {
-          // codex exits non-zero on its own errors but still prints the events.
-          if (error && !out.trim()) {
-            const why =
-              (error as NodeJS.ErrnoException).code === 'ENOENT'
+    const { out, failure } = await new Promise<{ out: string; failure: string | null }>(
+      (resolve) => {
+        const child = execFile(
+          this.#o.bin ?? process.env.CODEX_BIN ?? 'codex',
+          codexArgs({
+            model: this.#o.model,
+            approveAll: this.#o.approveAll,
+            workspace: this.#o.workspace,
+          }),
+          {
+            cwd: this.#o.workspace,
+            env: cliEnv(),
+            timeout: this.#o.timeoutMs ?? 30 * 60_000,
+            maxBuffer: 64 * 1024 * 1024,
+            ...(options.signal ? { signal: options.signal } : {}),
+          },
+          (error, stdout, stderr) => {
+            const why = !error
+              ? null
+              : (error as NodeJS.ErrnoException).code === 'ENOENT'
                 ? 'the codex command was not found. Install the Codex CLI or set CODEX_BIN.'
-                : `${error.message}${err ? `\n${err.slice(0, 2000)}` : ''}`;
-            reject(new Error(`ChatGPT (Codex) failed: ${why}`));
-          } else resolve(out);
-        },
-      );
-      child.stdin?.on('error', () => {}); // it may exit before reading everything
-      child.stdin?.end(system ? `${system}\n\n${prompt}` : prompt);
-    });
-    const r = parseEvents(stdout);
-    if (r.error) throw new Error(`ChatGPT (Codex): ${r.error}`);
+                : `${error.message}${stderr ? `\n${stderr.slice(0, 2000)}` : ''}`;
+            resolve({ out: stdout, failure: why });
+          },
+        );
+        child.stdin?.on('error', () => {}); // it may exit before reading everything
+        child.stdin?.end(system ? `${system}\n\n${prompt}` : prompt);
+      },
+    );
+    const r = parseEvents(out);
+    // Success means the turn completed. A run that was killed, timed out or overflowed may have
+    // printed an interim message, and that isn't the answer.
+    if (!r.completed) {
+      throw new Error(`ChatGPT (Codex) failed: ${r.error ?? failure ?? 'it stopped early'}`);
+    }
     if (!r.text) throw new Error('ChatGPT (Codex) finished without a reply.');
     // Through the constructor, so the usage survives LangGraph's checkpoint (see claude-code.ts).
     const fields = {

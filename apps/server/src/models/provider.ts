@@ -92,7 +92,7 @@ export function createChatModel(
       url: spec.baseUrl,
       request: { ...DEFAULT_HTTP_REQUEST, ...spec.request },
       headers: spec.headers ?? {},
-      model: name,
+      model: spec.model ?? '', // never the default model: that name is for another server
       ...retries,
     });
   }
@@ -145,7 +145,7 @@ export function createChatModel(
     return new ChatAnthropic({
       ...retries,
       model,
-      temperature: TEMPERATURE[role],
+      // No temperature: current Claude models reject it with a 400.
       maxTokens: MAX_OUTPUT_TOKENS[role],
       anthropicApiUrl: spec.baseUrl ?? DEFAULT_URLS.anthropic,
       // Without a header the SDK reads ANTHROPIC_API_KEY from the worker's environment.
@@ -168,6 +168,13 @@ export function createChatModel(
     ...(spec.headers && Object.keys(spec.headers).length ? { headers: spec.headers } : {}),
   });
 }
+
+/**
+ * Options for withStructuredOutput. Anthropic's default forces a tool call, which current Claude
+ * models reject; their structured output (output_config.format) works on all of them.
+ */
+export const structuredMethod = (model: BaseChatModel): { method?: 'jsonSchema' } =>
+  model._llmType() === 'anthropic' ? { method: 'jsonSchema' } : {};
 
 // Structural type: AIMessage's generic usage_metadata resolves to `never` under TS 7.
 export const tokensUsed = (message: { usage_metadata?: UsageMetadata | undefined }): number =>

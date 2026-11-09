@@ -35,7 +35,16 @@ function NewProject({ onClose }: { onClose: () => void }) {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
-  const [askFirst, setAskFirst] = useState(false);
+  // null until the user touches the switch: then the server's GANTRIX_APPROVE_ALL decides.
+  const [askChoice, setAskChoice] = useState<boolean | null>(null);
+  const [serverApproveAll, setServerApproveAll] = useState(true);
+  const askFirst = askChoice ?? !serverApproveAll;
+  useEffect(() => {
+    api.get<{ approveAll: boolean }>('/api/settings').then(
+      (s) => setServerApproveAll(s.approveAll),
+      () => {},
+    );
+  }, []);
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState('');
@@ -96,7 +105,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
         ...(description.trim() ? { description } : {}),
         ...(slackStatus?.posts ? { slack } : {}),
         budget: minutes ? { maxMinutes: Number(minutes) } : {},
-        approveAll: !askFirst,
+        ...(askChoice === null ? {} : { approveAll: !askChoice }),
         ...(team.size ? { agentIds: [...team] } : {}),
         ...(Object.keys(chosenModels).length ? { agentModels: chosenModels } : {}),
         ...(offload ? { offload } : {}),
@@ -290,13 +299,15 @@ function NewProject({ onClose }: { onClose: () => void }) {
                   <span className="muted small">
                     {choice
                       ? `${choice.model ?? 'default model'} for this project`
-                      : `${a.model ?? 'default model'} (its usual model)`}
+                      : offload
+                        ? `${LOCAL_AGENTS[offload].label} for this project`
+                        : `${a.model ?? 'default model'} (its usual model)`}
                   </span>
                   {editingModel === a.id ? (
                     <div className="np-model-edit">
                       <ModelPicker
-                        connectionId={choice?.connectionId ?? a.connectionId ?? ''}
-                        model={choice?.model ?? a.model ?? ''}
+                        connectionId={(choice ? choice.connectionId : a.connectionId) ?? ''}
+                        model={(choice ? choice.model : a.model) ?? ''}
                         onChange={(v) =>
                           setModels({
                             ...models,
@@ -391,7 +402,7 @@ function NewProject({ onClose }: { onClose: () => void }) {
             role="switch"
             aria-checked={askFirst}
             checked={askFirst}
-            onChange={(e) => setAskFirst(e.target.checked)}
+            onChange={(e) => setAskChoice(e.target.checked)}
           />
           <Icon name="hand" />
           Ask me before risky tools

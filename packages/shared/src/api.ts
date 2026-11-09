@@ -48,6 +48,10 @@ export interface TaskDto {
   slackChannel: string | null;
   /** Per-project model choices: agentId → connection + model. */
   agentModels: Record<string, AgentModelChoice> | null;
+  /** Offload: agents without their own choice run on this connection. */
+  offloadConnectionId: string | null;
+  /** Time stopped; it doesn't count against the time limit. */
+  pausedMs: number;
   status: TaskStatus;
   budget: Budget;
   tokensUsed: number;

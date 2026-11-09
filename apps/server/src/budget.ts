@@ -23,6 +23,7 @@ interface TaskUsage {
   tokensUsed: number;
   replans: number;
   startedAt: Date | null;
+  pausedMs?: number;
 }
 
 /** A limit that stops the whole task, or null while the task is within budget. */
@@ -35,7 +36,7 @@ export function budgetBreach(
     return { limit: 'tokens', detail: `Used ${task.tokensUsed} of ${budget.maxTokens} tokens.` };
   }
   if (task.startedAt) {
-    const minutes = (now.getTime() - task.startedAt.getTime()) / 60_000;
+    const minutes = (now.getTime() - task.startedAt.getTime() - (task.pausedMs ?? 0)) / 60_000;
     if (minutes >= budget.maxMinutes) {
       return {
         limit: 'time',

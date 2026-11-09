@@ -434,12 +434,12 @@ describe('api', () => {
         agentModels: { [b.id]: { connectionId: null, model: 'fake-big' } }, // their own choice wins
       });
       expect(first.statusCode).toBe(201);
-      const models = first.json().agentModels;
-      expect(models[a.id].connectionId).toEqual(expect.any(String));
-      expect(models[b.id]).toEqual({ connectionId: null, model: 'fake-big' });
+      const body = first.json();
+      expect(body.offloadConnectionId).toEqual(expect.any(String));
+      expect(body.agentModels[b.id]).toEqual({ connectionId: null, model: 'fake-big' });
+      expect(body.agentModels[a.id]).toBeUndefined(); // covered by offload, like agents added later
       const second = await start({ goal: 'Two', offload: 'chatgpt', agentIds: [a.id] });
-      expect(Object.keys(second.json().agentModels)).toEqual([a.id]);
-      expect(second.json().agentModels[a.id].connectionId).toBe(models[a.id].connectionId);
+      expect(second.json().offloadConnectionId).toBe(body.offloadConnectionId);
 
       process.env.CODEX_BIN = '/nope/codex';
       const missing = await start({ goal: 'Three', offload: 'chatgpt' });
@@ -449,6 +449,32 @@ describe('api', () => {
       if (original === undefined) delete process.env.CODEX_BIN;
       else process.env.CODEX_BIN = original;
     }
+  });
+
+  it('refuses an OpenAI or Anthropic connection with no model, on projects and agents', async () => {
+    const conn = await app.inject({
+      method: 'POST',
+      url: '/api/connections',
+      headers: auth,
+      payload: { name: 'openai-x', provider: 'openai', baseUrl: 'http://127.0.0.1:9/v1' },
+    });
+    const connectionId = conn.json().id;
+    const agent = await e.addAgent('writer');
+    const project = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      headers: auth,
+      payload: { goal: 'x', agentModels: { [agent.id]: { connectionId, model: null } } },
+    });
+    expect(project.statusCode).toBe(400);
+    expect(project.body).toContain('needs a model');
+    const patch = (payload: object) =>
+      app.inject({ method: 'PATCH', url: `/api/agents/${agent.id}`, headers: auth, payload });
+    expect((await patch({ connectionId, model: null })).statusCode).toBe(400);
+    expect((await patch({ connectionId, model: 'gpt-x' })).statusCode).toBe(200);
+    expect((await app.inject({ url: '/api/settings', headers: auth })).json()).toEqual({
+      approveAll: e.config.GANTRIX_APPROVE_ALL,
+    });
   });
 
   it('creates a task with a merged budget and returns its detail', async () => {

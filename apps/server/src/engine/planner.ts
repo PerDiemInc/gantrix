@@ -1,8 +1,8 @@
 import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
-import { agentSkills, agents, plans, skills, steps, tasks } from '../db/schema.ts';
+import { agentSkills, agents, connections, plans, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
-import { resolveModelSpec } from '../models/connections.ts';
-import { createChatModel, tokensUsed } from '../models/provider.ts';
+import { agentForProject, resolveModelSpec } from '../models/connections.ts';
+import { createChatModel, structuredMethod, tokensUsed } from '../models/provider.ts';
 import { validatePlan } from '../plan/dag.ts';
 import { type Plan, PlanSchema } from '../plan/schema.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
@@ -39,7 +39,7 @@ export async function runPlanJob(
   });
   if (existing) return; // already planned; this is a repeated job
 
-  const team = await loadTeam(deps, task.agentIds);
+  const team = await loadTeam(deps, task);
   if (!team.length) {
     await failTask(
       deps,
@@ -55,11 +55,16 @@ export async function runPlanJob(
   const done = all.filter((s) => s.status === 'succeeded');
   const why = await whyReplan(deps, task.id, job.version, all);
 
-  const model = createChatModel(
+  const chat = createChatModel(
     await resolveModelSpec(db, deps.config, null),
     'planner',
     modelDefaults(deps.config),
-  ).withStructuredOutput(PlanSchema, { name: 'plan', includeRaw: true });
+  );
+  const model = chat.withStructuredOutput(PlanSchema, {
+    name: 'plan',
+    includeRaw: true,
+    ...structuredMethod(chat),
+  });
   const ctx = {
     agentNames: new Set(team.map((a) => a.name)),
     doneKeys: new Set(done.map((s) => s.key)),
@@ -109,19 +114,28 @@ export async function runPlanJob(
 }
 
 /** Every agent, or only the ones the project chose. */
-async function loadTeam(deps: EngineDeps, only: string[] | null): Promise<TeamMember[]> {
+async function loadTeam(deps: EngineDeps, task: typeof tasks.$inferSelect): Promise<TeamMember[]> {
+  const only = task.agentIds;
   const rows = await deps.db
     .select({
       id: agents.id,
       name: agents.name,
       description: agents.description,
       manifest: skills.manifest,
+      model: agents.model,
+      modelBaseUrl: agents.modelBaseUrl,
+      connectionId: agents.connectionId,
     })
     .from(agents)
     .leftJoin(agentSkills, eq(agentSkills.agentId, agents.id))
     .leftJoin(skills, eq(skills.id, agentSkills.skillId))
     .where(only?.length ? inArray(agents.id, only) : undefined)
     .orderBy(agents.name);
+  const providers = new Map(
+    (
+      await deps.db.select({ id: connections.id, provider: connections.provider }).from(connections)
+    ).map((c) => [c.id, c.provider as string]),
+  );
   const team = new Map<string, TeamMember>();
   for (const r of rows) {
     const member = team.get(r.id) ?? {
@@ -130,7 +144,17 @@ async function loadTeam(deps: EngineDeps, only: string[] | null): Promise<TeamMe
       description: r.description,
       tools: [],
     };
-    if (r.manifest) {
+    // Claude Code and Codex use their own tools, so don't plan around Gantrix-only ones.
+    const { connectionId } = agentForProject(task, r);
+    const provider = connectionId ? providers.get(connectionId) : undefined;
+    if (provider === 'claude-code' || provider === 'codex') {
+      member.tools = [
+        'read_file',
+        'write_file',
+        'list_files',
+        ...(task.approveAll ? ['shell', 'web_fetch'] : []),
+      ];
+    } else if (r.manifest) {
       member.tools.push(
         ...r.manifest.tools,
         ...Object.keys(r.manifest.mcpServers).map((s) => `${s} (MCP)`),

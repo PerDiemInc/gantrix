@@ -6,6 +6,7 @@ import {
 } from '@langchain/core/language_models/chat_models';
 import { AIMessage, type BaseMessage } from '@langchain/core/messages';
 import type { ChatResult } from '@langchain/core/outputs';
+import { cliEnv } from './cli-env.ts';
 
 /** File tools only: Gantrix can't see or approve what Claude Code does inside one run. */
 export const CLAUDE_CODE_SAFE_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep'];
@@ -16,16 +17,6 @@ export const CLAUDE_CODE_GOD_MODE_TOOLS = [
   'WebFetch',
   'WebSearch',
 ];
-// Never passed to the child: they'd let a prompt reach the Gantrix API or its data.
-export const HIDDEN_ENV = [
-  'GANTRIX_TOKEN',
-  'DATABASE_URL',
-  'REDIS_URL',
-  'POSTGRES_PASSWORD',
-  'SLACK_BOT_TOKEN',
-  'SLACK_APP_TOKEN',
-];
-
 export interface ClaudeCodeOptions extends BaseChatModelParams {
   /** e.g. "sonnet" or a full model id; omitted → Claude Code's own default. */
   model?: string | null;
@@ -135,15 +126,13 @@ export class ClaudeCodeChatModel extends BaseChatModel {
     _run?: CallbackManagerForLLMRun,
   ): Promise<ChatResult> {
     const { system, prompt } = toPrompt(messages);
-    const env = { ...process.env };
-    for (const k of HIDDEN_ENV) delete env[k];
     const stdout = await new Promise<string>((resolve, reject) => {
       execFile(
         this.#o.bin ?? process.env.CLAUDE_CODE_BIN ?? 'claude',
         claudeArgs({ model: this.#o.model, approveAll: this.#o.approveAll, system, prompt }),
         {
           cwd: this.#o.workspace,
-          env,
+          env: cliEnv(),
           timeout: this.#o.timeoutMs ?? 30 * 60_000,
           maxBuffer: 32 * 1024 * 1024,
           ...(options.signal ? { signal: options.signal } : {}),

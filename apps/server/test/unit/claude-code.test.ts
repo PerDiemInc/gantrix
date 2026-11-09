@@ -12,11 +12,11 @@ let log: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'claude-code-'));
   log = join(dir, 'calls.log');
-  process.env.FAKE_CLAUDE_LOG = log;
+  process.env.CLAUDE_CODE_FAKE_LOG = log;
   process.env.GANTRIX_TOKEN = 'x'.repeat(32);
 });
 afterEach(async () => {
-  delete process.env.FAKE_CLAUDE_LOG;
+  delete process.env.CLAUDE_CODE_FAKE_LOG;
   delete process.env.GANTRIX_TOKEN;
   await rm(dir, { recursive: true, force: true });
 });

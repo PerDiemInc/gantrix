@@ -158,7 +158,9 @@ export function TaskPage({ id }: { id: string }) {
   const counts: Partial<Record<StepStatus, number>> = {};
   for (const s of current) counts[s.status] = (counts[s.status] ?? 0) + 1;
   const end = task.finishedAt ? Date.parse(task.finishedAt) : now;
-  const elapsedMin = task.startedAt ? Math.floor((end - Date.parse(task.startedAt)) / 60_000) : 0;
+  const elapsedMin = task.startedAt
+    ? Math.floor((end - Date.parse(task.startedAt) - task.pausedMs) / 60_000)
+    : 0;
   const decide = async (approvalId: string, approved: boolean) => {
     await api.post(`/api/approvals/${approvalId}`, { approved });
     reload();

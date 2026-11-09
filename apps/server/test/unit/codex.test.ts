@@ -12,13 +12,13 @@ let log: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'codex-'));
   log = join(dir, 'calls.log');
-  process.env.FAKE_CODEX_LOG = log;
+  process.env.CODEX_FAKE_LOG = log;
   process.env.GANTRIX_TOKEN = 'x'.repeat(32);
   process.env.SLACK_BOT_TOKEN = 'xoxb-test';
 });
 afterEach(async () => {
-  delete process.env.FAKE_CODEX_LOG;
-  delete process.env.FAKE_CODEX_FAIL;
+  delete process.env.CODEX_FAKE_LOG;
+  delete process.env.CODEX_FAKE_FAIL;
   delete process.env.GANTRIX_TOKEN;
   delete process.env.SLACK_BOT_TOKEN;
   await rm(dir, { recursive: true, force: true });
@@ -50,7 +50,7 @@ describe('CodexChatModel', () => {
   });
 
   it('reports a failed turn, even though the command printed events', async () => {
-    process.env.FAKE_CODEX_FAIL = '1';
+    process.env.CODEX_FAKE_FAIL = '1';
     const model = new CodexChatModel({
       workspace: dir,
       approveAll: false,
@@ -58,6 +58,19 @@ describe('CodexChatModel', () => {
       maxRetries: 0,
     });
     await expect(model.invoke([new HumanMessage('Go')])).rejects.toThrow('usage limit reached');
+  });
+
+  it('does not pass off an interim message as the answer when the run is killed', async () => {
+    process.env.CODEX_FAKE_SLEEP_MS = '5000';
+    const model = new CodexChatModel({
+      workspace: dir,
+      approveAll: false,
+      bin: FAKE,
+      maxRetries: 0,
+      timeoutMs: 300,
+    });
+    await expect(model.invoke([new HumanMessage('Go')])).rejects.toThrow('ChatGPT (Codex) failed');
+    delete process.env.CODEX_FAKE_SLEEP_MS;
   });
 
   it('says so when codex is not installed', async () => {
@@ -83,6 +96,15 @@ describe('codex arguments and events', () => {
   });
   it('treats "default" as no model', () => {
     expect(codexArgs({ approveAll: false, workspace: '/w', model: 'default' })).not.toContain('-m');
+  });
+  it('only a completed last turn counts: an early error is forgiven, partial text is not', () => {
+    const msg = '{"type":"item.completed","item":{"type":"agent_message","text":"Working"}}';
+    const done = '{"type":"turn.completed","usage":{"input_tokens":5,"output_tokens":1}}';
+    expect(parseEvents(`{"type":"error","message":"retrying"}\n${msg}\n${done}`)).toMatchObject({
+      completed: true,
+      error: null,
+    });
+    expect(parseEvents(msg)).toMatchObject({ text: 'Working', completed: false });
   });
   it('skips lines that are not JSON', () => {
     const r = parseEvents(

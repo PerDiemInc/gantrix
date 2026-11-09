@@ -22,10 +22,19 @@ export function roleOf(agent: Pick<AgentDto, 'name' | 'description'>): string {
   return d.split(/\s+/).slice(0, 4).join(' ') || agent.name;
 }
 
-export function modelOf(agent: AgentDto, connections: ConnectionDto[]): string {
-  const c = connections.find((x) => x.id === agent.connectionId);
-  const model = agent.model ?? 'default model';
-  return c ? `${model} · ${c.name}` : `${model} · Ollama`;
+/** The model an agent runs on in this project: its own project choice, offload, or its usual. */
+export function modelOf(
+  agent: AgentDto,
+  connections: ConnectionDto[],
+  task?: Pick<TaskDetailDto, 'agentModels' | 'offloadConnectionId'>,
+): { text: string; forProject: boolean } {
+  const choice =
+    task?.agentModels?.[agent.id] ??
+    (task?.offloadConnectionId ? { connectionId: task.offloadConnectionId, model: null } : null);
+  const connectionId = choice ? choice.connectionId : agent.connectionId;
+  const c = connections.find((x) => x.id === connectionId);
+  const model = (choice ? choice.model : agent.model) ?? 'default model';
+  return { text: c ? `${model} · ${c.name}` : `${model} · Ollama`, forProject: Boolean(choice) };
 }
 
 const ACTIVE: ReadonlySet<StepStatus> = new Set(['running', 'judging']);
@@ -135,9 +144,15 @@ export function TeamPanel({
                     {done}/{mine.length}
                   </span>{' '}
                   tasks done ·{' '}
-                  <a href="#/agents" title="Change the model on the Agents page">
-                    {modelOf(a, connections)}
-                  </a>
+                  {modelOf(a, connections, task).forProject ? (
+                    <span title="Set for this project">
+                      {modelOf(a, connections, task).text} (this project)
+                    </span>
+                  ) : (
+                    <a href="#/agents" title="Change the model on the Agents page">
+                      {modelOf(a, connections, task).text}
+                    </a>
+                  )}
                 </p>
               </div>
               <div className="employee-actions">

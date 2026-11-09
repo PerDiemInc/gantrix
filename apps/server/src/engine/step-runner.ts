@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { isTerminal, type StepStatus } from '@gantrix/shared';
 import { type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { Command, GraphRecursionError } from '@langchain/langgraph';
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray, sql } from 'drizzle-orm';
 import { canRetry } from '../budget.ts';
 import type { Db } from '../db/client.ts';
 import {
@@ -16,8 +16,9 @@ import {
   tasks,
 } from '../db/schema.ts';
 import { emit } from '../events.ts';
-import { resolveModelSpec } from '../models/connections.ts';
+import { agentForProject, resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
+import { changedFiles, snapshotFiles } from '../skills/file-changes.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
 import {
@@ -52,9 +53,12 @@ type AgentInput = Parameters<StepAgent['invoke']>[0];
 // queued: a new attempt or a resume after approval. running/judging: BullMQ retrying after a crash.
 const RUNNABLE: ReadonlySet<StepStatus> = new Set(['queued', 'running', 'judging']);
 const DEP_OUTPUT_CHARS = 4_000;
+// A job may no longer change a step in one of these: Resume or a new attempt took it over.
+const NOT_OURS: ReadonlySet<StepStatus> = new Set(['pending', 'superseded', 'cancelled']);
+const STALE_CHECK_MS = 3_000;
 
 /** Thrown before a model turn when the task has ended, so the step stops quietly. */
-class StepStopped extends Error {}
+export class StepStopped extends Error {}
 
 const clip = (text: string | null, max: number) =>
   !text ? '' : text.length > max ? `${text.slice(0, max)}\n[truncated]` : text;
@@ -76,7 +80,10 @@ export async function runStepJob(
       if (!fresh || (await execute(deps, task, fresh)) !== 'again') break;
     }
   } catch (error) {
-    if (error instanceof StepStopped) return; // the supervisor tidies up the task
+    if (error instanceof StepStopped) {
+      await closeStoppedStep(deps, step);
+      return; // the supervisor tidies up the task
+    }
     if (error instanceof GraphRecursionError) {
       const reason = `Stopped after ${MAX_MODEL_TURNS} model turns without finishing.`;
       await recordVerdict(deps, task, step, { passed: false, reason, tokens: 0 }, '');
@@ -86,6 +93,54 @@ export async function runStepJob(
   } finally {
     await deps.queues.tick(task.id);
   }
+}
+
+/** A job stopped mid-run on a stopped project: its step isn't running any more. */
+async function closeStoppedStep(deps: EngineDeps, step: Step): Promise<void> {
+  const task = await deps.db.query.tasks.findFirst({
+    columns: { status: true },
+    where: eq(tasks.id, step.taskId),
+  });
+  if (!task || !isTerminal(task.status)) return; // resumed: a new attempt owns the step now
+  await deps.db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(steps)
+      .set({ status: 'cancelled', finishedAt: new Date() })
+      .where(
+        and(
+          eq(steps.id, step.id),
+          eq(steps.attempt, step.attempt),
+          inArray(steps.status, ['running', 'judging']),
+        ),
+      )
+      .returning({ id: steps.id });
+    if (row) {
+      await emit(
+        tx,
+        step.taskId,
+        {
+          type: 'step.status',
+          stepId: step.id,
+          key: step.key,
+          status: 'cancelled',
+          attempt: step.attempt,
+        },
+        step.id,
+      );
+    }
+  });
+}
+
+/** Whether this job should give up: the project ended, or a newer attempt owns the step. */
+async function isStale(db: Db, task: Task, step: Step): Promise<boolean> {
+  const [row] = await db
+    .select({ taskStatus: tasks.status, attempt: steps.attempt, status: steps.status })
+    .from(steps)
+    .innerJoin(tasks, eq(tasks.id, steps.taskId))
+    .where(and(eq(steps.id, step.id), eq(tasks.id, task.id)));
+  return (
+    !row || isTerminal(row.taskStatus) || row.attempt !== step.attempt || NOT_OURS.has(row.status)
+  );
 }
 
 async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again' | undefined> {
@@ -147,19 +202,19 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
         await snapshotStepInput(task.workspacePath, workspace, source.id, step.attempt);
     }
   }
-  // The project's own choice for this agent wins over the agent's setting.
-  const spec = await resolveModelSpec(db, config, {
-    ...agent,
-    ...(task.agentModels?.[agent.id]
-      ? {
-          connectionId: task.agentModels[agent.id]?.connectionId ?? null,
-          model: task.agentModels[agent.id]?.model ?? null,
-          modelBaseUrl: null,
-        }
-      : {}),
-  });
+  // The project's own choice (or offload) wins over the agent's setting.
+  const spec = await resolveModelSpec(db, config, agentForProject(task, agent));
   const localCli = spec.provider === 'claude-code' || spec.provider === 'codex';
   const mcp = await openMcpTools(localCli ? {} : toolkit.mcpServers, workspace);
+  // A model turn can last 30 minutes on a CLI: Stop has to reach it during the turn.
+  const abort = new AbortController();
+  const watch = setInterval(() => {
+    void isStale(db, task, step).then(
+      (stale) => stale && abort.abort(),
+      () => {}, // a database hiccup isn't a reason to stop
+    );
+  }, STALE_CHECK_MS);
+  watch.unref();
   try {
     const graph = buildStepAgent({
       model: createChatModel(
@@ -182,12 +237,9 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
       autoApprove: toolkit.autoApprove,
       approveAll: task.approveAll,
       checkpointer,
+      signal: abort.signal,
       beforeTurn: async () => {
-        const t = await db.query.tasks.findFirst({
-          columns: { status: true },
-          where: eq(tasks.id, task.id),
-        });
-        if (!t || isTerminal(t.status)) throw new StepStopped();
+        if (await isStale(db, task, step)) throw new StepStopped();
         const pending = await db
           .select()
           .from(taskMessages)
@@ -259,7 +311,17 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     if (step.status !== 'running') {
       await setStep(db, task.id, step, 'running', step.startedAt ? {} : { startedAt: new Date() });
     }
-    if (input !== 'finished') await graph.invoke(input, run);
+    // The judge can't see inside a CLI run, so note which files it changed.
+    const filesBefore = localCli && input !== 'finished' ? await snapshotFiles(workspace) : null;
+    if (input !== 'finished') {
+      try {
+        await graph.invoke(input, run);
+      } catch (error) {
+        if (abort.signal.aborted) throw new StepStopped();
+        throw error;
+      }
+    }
+    const changed = filesBefore ? await changedFiles(workspace, filesBefore) : [];
 
     const after = await graph.getState(run);
     const { output, tokens } = summarize((after.values.messages ?? []) as BaseMessage[]);
@@ -270,7 +332,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     }
 
     await setStep(db, task.id, step, 'judging', {});
-    const workspaceFiles = await describeWorkspace(workspace, after.values.messages ?? []);
+    const workspaceFiles = await describeWorkspace(workspace, after.values.messages ?? [], changed);
     const judge = createChatModel(
       await resolveModelSpec(db, config, null),
       'judge',
@@ -285,6 +347,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     await recordVerdict(deps, task, step, verdict, output);
     return undefined;
   } finally {
+    clearInterval(watch);
     await mcp.close();
   }
 }
@@ -504,18 +567,29 @@ export async function setStep(
   status: StepStatus,
   fields: Partial<typeof steps.$inferInsert>,
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
+  const applied = await db.transaction(async (tx) => {
+    // Only this attempt, and only while it still owns the step (see NOT_OURS).
+    const [row] = await tx
       .update(steps)
       .set({ ...fields, status })
-      .where(eq(steps.id, step.id));
+      .where(
+        and(
+          eq(steps.id, step.id),
+          eq(steps.attempt, step.attempt),
+          notInArray(steps.status, [...NOT_OURS]),
+        ),
+      )
+      .returning({ id: steps.id });
+    if (!row) return false;
     await emit(
       tx,
       taskId,
       { type: 'step.status', stepId: step.id, key: step.key, status, attempt: step.attempt },
       step.id,
     );
+    return true;
   });
+  if (!applied) throw new StepStopped();
   step.status = status;
 }
 
@@ -540,10 +614,12 @@ const MAX_JUDGED_FILE_CHARS = 4_000;
 async function describeWorkspace(
   workspace: string,
   messages: readonly BaseMessage[],
+  /** Files a CLI run changed; it makes no write_file calls for us to read. */
+  changed: readonly string[] = [],
 ): Promise<string> {
   const list = fileTools(workspace).find((t) => t.name === 'list_files');
   const listing = list ? String(await list.invoke({})) : '';
-  const written = new Set<string>();
+  const written = new Set<string>(changed);
   for (const m of messages) {
     for (const call of (m as { tool_calls?: { name: string; args: { path?: unknown } }[] })
       .tool_calls ?? []) {
@@ -555,7 +631,8 @@ async function describeWorkspace(
   for (const path of [...written].slice(-MAX_JUDGED_FILES)) {
     try {
       const text = await readFile(await resolveInWorkspace(workspace, path), 'utf8');
-      contents.push(`### ${path}\n${clip(text, MAX_JUDGED_FILE_CHARS)}`);
+      if (text.includes('\0')) contents.push(`### ${path}\n(binary file)`);
+      else contents.push(`### ${path}\n${clip(text, MAX_JUDGED_FILE_CHARS)}`);
     } catch {
       contents.push(`### ${path}\n(could not be read)`);
     }

@@ -25,6 +25,7 @@ import { fileTools } from '../../skills/tools/files.ts';
 import { resolveInWorkspace } from '../../skills/workspace.ts';
 import { toConversation } from '../conversation.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
+import { requireModelFor } from '../model-checks.ts';
 import type { ApiDeps } from '../server.ts';
 
 const MAX_FILE_BYTES = 256 * 1024;
@@ -206,8 +207,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
         throw new HttpError(400, 'Some of the chosen agents do not exist.');
       }
     }
-    // Offload: the whole team runs on that local agent; a per-agent choice still wins.
-    let agentModels = input.agentModels;
+    // Offload: every agent without its own choice runs on that local agent, on this project.
+    let offloadConnectionId: string | undefined;
     if (input.offload) {
       const agent = (await detectLocalAgents()).find((a) => a.id === input.offload);
       if (!agent?.installed) {
@@ -216,14 +217,10 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
           `${agent?.label ?? input.offload} isn't installed on this machine, so the project can't be offloaded to it.`,
         );
       }
-      const connection = await ensureLocalConnection(db, input.offload);
-      const team = input.agentIds?.length
-        ? input.agentIds
-        : (await db.select({ id: agents.id }).from(agents)).map((a) => a.id);
-      agentModels = {
-        ...Object.fromEntries(team.map((id) => [id, { connectionId: connection.id, model: null }])),
-        ...input.agentModels,
-      };
+      offloadConnectionId = (await ensureLocalConnection(db, input.offload)).id;
+    }
+    for (const choice of Object.values(input.agentModels ?? {})) {
+      await requireModelFor(db, choice.connectionId, choice.model);
     }
     // Drop absent fields so they can't override the defaults with undefined.
     const budget = Object.fromEntries(
@@ -237,7 +234,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       ...(input.description ? { description: input.description } : {}),
       ...(input.name ? { name: input.name } : {}),
       ...(input.slack !== undefined ? { slack: input.slack } : {}),
-      ...(agentModels ? { agentModels } : {}),
+      ...(input.agentModels ? { agentModels: input.agentModels } : {}),
+      ...(offloadConnectionId ? { offloadConnectionId } : {}),
     });
     return reply.code(201).send(task);
   });
@@ -357,6 +355,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
   });
 
   // Whether Slack is set up, for the dashboard's switch. No tokens are returned.
+  app.get('/api/settings', async () => ({ approveAll: deps.config.GANTRIX_APPROVE_ALL }));
+
   app.get('/api/slack', async () => ({
     posts: Boolean(deps.config.SLACK_BOT_TOKEN && deps.config.SLACK_CHANNEL_ID),
     replies: Boolean(
