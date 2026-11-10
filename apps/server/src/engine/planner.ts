@@ -18,7 +18,8 @@ Rules:
 - Steps that don't need each other's results must not depend on each other (empty dependsOn),
   so they run in parallel. Add a dependency only when a step needs another step's output.
 - Each acceptance criterion must be checkable from the agent's final reply or the files it wrote.
-- Never redo finished steps. New steps may depend on finished steps' keys.`;
+- Never redo finished steps. New steps may depend on finished steps' keys.
+- When the user's note tags an agent with "@Name", give that work to that agent.`;
 
 interface TeamMember {
   id: string;

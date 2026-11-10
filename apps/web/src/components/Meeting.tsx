@@ -1,5 +1,11 @@
-import { isTerminal, type StreamEvent, type TaskDetailDto } from '@gantrix/shared';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import {
+  type AgentDto,
+  isTerminal,
+  mentionedAgents,
+  type StreamEvent,
+  type TaskDetailDto,
+} from '@gantrix/shared';
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { label } from '../format.ts';
 import { Icon, type IconName } from './Icon.tsx';
@@ -129,9 +135,12 @@ export function meetingLines(
       case 'budget.exceeded':
         say(e, 'system', 'Gantrix', `Budget exceeded (${e.limit}): ${e.detail}`);
         break;
-      case 'user.message':
-        say(e, 'you', e.stepId ? `You to ${who(e.stepId)}` : 'You to everyone', e.text);
+      case 'user.message': {
+        const tagged = mentionedAgents(e.text, [...agentNames.values()]).map((a) => a.name);
+        const to = e.stepId ? who(e.stepId) : tagged.length ? tagged.join(', ') : 'everyone';
+        say(e, 'you', `You to ${to}`, e.text);
         break;
+      }
       case 'step.edited': {
         const what = e.fields.length ? `changed ${e.fields.join(', ')} of` : 'touched';
         say(
@@ -169,6 +178,25 @@ const OPEN_STEP = new Set([
   'delegating',
 ]);
 
+/** The "@partial" being typed just before the caret, or undefined when there is none. */
+export function mentionQuery(
+  text: string,
+  caret: number,
+): { start: number; query: string } | undefined {
+  const match = /(?:^|[^\p{L}\p{N}_.])@([^@\n]{0,40})$/u.exec(text.slice(0, caret));
+  if (!match) return undefined;
+  const query = match[1] ?? '';
+  return { start: caret - query.length - 1, query };
+}
+
+/** The project's agents whose name starts with what was typed after "@". */
+export function mentionOptions<A extends { name: string }>(team: readonly A[], query: string): A[] {
+  const q = query.toLowerCase();
+  return team.filter((a) => a.name.toLowerCase().startsWith(q)).slice(0, 8);
+}
+
+type TeamMember = Pick<AgentDto, 'id' | 'name'> & { avatar?: string | null };
+
 function Composer({
   task,
   agentNames,
@@ -183,7 +211,21 @@ function Composer({
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mention, setMention] = useState<{ start: number; query: string }>();
+  const [highlight, setHighlight] = useState(0);
+  const input = useRef<HTMLTextAreaElement>(null);
   const open = task.steps.filter((s) => OPEN_STEP.has(s.status));
+  const team: TeamMember[] = [...agentNames.entries()]
+    .filter(([id]) => !task.agentIds?.length || task.agentIds.includes(id))
+    .map(([id, a]) => ({ id, ...a }));
+  const options = mention ? mentionOptions(team, mention.query) : [];
+  const tagged = to ? [] : mentionedAgents(text, team);
+  const taggedSteps = tagged.length === 1 ? open.filter((s) => s.agentId === tagged[0]?.id) : [];
+  const route = !tagged.length
+    ? ''
+    : taggedSteps.length === 1
+      ? `Goes to ${tagged[0]?.name} on ${taggedSteps[0]?.key}.`
+      : `The planner gives this to ${tagged.map((a) => a.name).join(', ')}.`;
   if (isTerminal(task.status)) {
     return (
       <p className="muted small">
@@ -200,10 +242,51 @@ function Composer({
     try {
       await api.post(`/api/tasks/${task.id}/messages`, { text, ...(to ? { stepId: to } : {}) });
       setText('');
+      setMention(undefined);
     } catch (err) {
       setError((err as Error).message);
     }
     setBusy(false);
+  };
+  const track = (value: string, caret: number) => {
+    setText(value);
+    setMention(mentionQuery(value, caret));
+    setHighlight(0);
+  };
+  const pick = (agent: TeamMember) => {
+    if (!mention) return;
+    const end = mention.start + 1 + mention.query.length;
+    const insert = `@${agent.name} `;
+    const next = text.slice(0, mention.start) + insert + text.slice(end);
+    setText(next);
+    setMention(undefined);
+    const caret = mention.start + insert.length;
+    requestAnimationFrame(() => {
+      input.current?.focus();
+      input.current?.setSelectionRange(caret, caret);
+    });
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (options.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        setHighlight((h) => (h + step + options.length) % options.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const agent = options[highlight];
+        if (agent) pick(agent);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMention(undefined);
+        return;
+      }
+    }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send(e);
   };
   return (
     <form className="composer" onSubmit={(e) => void send(e)}>
@@ -222,22 +305,52 @@ function Composer({
       <label className="sr-only" htmlFor="chat-text">
         Message
       </label>
-      <textarea
-        id="chat-text"
-        rows={2}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={
-          to
-            ? 'A note for this agent; it reads it before its next turn.'
-            : 'Change the plan, add a requirement, correct a mistake…'
-        }
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send(e);
-        }}
-      />
+      <div className="mention-field">
+        <textarea
+          id="chat-text"
+          ref={input}
+          rows={2}
+          value={text}
+          onChange={(e) => track(e.target.value, e.target.selectionStart)}
+          onBlur={() => setMention(undefined)}
+          placeholder={
+            to
+              ? 'A note for this agent; it reads it before its next turn.'
+              : 'Change the plan, add a requirement, correct a mistake… Type @ to tag an agent.'
+          }
+          role="combobox"
+          aria-expanded={options.length > 0}
+          aria-controls="chat-mentions"
+          aria-autocomplete="list"
+          aria-activedescendant={options.length ? `chat-mention-${highlight}` : undefined}
+          onKeyDown={onKeyDown}
+        />
+        {options.length > 0 && (
+          <div id="chat-mentions" className="mention-list" role="listbox" aria-label="Agents">
+            {options.map((a, i) => (
+              <div
+                key={a.id}
+                id={`chat-mention-${i}`}
+                role="option"
+                tabIndex={-1}
+                aria-selected={i === highlight}
+                className={`mention-option${i === highlight ? ' active' : ''}`}
+                // mousedown, not click: a click would blur the textarea and close the list first
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(a);
+                }}
+                onMouseEnter={() => setHighlight(i)}
+              >
+                <Avatar name={a.name} avatar={a.avatar ?? null} size={20} />
+                {a.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="composer-foot">
-        <span className="muted small">Ctrl or Cmd + Enter sends</span>
+        <span className="muted small">{route || 'Ctrl or Cmd + Enter sends'}</span>
         <button type="submit" className="primary" disabled={busy || !text.trim()}>
           <Icon name="send" size={14} /> {busy ? 'Sending…' : 'Send'}
         </button>
