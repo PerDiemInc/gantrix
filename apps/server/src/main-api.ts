@@ -30,7 +30,9 @@ const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRI
 await app.listen({ host: config.GANTRIX_HOST, port: config.GANTRIX_PORT });
 
 // Sites published by deploy_site, on their own origin (see preview.ts).
-const preview = createPreviewServer(config.GANTRIX_SITES_DIR);
+const preview = createPreviewServer(config.GANTRIX_SITES_DIR, {
+  checkHost: ['127.0.0.1', 'localhost', '::1'].includes(config.GANTRIX_HOST),
+});
 preview.on('error', (error) => console.error(`Preview server: ${error.message}`));
 preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 

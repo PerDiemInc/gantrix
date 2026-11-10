@@ -1,4 +1,6 @@
-import { lookup } from 'node:dns/promises';
+import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
@@ -23,6 +25,8 @@ for (const [net, prefix] of [
 }
 for (const [net, prefix] of [
   ['::', 128],
+  ['64:ff9b::', 96], // NAT64: reaches IPv4 addresses
+  ['2002::', 16], // 6to4: embeds an IPv4 address
   ['::1', 128],
   ['fc00::', 7],
   ['fe80::', 10],
@@ -34,32 +38,85 @@ for (const [net, prefix] of [
 const isBlocked = (address: string): boolean =>
   blocked.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
 
-// Checks the address before each request. A DNS answer that changes between this check and
-// the request can slip through; web_fetch needs approval unless a skill allows it.
-async function assertPublic(url: URL): Promise<void> {
+// Literal IP hosts never go through DNS, so they're checked here.
+function assertAllowedUrl(url: URL): void {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new ToolError('Only http and https URLs are allowed.');
   }
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map((a) => a.address);
-  if (addresses.some(isBlocked)) {
+  if (isIP(host) && isBlocked(host)) {
     throw new ToolError(`${url.hostname} is a private or local address; refusing to fetch it.`);
   }
 }
 
-async function readCapped(response: Response): Promise<string> {
-  const reader = response.body?.getReader();
-  if (!reader) return '';
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (total < MAX_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  await reader.cancel();
-  return Buffer.concat(chunks).subarray(0, MAX_BYTES).toString('utf8');
+/**
+ * The DNS lookup the socket itself uses. Checking here, not before the request, means the
+ * address that's checked is the address that's connected to: a name that answers with a public
+ * address first and 127.0.0.1 the second time can't slip through.
+ */
+const publicLookup = ((
+  hostname: string,
+  options: { all?: boolean; family?: number },
+  callback: (error: Error | null, address: string | LookupAddress[], family?: number) => void,
+) => {
+  dnsLookup(hostname, { ...options, all: true }, (error, addresses) => {
+    if (error) return callback(error, '');
+    const list = addresses as LookupAddress[];
+    if (!list.length || list.some((a) => isBlocked(a.address))) {
+      return callback(
+        new ToolError(`${hostname} is a private or local address; refusing to fetch it.`),
+        '',
+      );
+    }
+    if (options.all) return callback(null, list);
+    const [first] = list;
+    callback(null, first?.address ?? '', first?.family);
+  });
+}) as unknown as typeof dnsLookup;
+
+interface Fetched {
+  status: number;
+  headers: IncomingMessage['headers'];
+  body: string;
+}
+
+function get(url: URL): Promise<Fetched> {
+  return new Promise((resolve, reject) => {
+    const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
+      url,
+      {
+        method: 'GET',
+        lookup: publicLookup,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        headers: {
+          'user-agent': 'Gantrix/0.1 (+https://github.com/PerDiemInc/gantrix)',
+          'accept-encoding': 'identity',
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        const done = () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            headers: res.headers,
+            body: Buffer.concat(chunks).subarray(0, MAX_BYTES).toString('utf8'),
+          });
+        res.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+          total += chunk.byteLength;
+          if (total >= MAX_BYTES) {
+            res.destroy();
+            done();
+          }
+        });
+        res.on('end', done);
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 function htmlToText(html: string): string {
@@ -82,22 +139,18 @@ export function webFetchTool() {
       asToolResult(async () => {
         let current = new URL(url);
         for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-          await assertPublic(current);
-          const response = await fetch(current, {
-            redirect: 'manual',
-            signal: AbortSignal.timeout(TIMEOUT_MS),
-            headers: { 'user-agent': 'Gantrix/0.1 (+https://github.com/PerDiemInc/gantrix)' },
-          });
-          const location = response.headers.get('location');
+          assertAllowedUrl(current);
+          const response = await get(current);
+          const location = response.headers.location;
           if (response.status >= 300 && response.status < 400 && location) {
-            current = new URL(location, current);
+            current = new URL(location, current); // each hop is checked again
             continue;
           }
-          const type = response.headers.get('content-type') ?? '';
+          const type = response.headers['content-type'] ?? '';
           if (!/^(text\/|application\/(json|xml|xhtml))/.test(type)) {
             throw new ToolError(`Unsupported content type "${type || 'unknown'}".`);
           }
-          const body = await readCapped(response);
+          const body = response.body;
           const text = type.includes('html') ? htmlToText(body) : body;
           const clipped =
             text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n[truncated]` : text;

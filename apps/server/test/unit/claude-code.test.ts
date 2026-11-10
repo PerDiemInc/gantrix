@@ -31,7 +31,7 @@ describe('ClaudeCodeChatModel', () => {
     });
     const reply = await model.invoke([
       new SystemMessage('You are the CTO.'),
-      new HumanMessage('Write notes.'),
+      new HumanMessage('- Write notes.'), // starts with "-": must not be read as an option
     ]);
 
     expect(reply.content).toBe('Wrote claude-notes.md.');
@@ -40,10 +40,11 @@ describe('ClaudeCodeChatModel', () => {
     const call = JSON.parse((await readFile(log, 'utf8')).trim());
     expect(call.cwd).toBe(await import('node:fs/promises').then((f) => f.realpath(dir)));
     expect(call.hasToken).toBe(false);
+    expect(call.prompt).toBe('- Write notes.'); // on stdin
+    expect(call.args).not.toContain('- Write notes.');
     expect(call.args).toEqual(
       expect.arrayContaining([
         '-p',
-        'Write notes.',
         '--model',
         'sonnet',
         '--append-system-prompt',

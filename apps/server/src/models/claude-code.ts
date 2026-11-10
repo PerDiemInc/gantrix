@@ -85,8 +85,7 @@ export function claudeArgs(o: {
   const tools = o.approveAll ? CLAUDE_CODE_GOD_MODE_TOOLS : CLAUDE_CODE_SAFE_TOOLS;
   const list = tools.join(',');
   return [
-    '-p',
-    o.prompt,
+    '-p', // the prompt comes on stdin: as an argument, text starting with "-" would be an option
     '--output-format',
     'json',
     '--no-session-persistence',
@@ -127,7 +126,7 @@ export class ClaudeCodeChatModel extends BaseChatModel {
   ): Promise<ChatResult> {
     const { system, prompt } = toPrompt(messages);
     const stdout = await new Promise<string>((resolve, reject) => {
-      execFile(
+      const child = execFile(
         this.#o.bin ?? process.env.CLAUDE_CODE_BIN ?? 'claude',
         claudeArgs({ model: this.#o.model, approveAll: this.#o.approveAll, system, prompt }),
         {
@@ -148,6 +147,8 @@ export class ClaudeCodeChatModel extends BaseChatModel {
           } else resolve(out);
         },
       );
+      child.stdin?.on('error', () => {}); // it may exit before reading everything
+      child.stdin?.end(prompt);
     });
     const r = parseResult(stdout);
     if (r.is_error) throw new Error(`Claude Code: ${r.result ?? 'unknown error'}`);

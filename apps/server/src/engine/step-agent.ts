@@ -13,7 +13,7 @@ import {
   StateGraph,
 } from '@langchain/langgraph';
 import { tokensUsed } from '../models/provider.ts';
-import { requiresApproval } from '../skills/policy.ts';
+import { alwaysAsks, requiresApproval } from '../skills/policy.ts';
 import { ASK_USER } from '../skills/tools/ask.ts';
 import { DELEGATE } from '../skills/tools/delegate.ts';
 
@@ -83,7 +83,7 @@ export function buildStepAgent(o: StepAgentOptions) {
         : 'The user skipped this question. Make a sensible assumption, say what you assumed, and go on.';
     }
     const gated = requiresApproval(call.name, o.autoApprove);
-    if (gated && !o.approveAll) {
+    if ((gated && !o.approveAll) || alwaysAsks(call.name)) {
       // Everything above this line re-runs on resume, so it must have no side effects.
       const decision = interrupt<ApprovalRequest, ApprovalDecision>({
         tool: call.name,
@@ -93,7 +93,7 @@ export function buildStepAgent(o: StepAgentOptions) {
         return 'The user denied this tool call. Continue without it, or say what you need.';
       }
     }
-    await o.onToolCall(call.name, call.args, gated);
+    await o.onToolCall(call.name, call.args, gated && !alwaysAsks(call.name));
     try {
       const result = await tool.invoke(call.args);
       return typeof result === 'string' ? result : JSON.stringify(result);

@@ -1,6 +1,9 @@
 import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
+import { hostnameOf } from './api/auth.ts';
+
+const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -47,8 +50,16 @@ export async function resolveSitePath(root: string, urlPath: string): Promise<st
  * Serves sites published with deploy_site, on their own port: a site runs on a different
  * origin from the dashboard, so its scripts can't read the dashboard's token.
  */
-export function createPreviewServer(sitesDir: string): Server {
+export function createPreviewServer(
+  sitesDir: string,
+  o: { checkHost: boolean } = { checkHost: true },
+): Server {
   return createServer(async (req, res) => {
+    // A page that rebinds its own domain to 127.0.0.1 sends that domain as Host.
+    if (o.checkHost && !LOOPBACK.has(hostnameOf(req.headers.host ?? '').toLowerCase())) {
+      res.writeHead(421, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Unexpected Host');
+      return;
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -71,7 +82,8 @@ export function createPreviewServer(sitesDir: string): Server {
     }
     // "/name" → "/name/" so relative links inside the site work.
     const first = url.split('?')[0] ?? '';
-    if (/^\/[^/]+$/.test(first)) {
+    if (/^\/[a-z0-9][a-z0-9-]*$/i.test(first)) {
+      // a site name only: "/\\evil.com" isn't one
       res.writeHead(301, { Location: `${first}/` }).end();
       return;
     }

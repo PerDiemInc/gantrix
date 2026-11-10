@@ -206,9 +206,14 @@ describe('slack', () => {
 
     e.fake.script.worker = () => 'Everything is done: notes.md was written.';
     expect(await mention('what is left?', 'USTRANGER')).toContain('Everything is done');
-    // The model saw the project's facts.
+    // The model saw the project's overview, but not step outputs or tool calls: USTRANGER
+    // can't steer, and those never appear in the thread.
     const asked = e.fake.bodies.at(-1)?.messages.at(-1)?.content ?? '';
     expect(asked).toContain('Project: Launch notes');
     expect(asked).toContain('Question: what is left?');
+    expect(asked).not.toContain('Recent activity');
+    expect(asked).not.toContain('Result:');
+    await mention('what is left?');
+    expect(e.fake.bodies.at(-1)?.messages.at(-1)?.content ?? '').toContain('Recent activity');
   });
 });

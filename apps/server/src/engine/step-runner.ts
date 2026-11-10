@@ -166,10 +166,10 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
           delegateTool(
             (
               await db
-                .select({ name: agents.name, description: agents.description })
+                .select({ id: agents.id, name: agents.name, description: agents.description })
                 .from(agents)
                 .where(ne(agents.id, agent.id))
-            ).filter((a) => a.name),
+            ).filter((a) => !task.agentIds?.length || task.agentIds.includes(a.id)),
             workspace !== task.workspacePath ? step.id : undefined,
           ),
         ]

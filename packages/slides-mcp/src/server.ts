@@ -25,6 +25,12 @@ export function createServer(api: SlidesApi) {
       description:
         "Create a new, empty Google Slides deck in the user's Drive. Returns its id and link.",
       inputSchema: { title: z.string().min(1).max(200) },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     ({ title }) =>
       run(async () => {
@@ -49,6 +55,12 @@ export function createServer(api: SlidesApi) {
         background: HEX.optional(),
         text_color: HEX.optional(),
         index: z.number().int().min(0).optional().describe('0-based position; default: at the end'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
       },
     },
     (a) =>
@@ -83,6 +95,7 @@ export function createServer(api: SlidesApi) {
     {
       description: 'List the slides of a deck with their text, to check the result.',
       inputSchema: { presentation_id: z.string().min(5) },
+      annotations: { readOnlyHint: true, openWorldHint: true },
     },
     ({ presentation_id }) =>
       run(async () => {

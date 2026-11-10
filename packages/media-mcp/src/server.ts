@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MediaConfig } from './config.ts';
@@ -69,6 +72,8 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
     {
       description:
         'List the image and video models you may use here, with their licences and defaults.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () =>
       text(
@@ -111,13 +116,24 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
             'how much to change from_image. 0.3-0.8 (default 0.8) = variations that keep its layout and colours; 0.95+ = a new picture loosely based on it. It cannot keep the subject while changing the scene.',
           ),
       },
+      // Writes a file in the workspace; a local model server does the work.
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     (args) =>
       run(async () => {
         const model = pick('image', args.model, Boolean(args.from_image));
         const out = await outputPath(args.path, IMAGE_EXTS);
-        // Models save PNG; other formats are converted afterwards.
-        const png = out.toLowerCase().endsWith('.png') ? out : `${out}.tmp.png`;
+        // Models save PNG; other formats are converted afterwards, from a private temp folder
+        // (a name next to the output could be a symlink planted in the workspace).
+        const tmp = out.toLowerCase().endsWith('.png')
+          ? null
+          : await mkdtemp(join(tmpdir(), 'gx-media-'));
+        const png = tmp ? join(tmp, 'image.png') : out;
         const from = args.from_image ? await inputImage(args.from_image) : undefined;
         const t = Date.now();
         const r = await providers[model.provider]().image(
@@ -131,7 +147,13 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
           },
           png,
         );
-        if (png !== out) await convertImage(png, out);
+        if (tmp) {
+          try {
+            await convertImage(png, out);
+          } finally {
+            await rm(tmp, { recursive: true, force: true });
+          }
+        }
         return withWarning(
           model,
           `Saved ${args.path} (${r.width}×${r.height}) with ${model.id} in ${took(Date.now() - t)}.`,
@@ -162,6 +184,13 @@ export function createServer(cfg: MediaConfig, providers: Record<ProviderId, () 
           .describe(
             'fast 640x352 (~1.5 min per 2 s), standard 832x480 (~3.5 min, default), high 1280x704 (~12 min on 48 GB RAM); use high only when asked',
           ),
+      },
+      // Writes a file in the workspace; a local model server does the work.
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
       },
     },
     (args) =>

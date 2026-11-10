@@ -48,11 +48,14 @@ export async function startDelegations(
       continue;
     }
     const args = parsed.data;
-    const all = await tx.select({ id: agents.id, name: agents.name }).from(agents);
+    // Only the project's team: the user's choice of agents is a boundary for hand-offs too.
+    const all = (await tx.select({ id: agents.id, name: agents.name }).from(agents)).filter(
+      (a) => !task.agentIds?.length || task.agentIds.includes(a.id),
+    );
     const target = all.find((a) => a.name.toLowerCase() === args.agent.trim().toLowerCase());
     if (!target) {
       await refuse(
-        `Error: there is no agent named "${args.agent}". Agents: ${all.map((a) => a.name).join(', ')}.`,
+        `Error: there is no agent named "${args.agent}" on this project's team. Team: ${all.map((a) => a.name).join(', ')}.`,
       );
       continue;
     }

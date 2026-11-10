@@ -83,6 +83,29 @@ describe('delegation (sub-agents)', () => {
     ).toBe(0);
   });
 
+  it("can't hand work to an agent outside the project's team", async () => {
+    const lead = await e.addAgent('researcher', ['delegate']);
+    await e.addAgent('devops', ['shell']);
+    e.fake.script.plan = () => ({ steps: [step('research', 'researcher')] });
+    const leadSaw: string[] = [];
+    let offered: string[] = [];
+    e.fake.script.worker = ({ toolResults, tools }) => {
+      offered = tools;
+      if (!toolResults.length) return handOff('devops', 'Run this command');
+      leadSaw.push(toolResults.at(-1) ?? '');
+      return 'Done without it.';
+    };
+    const task = await createTask(e.deps, {
+      goal: 'Research',
+      agentIds: [lead.id],
+      approveAll: true,
+    });
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
+    expect(offered).toContain('delegate');
+    expect(leadSaw[0]).toContain(`no agent named "devops" on this project's team`);
+    expect(await stepsOf(task.id)).toHaveLength(1);
+  });
+
   it('answers a bad hand-off at once and the lead carries on', async () => {
     await e.addAgent('deployer', ['delegate']);
     e.fake.script.plan = () => ({ steps: [step('deploy', 'deployer')] });

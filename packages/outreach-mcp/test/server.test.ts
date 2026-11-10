@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -110,5 +110,52 @@ describe('send_email', () => {
     const r = await call('send_email', { to: 'c@three.com', subject: 'Hello there', body: BODY });
     expect(r.text).toContain('daily limit of 2');
     expect(sent).toHaveLength(2);
+  });
+
+  it('refuses a subject with a line break, which used to hide the send from the log', async () => {
+    await connect();
+    const r = await call('send_email', { to: 'a@x.com', subject: 'Quick\nquestion', body: BODY });
+    expect(r.isError).toBe(true);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('refuses to send when the log has a line it cannot read', async () => {
+    await connect();
+    await mkdir(join(dir, '.gantrix', 'outreach'), { recursive: true });
+    await writeFile(join(dir, '.gantrix', 'outreach', 'sent.csv'), 'not a row\n');
+    const r = await call('send_email', { to: 'a@x.com', subject: 'Hello there', body: BODY });
+    expect(r).toMatchObject({ isError: true });
+    expect(r.text).toContain("Can't read a line of the send log");
+    expect(sent).toHaveLength(0);
+  });
+
+  it('keeps the caps when many sends arrive at once', async () => {
+    await connect(); // daily limit 2
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        call('send_email', { to: `p${i % 2}@x.com`, subject: 'Hello there', body: BODY }),
+      ),
+    );
+    expect(sent).toHaveLength(2);
+    expect(results.filter((r) => !r.isError)).toHaveLength(2);
+  });
+
+  it('blocks +tag addresses and subdomains of a blocked company', async () => {
+    await connect();
+    await call('add_do_not_contact', { email: 'boss@example.org', reason: 'asked' });
+    await call('add_do_not_contact', { email: '@acme.com', reason: 'asked' });
+    for (const to of ['boss+1@example.org', 'x@mail.acme.com']) {
+      const r = await call('send_email', { to, subject: 'Hello there', body: BODY });
+      expect(r.text).toContain('do-not-contact');
+    }
+    expect(sent).toHaveLength(0);
+  });
+
+  it('marks its tools read-only or not for clients', async () => {
+    await connect();
+    const { tools } = await client.listTools();
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t.annotations]));
+    expect(byName.check_contact?.readOnlyHint).toBe(true);
+    expect(byName.send_email?.destructiveHint).toBe(true);
   });
 });

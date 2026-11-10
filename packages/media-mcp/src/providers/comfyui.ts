@@ -13,6 +13,9 @@ import {
 } from '../types.ts';
 
 const POLL_MS = 3_000;
+// A job that never finishes (ComfyUI restarted, the job was dropped) mustn't hold a step forever.
+const IMAGE_TIMEOUT_MS = 15 * 60_000;
+const VIDEO_TIMEOUT_MS = 60 * 60_000;
 const FPS = 24;
 
 // Frame sizes per quality (multiples of 32). On a 48 GB M5 Pro a 2 s 16:9 clip took about
@@ -240,7 +243,8 @@ export class ComfyUI implements Provider {
   }
 
   /** Queues a graph, waits for it to finish, and returns the first file it saved. */
-  async #run(graph: Graph, what: string): Promise<SavedFile> {
+  async #run(graph: Graph, what: string, timeoutMs: number): Promise<SavedFile> {
+    const deadline = Date.now() + timeoutMs;
     const queued = await this.#fetch('/prompt', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -257,6 +261,14 @@ export class ComfyUI implements Provider {
       const h = (await (await this.#fetch(`/history/${id}`)).json()) as Record<string, History>;
       entry = h[id];
       if (entry?.status?.completed || entry?.status?.status_str === 'error') break;
+      if (!entry && !(await this.#queued(id))) {
+        throw new MediaError(`ComfyUI lost the ${what} job (restarted or cancelled?). Try again.`);
+      }
+      if (Date.now() > deadline) {
+        throw new MediaError(
+          `The ${what} job took longer than ${Math.round(timeoutMs / 60_000)} minutes; stopped waiting.`,
+        );
+      }
       await sleep(POLL_MS);
     }
     if (entry.status?.status_str === 'error') {
@@ -268,6 +280,16 @@ export class ComfyUI implements Provider {
     const file = Object.values(entry.outputs ?? {}).flatMap((o) => o.images ?? [])[0];
     if (!file) throw new MediaError(`ComfyUI finished the ${what} but saved nothing.`);
     return file;
+  }
+
+  /** Whether a job is still running or waiting in ComfyUI's queue. */
+  async #queued(id: string): Promise<boolean> {
+    const q = (await (await this.#fetch('/queue')).json().catch(() => null)) as {
+      queue_running?: unknown[][];
+      queue_pending?: unknown[][];
+    } | null;
+    if (!q) return true; // can't tell: keep waiting until the deadline
+    return [...(q.queue_running ?? []), ...(q.queue_pending ?? [])].some((j) => j[1] === id);
   }
 
   async #download(file: SavedFile, out: string): Promise<void> {
@@ -305,7 +327,7 @@ export class ComfyUI implements Provider {
         ...(req.fromImage ? { baseImage: await this.#upload(req.fromImage) } : {}),
         ...(req.strength === undefined ? {} : { strength: req.strength }),
       });
-      await this.#download(await this.#run(graph, 'Z-Image'), out);
+      await this.#download(await this.#run(graph, 'Z-Image', IMAGE_TIMEOUT_MS), out);
       return { width, height };
     } finally {
       await this.#free();
@@ -327,7 +349,7 @@ export class ComfyUI implements Provider {
         seed: req.seed ?? randomSeed(),
         ...(req.fromImage ? { startImage: await this.#upload(req.fromImage) } : {}),
       });
-      const file = await this.#run(graph, 'Wan video');
+      const file = await this.#run(graph, 'Wan video', VIDEO_TIMEOUT_MS);
       await this.#download(file, out);
       return {
         width: file.metadata?.width ?? width,

@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 /** Marks a project whose steps each get their own folder (see step-workspace.ts). */
@@ -34,9 +34,22 @@ export async function createWorkspace(
 export async function resolveInWorkspace(workspace: string, input: string): Promise<string> {
   const root = await realpath(workspace);
   const target = resolve(root, input);
-  let existing = target; // the deepest part of the path that exists, so a symlink can't lead out
-  while (!(await pathExists(existing))) existing = dirname(existing);
-  const real = join(await realpath(existing), relative(existing, target));
+  // The deepest part of the path that exists, so a symlink can't lead out. lstat: a symlink
+  // whose target doesn't exist yet still counts, or writing through it would create the target
+  // wherever it points.
+  let existing = target;
+  while (
+    !(await lstat(existing).then(
+      () => true,
+      () => false,
+    ))
+  )
+    existing = dirname(existing);
+  const resolved = await realpath(existing).catch(() => null);
+  if (!resolved) {
+    throw new ToolError(`Path "${input}" goes through a broken symlink.`);
+  }
+  const real = join(resolved, relative(existing, target));
   if (real !== root && !real.startsWith(root + sep)) {
     throw new ToolError(`Path "${input}" is outside the task workspace.`);
   }

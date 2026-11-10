@@ -10,7 +10,12 @@ export const minutesSince = (from: Date, to: Date = new Date()) =>
   Math.max(0, Math.round((to.getTime() - from.getTime()) / 60_000));
 
 /** Everything about a project a question could be about, as plain text for a model. */
-export async function projectFacts(db: Db, task: Task): Promise<string> {
+export async function projectFacts(
+  db: Db,
+  task: Task,
+  /** False for people who may not steer: no step outputs, tool calls or raw events. */
+  detailed = true,
+): Promise<string> {
   const [all, team, pending, recent] = await Promise.all([
     db.select().from(steps).where(eq(steps.taskId, task.id)).orderBy(asc(steps.createdAt)),
     db.select({ id: agents.id, name: agents.name, description: agents.description }).from(agents),
@@ -40,13 +45,15 @@ export async function projectFacts(db: Db, task: Task): Promise<string> {
     `Tasks in the current plan (v${latest}):`,
     ...current.map(
       (s) =>
-        `- ${s.title} [${s.status}] by ${name.get(s.agentId ?? '') ?? 'unassigned'}${s.output ? `. Result: ${clip(s.output, 400)}` : ''}${s.error ? `. Error: ${clip(s.error, 200)}` : ''}`,
+        `- ${s.title} [${s.status}] by ${name.get(s.agentId ?? '') ?? 'unassigned'}${detailed && s.output ? `. Result: ${clip(s.output, 400)}` : ''}${detailed && s.error ? `. Error: ${clip(s.error, 200)}` : ''}`,
     ),
     pending.length
       ? `Waiting for the user:\n${pending.map((a) => `- ${a.tool === 'ask_user' ? `question: ${String(a.args.question ?? '')}` : `approval for ${a.tool}`}`).join('\n')}`
       : '',
-    task.result ? `Final result: ${clip(task.result, 1200)}` : '',
-    `Recent activity, newest first:\n${recent.map((e) => `- ${e.at.toISOString()} ${e.type} ${clip(JSON.stringify(e.payload), 160)}`).join('\n')}`,
+    detailed && task.result ? `Final result: ${clip(task.result, 1200)}` : '',
+    !detailed
+      ? ''
+      : `Recent activity, newest first:\n${recent.map((e) => `- ${e.at.toISOString()} ${e.type} ${clip(JSON.stringify(e.payload), 160)}`).join('\n')}`,
   ]
     .filter(Boolean)
     .join('\n');

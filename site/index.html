@@ -296,8 +296,8 @@ npm run gantrix -- example website</pre></div>
         </table>
       </div>
       <ul class="safety">
-        <li><b>Email with guardrails.</b> Every CRO email carries an unsubscribe line and your postal address. Turn on Ask first to approve each send.</li>
-        <li><b>No spam by design.</b> There's a daily cap, at most three emails per person, a do-not-contact list, and SMS stays draft-only.</li>
+        <li><b>Email with guardrails.</b> Every CRO email waits for your approval, even with approvals off, and carries an unsubscribe line and your postal address.</li>
+        <li><b>No spam by design.</b> There's a daily cap, at most three emails per person, a do-not-contact list that also covers +tags and subdomains, and SMS stays draft-only.</li>
         <li><b>Decks land in Google Slides.</b> The designer builds them in your Drive with access only to the decks it creates.</li>
         <li><b>Every agent has a face.</b> Each one gets a Gant avatar you can swap for another, or for your own picture.</li>
         <li><b>Security stays in scope.</b> The CISO tests only what you name as yours, and every shell command asks first.</li>
@@ -349,10 +349,10 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
           <li><b>Approvals when you want them.</b> Agents run every tool on their own by default. Turn on Ask me before risky tools, or use <code>--ask</code>, and shell, web, MCP and email calls wait; only that step pauses.</li>
           <li><b>Shell isn't sandboxed.</b> It can do anything your user account can. Without approvals, give agents shell only for goals and skills you trust.</li>
           <li><b>Everything is logged.</b> Every tool call shows in the project's chat and Logs page, approved or not.</li>
-          <li><b>Web pages can talk back.</b> Fetched text can try to steer an agent. Approval is where you catch it.</li>
+          <li><b>Web pages can talk back.</b> Fetched text can try to steer an agent. It can only hand work to agents on the project's team, web fetches can't reach private addresses, and approval is where you catch the rest.</li>
         </ul>
         <ul class="safety">
-          <li><b>Local only.</b> The API listens on 127.0.0.1 and needs your token on every request; tokens are never accepted in URLs.</li>
+          <li><b>Local only.</b> The API listens on 127.0.0.1, needs your token on every request and answers only to localhost, so a web page can't reach it by rebinding its domain. Tokens are never accepted in URLs.</li>
           <li><b>No secrets for tools.</b> Shell commands, MCP servers and local Claude or ChatGPT runs don't get the server's environment, so they can't read API keys, the token or the database password.</li>
           <li><b>Confined files.</b> File tools can't leave the task's folder, through <code>..</code>, absolute paths or symlinks.</li>
           <li><b>Separate folders per step (optional).</b> With <code>GANTRIX_ISOLATED_STEPS=true</code> each step works in its own folder with copies of what it builds on, so agents can't overwrite each other's files. It isn't a sandbox for shell.</li>

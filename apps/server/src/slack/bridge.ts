@@ -405,7 +405,7 @@ export class SlackBridge {
       await resumeTask(this.#deps, task.id);
       return;
     }
-    await reply(await this.#answer(task, text));
+    await reply(await this.#answer(task, text, allowed));
   }
 
   async #changeTeam(task: Task, op: 'add' | 'remove', names: string): Promise<string> {
@@ -431,9 +431,9 @@ export class SlackBridge {
     return `${verb} ${found.map((a) => `*${a.name}*`).join(', ')}.${missing.length ? ` I don't know ${missing.join(', ')}.` : ''}${op === 'add' ? ' They pick up work from the next plan, or reassign a task to them.' : ''}`;
   }
 
-  async #answer(task: Task, question: string): Promise<string> {
+  async #answer(task: Task, question: string, detailed: boolean): Promise<string> {
     const { db, config } = this.#deps;
-    const facts = await projectFacts(db, task);
+    const facts = await projectFacts(db, task, detailed);
     const model = createChatModel(
       await resolveModelSpec(db, config, null),
       'planner',

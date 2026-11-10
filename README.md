@@ -343,8 +343,10 @@ itself. For AWS or GCP it uses the `delegate` tool to hand a sub-task to `aws-en
 `gcp-engineer`, which write Terraform in `infra/aws/` or `infra/gcp/`, check it and run
 `terraform plan`. The sub-task appears on the board as "sub-task for …", with its own
 conversation and review. `devops` waits while it runs, then carries on with the result.
-`terraform apply`, paid resources, DNS and anything destructive wait for your yes (`ask_user`),
-even with approvals off. The CLIs (`supabase`, `heroku`, `vercel`, `fly`, `terraform`,
+The skills tell the agents to ask you (`ask_user`) before `terraform apply`, paid resources, DNS
+and anything destructive. That's an instruction to the model, not a lock: they run these
+commands through `shell`, which runs without asking unless the project asks first. For real
+cloud accounts, turn on "Ask me before risky tools" so every command waits for you. The CLIs (`supabase`, `heroku`, `vercel`, `fly`, `terraform`,
 `aws`, `gcloud`…) must be installed and logged in by you; the agents never handle keys.
 
 ```bash
@@ -353,8 +355,10 @@ npm run gantrix -- run --agents devops,aws-engineer "Deploy site/ to AWS as a st
 ```
 
 **Any agent can have sub-agents.** Add `delegate` to a skill's `tools` and its agent can hand
-self-contained sub-tasks to any other agent and wait for the result. Rules:
+self-contained sub-tasks to another agent on the project's team and wait for the result. Rules:
 
+- Only agents on the project's team can get a sub-task. If you picked a team, the others are
+  out of reach, so a prompt injection can't recruit an agent with more powerful tools.
 - Sub-tasks go one level deep: a sub-agent can't delegate further.
 - One task can hand out at most 6 sub-tasks.
 - A failed sub-task goes back to the agent that delegated it, which decides what to do; it
@@ -395,14 +399,18 @@ ENV
 chmod 600 ~/.gantrix/outreach.env
 ```
 
-- Emails go out without asking unless the project asks first. Then each one waits for your
-  approval, one recipient at a time.
+- **Every email waits for your approval**, one recipient at a time, even on projects that don't
+  ask first. Sending to a real person can't be undone. Approve or deny it on the project page,
+  the Approvals page or with `gantrix approve <id>`.
 - Each one gets an unsubscribe line, your postal address and a `List-Unsubscribe` header
   (US CAN-SPAM). Check the rules where your recipients live, such as GDPR or CASL.
 - `OUTREACH_DAILY_LIMIT` (default 25) caps sends per day.
 - A person gets at most three emails, and never after they're added to the do-not-contact list.
-  That list is `~/.gantrix/outreach/do-not-contact.txt`; one address or `@domain` per line.
-- Every send is logged to `~/.gantrix/outreach/sent.csv`.
+  That list is `~/.gantrix/outreach/do-not-contact.txt`; one address or `@domain` per line. An
+  address also blocks its `+tag` variants, and `@domain` also blocks its subdomains.
+- Every send is logged to `~/.gantrix/outreach/sent.csv`. Sends run one at a time, so the caps
+  hold even when an agent asks for several at once. If that file has a line Gantrix can't read,
+  it stops sending until you fix or remove the line.
 - SMS stays draft-only. Texting people who haven't agreed to it is illegal in the US (TCPA).
 
 ## Images and video (optional)
@@ -480,7 +488,9 @@ channel). It works both ways:
   `extend 60m`, `rename Crumb site`, `help`. A mention outside a thread lists running projects.
 
 Anyone in the channel can ask questions. Only the people in `SLACK_ALLOWED_USERS` can steer,
-answer, change the team, stop or rename, because agents act on what they say.
+answer, change the team, stop or rename, because agents act on what they say. Others get
+answers from the project's overview (tasks, who is on them, status and time); step results and
+tool details (commands, file contents) stay out of their answers.
 
 **Set it up (about 5 minutes):**
 
@@ -502,14 +512,24 @@ Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. To
 ## Approvals and safety
 
 - **By default, agents don't ask.** Every tool call runs without an approval, including shell
-  commands, web requests, MCP tools and the CRO's emails. Each call is still logged, so you can
-  see it in the chat and on the Logs page.
+  commands, web requests and MCP tools. Each call is still logged, so you can see it in the chat
+  and on the Logs page. The one exception: the CRO's emails always wait for you.
 - **Turn approvals on for a project** with "Ask me before risky tools" on the dashboard, or
   `gantrix run --ask "…"`. Then shell, publishing, web, MCP and email calls wait for you, and
   only that step pauses. Decide with Approve/Deny on the project or Approvals page, in
   `gantrix tail <task>`, or with `gantrix approve <id>` / `gantrix deny <id>`.
 - To make every new project ask first, set `GANTRIX_APPROVE_ALL=false`. A skill's
   `auto-approve` list can never waive `shell` or `deploy_site`.
+- **Local only.** The API (port 4700) and the preview server (4702) listen on `127.0.0.1` and
+  answer only to `localhost`, `127.0.0.1` or `[::1]` as the address. A web page that points its
+  own domain at your machine (DNS rebinding) gets turned away. If you set `GANTRIX_HOST` to
+  another address on purpose, that check is off and only the token protects the API.
+- **`web_fetch` stays on the public internet.** It checks the address it actually connects to,
+  on every redirect, and refuses private, local and cloud-metadata addresses.
+- File tools refuse paths that leave the project's folder, including through a symlink whose
+  target doesn't exist yet.
+- Image and video jobs give up after 15 minutes (images) or 60 minutes (video), or as soon as
+  ComfyUI loses the job.
 - **Isolated steps (optional).** Set `GANTRIX_ISOLATED_STEPS=true` and each new project gives
   every step its own folder at `steps/<step-id>/`, so agents can't overwrite each other's
   files. A step gets copies of everything it builds on (its dependencies and theirs) in
