@@ -2211,3 +2211,91 @@ button.chip {
 .mention-option.active {
   background: var(--surface-2);
 }
+
+/* ---------- chat: markdown replies and folded tool calls ---------- */
+.bubble .md {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.bubble .md > :first-child {
+  margin-top: 0;
+}
+.bubble .md > :last-child {
+  margin-bottom: 0;
+}
+.bubble .md :is(p, ul, ol, pre, blockquote, table) {
+  margin: 0 0 8px;
+}
+.bubble .md :is(h1, h2, h3, h4, h5, h6) {
+  margin: 10px 0 4px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.bubble .md :is(ul, ol) {
+  padding-left: 20px;
+}
+.bubble .md li + li {
+  margin-top: 2px;
+}
+.bubble .md code {
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.bubble .md pre {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+.bubble .md pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.bubble .md blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+.bubble .md a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bubble .md table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bubble .md :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  text-align: left;
+}
+.asides {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.asides summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 0;
+}
+.asides summary:hover {
+  color: var(--text);
+}
+.asides ul {
+  margin: 4px 0 0;
+  padding: 0 0 0 14px;
+  display: grid;
+  gap: 2px;
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  overflow-wrap: anywhere;
+}
