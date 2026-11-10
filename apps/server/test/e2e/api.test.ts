@@ -43,6 +43,28 @@ describe('api', () => {
     expect((await app.inject({ url: '/api/tasks', headers: auth })).statusCode).toBe(200);
   });
 
+  it("can't be walked around with an encoded path, an absolute URL or a rebound Host", async () => {
+    // The router decodes these to /api/tasks; the check must too.
+    for (const url of ['/%61pi/tasks', '/%61%70%69/agents', '/api/%74asks', '//api/tasks']) {
+      expect((await app.inject(url)).statusCode, url).toBe(401);
+    }
+    expect((await app.inject('/nowhere')).statusCode).toBe(401); // unrouted needs it too
+    // A page that rebinds evil.example to 127.0.0.1 sends its own name as Host.
+    const rebound = await app.inject({
+      url: '/api/tasks',
+      headers: { ...auth, host: 'evil.example:4700' },
+    });
+    expect(rebound.statusCode).toBe(421);
+    for (const host of ['127.0.0.1:4700', 'localhost:4701', '[::1]:4700']) {
+      expect((await app.inject({ url: '/api/tasks', headers: { ...auth, host } })).statusCode).toBe(
+        200,
+      );
+    }
+    expect(
+      (await app.inject({ url: '/api/health', headers: { host: 'localhost' } })).statusCode,
+    ).toBe(200);
+  });
+
   it('creates agents, rejects duplicates and bad input', async () => {
     const create = (body: object) =>
       app.inject({ method: 'POST', url: '/api/agents', headers: auth, payload: body });

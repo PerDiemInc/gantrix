@@ -36,7 +36,9 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
     },
     bodyLimit: 1024 * 1024,
   });
-  app.addHook('onRequest', bearerAuth(token));
+  // Only when Gantrix listens on loopback: on purpose on another address, the Host is that one.
+  const loopback = ['127.0.0.1', 'localhost', '::1'].includes(deps.config.GANTRIX_HOST);
+  app.addHook('onRequest', bearerAuth(token, { checkHost: loopback }));
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof HttpError) return reply.code(error.status).send({ error: error.message });
