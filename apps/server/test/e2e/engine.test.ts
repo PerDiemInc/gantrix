@@ -5,7 +5,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { agents, approvals, connections, events, steps, tasks } from '../../src/db/schema.ts';
+import {
+  agents,
+  approvals,
+  connections,
+  events,
+  steps,
+  taskMessages,
+  tasks,
+} from '../../src/db/schema.ts';
 import {
   cancelTask,
   createTask,
@@ -342,6 +350,26 @@ describe('engine', () => {
       b.messages.some((m) => m.role === 'user' && m.content.includes('Use the EU site.')),
     );
     expect(sawNote).toBe(true);
+    expect(await eventTypes(task.id)).toContain('user.message_delivered');
+  });
+
+  it("sends a note that tags an agent with @ to that agent's open step", async () => {
+    await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({ steps: [step('fetch', 'fetcher')] });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length ? 'Done.' : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const task = await createTask(e.deps, { goal: 'Fetch a page' });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    const [fetch] = await stepsOf(task.id);
+
+    expect(await sendMessage(e.deps, task.id, { text: '@Fetcher use the EU site.' })).toMatchObject(
+      { status: 'sent' },
+    );
+    const [note] = await e.db.select().from(taskMessages).where(eq(taskMessages.taskId, task.id));
+    expect(note?.stepId).toBe(fetch!.id); // to the step, not a team note that would replan
+    const [pending] = await e.db.select().from(approvals).where(eq(approvals.taskId, task.id));
+    await decideApproval(e.deps, pending!.id, true);
+    expect((await e.waitFor(task.id)).status).toBe('succeeded');
     expect(await eventTypes(task.id)).toContain('user.message_delivered');
   });
 

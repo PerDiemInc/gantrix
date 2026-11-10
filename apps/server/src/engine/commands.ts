@@ -5,6 +5,7 @@ import {
   type AgentModelChoice,
   type Budget,
   isTerminal,
+  mentionedAgents,
   TERMINAL_TASK_STATUSES,
 } from '@gantrix/shared';
 import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
@@ -153,6 +154,37 @@ export async function enqueueStep(
 const FINISHED_STEP = new Set(['succeeded', 'failed', 'superseded']);
 
 /**
+ * A team note that tags one agent ("@Researcher check the prices") goes straight to that
+ * agent's step when it has exactly one open. Otherwise it stays a team note and the planner,
+ * which reads the tag, gives the work to that agent.
+ */
+async function mentionedStep(
+  deps: EngineDeps,
+  task: typeof tasks.$inferSelect,
+  text: string,
+): Promise<string | undefined> {
+  if (!text.includes('@')) return undefined;
+  const team = await deps.db
+    .select({ id: agents.id, name: agents.name })
+    .from(agents)
+    .where(task.agentIds?.length ? inArray(agents.id, task.agentIds) : undefined);
+  const [agent, ...others] = mentionedAgents(text, team);
+  if (!agent || others.length) return undefined;
+  const open = await deps.db
+    .select({ id: steps.id })
+    .from(steps)
+    .where(
+      and(
+        eq(steps.taskId, task.id),
+        eq(steps.agentId, agent.id),
+        notInArray(steps.status, ['succeeded', 'failed', 'superseded', 'cancelled']),
+      ),
+    )
+    .limit(2);
+  return open.length === 1 ? open[0]?.id : undefined;
+}
+
+/**
  * A note from the user. To one step: that agent gets it before its next model turn. To the
  * whole team: the planner reads it, after the running steps finish, and replans.
  */
@@ -168,6 +200,10 @@ export async function sendMessage(
 > {
   const task = await deps.db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
   if (!task || isTerminal(task.status)) return { status: 'task_finished' };
+  if (!input.stepId) {
+    const stepId = await mentionedStep(deps, task, input.text);
+    if (stepId) input = { ...input, stepId };
+  }
   if (input.stepId) {
     const step = await deps.db.query.steps.findFirst({
       where: and(eq(steps.id, input.stepId), eq(steps.taskId, taskId)),

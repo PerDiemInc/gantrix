@@ -2180,3 +2180,34 @@ button.chip {
 .step-insights dl dd {
   margin: 4px 0;
 }
+
+/* ---------- chat: @-mention an agent ---------- */
+.mention-field {
+  position: relative;
+}
+.mention-list {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 10;
+  min-width: 200px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.mention-option.active {
+  background: var(--surface-2);
+}
