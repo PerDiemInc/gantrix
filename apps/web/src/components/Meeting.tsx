@@ -8,6 +8,7 @@ import {
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { label } from '../format.ts';
+import { chatMarkdown } from '../markdown.ts';
 import { Icon, type IconName } from './Icon.tsx';
 import { Avatar } from './ui.tsx';
 
@@ -22,6 +23,40 @@ interface Line {
   text: string;
   /** Tool calls and receipts: shown smaller, as asides. */
   aside?: boolean;
+  /** The tool an aside called, for the summary of a run of them. */
+  tool?: string;
+}
+
+/** A run of asides in a row folds into one line; everything else stays a line of its own. */
+export type ChatItem = { kind: 'line'; line: Line } | { kind: 'asides'; id: number; lines: Line[] };
+
+export function groupAsides(lines: Line[]): ChatItem[] {
+  const items: ChatItem[] = [];
+  for (const line of lines) {
+    const last = items.at(-1);
+    if (line.aside && last?.kind === 'asides') last.lines.push(line);
+    else if (line.aside) items.push({ kind: 'asides', id: line.id, lines: [line] });
+    else items.push({ kind: 'line', line });
+  }
+  return items;
+}
+
+/** "8 tool calls · read_file ×6, list_files ×2" */
+export function asideSummary(lines: Line[]): string {
+  const counts = new Map<string, number>();
+  for (const l of lines) if (l.tool) counts.set(l.tool, (counts.get(l.tool) ?? 0) + 1);
+  const calls = [...counts.values()].reduce((a, b) => a + b, 0);
+  const tools = [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => (n > 1 ? `${t} ×${n}` : t))
+    .join(', ');
+  const notes = lines.length - calls;
+  return [
+    calls ? `${calls} tool call${calls > 1 ? 's' : ''}${tools ? ` · ${tools}` : ''}` : '',
+    notes ? `${notes} note${notes > 1 ? 's' : ''} read` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 const clip = (s: string, n = 400) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -39,8 +74,23 @@ export function meetingLines(
     return (s?.agentId && agentNames.get(s.agentId)?.name) || 'agent';
   };
   const lines: Line[] = [];
-  const say = (e: StreamEvent, speaker: Speaker, name: string, text: string, aside = false) =>
-    lines.push({ id: e.id, at: e.at, speaker, name, text, ...(aside ? { aside } : {}) });
+  const say = (
+    e: StreamEvent,
+    speaker: Speaker,
+    name: string,
+    text: string,
+    aside = false,
+    tool?: string,
+  ) =>
+    lines.push({
+      id: e.id,
+      at: e.at,
+      speaker,
+      name,
+      text,
+      ...(aside ? { aside } : {}),
+      ...(tool ? { tool } : {}),
+    });
 
   for (const e of events) {
     switch (e.type) {
@@ -110,13 +160,7 @@ export function meetingLines(
         break;
       }
       case 'step.tool_call':
-        say(
-          e,
-          'agent',
-          who(e.stepId),
-          `${e.tool} ${clip(e.summary, 140)}${e.autoApproved ? '' : ''}`,
-          true,
-        );
+        say(e, 'agent', who(e.stepId), `${e.tool} ${clip(e.summary, 140)}`, true, e.tool);
         break;
       case 'approval.requested':
         say(
@@ -395,24 +439,54 @@ export function Meeting({
   return (
     <div className="meeting">
       <ol className="meeting-lines" aria-live="polite" aria-relevant="additions">
-        {lines.map((l) => (
-          <li key={l.id} className={`line line-${l.speaker}${l.aside ? ' aside' : ''}`}>
-            {l.speaker === 'agent' ? (
-              <Avatar name={l.name} avatar={avatarOf.get(l.name)} size={32} />
-            ) : (
-              <span className={`speaker speaker-${l.speaker}`} aria-hidden="true">
-                <Icon name={SPEAKER_ICON[l.speaker]} size={16} />
-              </span>
-            )}
-            <div className="bubble">
-              <div className="line-head">
-                <b>{l.name}</b>
-                <time className="muted small">{new Date(l.at).toLocaleTimeString()}</time>
+        {groupAsides(lines).map((item) => {
+          if (item.kind === 'asides' && item.lines.length > 1) {
+            return (
+              <li key={`a${item.id}`} className="line aside">
+                <span aria-hidden="true" />
+                <details className="asides">
+                  <summary>{asideSummary(item.lines)}</summary>
+                  <ul>
+                    {item.lines.map((l) => (
+                      <li key={l.id}>{l.text}</li>
+                    ))}
+                  </ul>
+                </details>
+              </li>
+            );
+          }
+          const l = item.kind === 'line' ? item.line : item.lines[0];
+          if (!l) return null;
+          const at = new Date(l.at);
+          return (
+            <li key={l.id} className={`line line-${l.speaker}${l.aside ? ' aside' : ''}`}>
+              {l.speaker === 'agent' ? (
+                <Avatar name={l.name} avatar={avatarOf.get(l.name)} size={32} />
+              ) : (
+                <span className={`speaker speaker-${l.speaker}`} aria-hidden="true">
+                  <Icon name={SPEAKER_ICON[l.speaker]} size={16} />
+                </span>
+              )}
+              <div className="bubble">
+                <div className="line-head">
+                  <b>{l.name}</b>
+                  <time className="muted small" dateTime={l.at} title={at.toLocaleString()}>
+                    {at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </time>
+                </div>
+                {l.aside || l.speaker === 'you' ? (
+                  <p>{l.text}</p>
+                ) : (
+                  <div
+                    className="md"
+                    // biome-ignore lint/security/noDangerouslySetInnerHtml: chatMarkdown escapes raw HTML and only links http(s)/mailto
+                    dangerouslySetInnerHTML={{ __html: chatMarkdown(l.text) }}
+                  />
+                )}
               </div>
-              <p>{l.text}</p>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
         <li ref={end} className="line-end" />
       </ol>
       <Composer task={task} agentNames={agentNames} to={target} setTo={onTarget} />
