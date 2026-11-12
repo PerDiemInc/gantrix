@@ -23,3 +23,15 @@ export function ago(iso: string, now = Date.now()): string {
 }
 
 export const short = (id: string) => id.slice(-8);
+
+/** 1536 → "1.5 KB", in powers of 1024 like Activity Monitor and `docker stats`. */
+export function bytes(n: number): string {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = Math.max(0, n);
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}

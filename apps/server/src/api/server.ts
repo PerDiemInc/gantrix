@@ -8,6 +8,7 @@ import { approvalRoutes } from './routes/approvals.ts';
 import { connectionRoutes } from './routes/connections.ts';
 import { skillRoutes } from './routes/skills.ts';
 import { streamRoutes } from './routes/stream.ts';
+import { systemRoutes } from './routes/system.ts';
 import { taskRoutes } from './routes/tasks.ts';
 
 export interface ApiDeps extends EngineDeps {
@@ -60,5 +61,6 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
   taskRoutes(app, deps);
   approvalRoutes(app, deps);
   streamRoutes(app, deps);
+  systemRoutes(app);
   return app;
 }

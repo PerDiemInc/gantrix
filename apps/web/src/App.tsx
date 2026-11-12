@@ -9,6 +9,7 @@ import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
+import { SystemPage } from './pages/SystemPage.tsx';
 import { ProjectPage } from './pages/TaskPage.tsx';
 
 function TokenGate({ onSaved, rejected }: { onSaved: () => void; rejected: boolean }) {
@@ -71,6 +72,7 @@ export function App() {
     ['skills', 'Skills'],
     ['connections', 'Connections'],
     ['approvals', 'Approvals'],
+    ['system', 'System'],
   ] as const;
   const current = route.page === 'project' || route.page === 'logs' ? 'projects' : route.page;
   return (
@@ -112,6 +114,7 @@ export function App() {
           {route.page === 'skills' && <SkillsPage />}
           {route.page === 'connections' && <ConnectionsPage />}
           {route.page === 'approvals' && <ApprovalsPage />}
+          {route.page === 'system' && <SystemPage />}
         </ErrorBoundary>
       </main>
     </>

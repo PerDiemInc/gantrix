@@ -190,3 +190,47 @@ export interface ModelSource {
   /** Why the list couldn't be fetched (you can still type a model name). */
   error?: string;
 }
+
+/** One running Docker container, from `docker stats` joined with `docker ps`. */
+export interface ContainerStatsDto {
+  id: string;
+  name: string;
+  image: string;
+  /** "Up 26 hours (healthy)" */
+  status: string;
+  /** The Compose project it belongs to, if any. */
+  project: string | null;
+  /** Share of one CPU core: 150 means one and a half cores. */
+  cpuPercent: number;
+  memUsedBytes: number;
+  memLimitBytes: number;
+  memPercent: number;
+  pids: number;
+}
+
+/** What this machine and its Docker engine are using right now. */
+export interface SystemDto {
+  host: {
+    platform: string;
+    cpus: number;
+    /** 1, 5 and 15 minute load averages. */
+    loadAvg: [number, number, number];
+    memTotalBytes: number;
+    /** Memory the OS can hand out without swapping (free plus reclaimable cache). */
+    memAvailableBytes: number;
+    uptimeSeconds: number;
+  };
+  /** The Gantrix API process itself. */
+  gantrix: { rssBytes: number };
+  docker:
+    | {
+        available: true;
+        version: string;
+        /** The memory and CPUs Docker may use (the Docker Desktop VM on a Mac). */
+        memTotalBytes: number;
+        cpus: number;
+        containers: ContainerStatsDto[];
+      }
+    | { available: false; error: string };
+  sampledAt: string;
+}

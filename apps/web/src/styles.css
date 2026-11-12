@@ -2299,3 +2299,59 @@ button.chip {
   font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   overflow-wrap: anywhere;
 }
+
+/* ---------- system page ---------- */
+.num-tab {
+  font-variant-numeric: tabular-nums;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: 16px;
+}
+.stat {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.stat h2 {
+  margin: 0;
+}
+.stat-value {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.stat p.small {
+  margin: 0;
+}
+.table-scroll {
+  overflow-x: auto;
+}
+table.containers {
+  min-width: 640px;
+}
+table.containers .w-meter {
+  width: 22%;
+}
+table.containers td .meter-track {
+  margin-top: 4px;
+}
+th button.sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+th button.sort:hover,
+th button.sort.active {
+  color: var(--text);
+}
+th button.sort.active::after {
+  content: " ↓";
+}
+th[aria-sort="ascending"] button.sort.active::after {
+  content: " ↑";
+}

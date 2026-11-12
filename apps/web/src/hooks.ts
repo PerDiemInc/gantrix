@@ -9,7 +9,8 @@ export type Route =
   | { page: 'agents' }
   | { page: 'skills' }
   | { page: 'connections' }
-  | { page: 'approvals' };
+  | { page: 'approvals' }
+  | { page: 'system' };
 
 function parseHash(hash: string): Route {
   const [, page, id, sub, stepId] = hash.replace(/^#/, '').split('/');
@@ -19,7 +20,13 @@ function parseHash(hash: string): Route {
     return stepId ? { page: 'logs', id, stepId } : { page: 'logs', id };
   }
   if (isProject && id) return { page: 'project', id };
-  if (page === 'agents' || page === 'skills' || page === 'connections' || page === 'approvals') {
+  if (
+    page === 'agents' ||
+    page === 'skills' ||
+    page === 'connections' ||
+    page === 'approvals' ||
+    page === 'system'
+  ) {
     return { page };
   }
   return { page: 'projects' };
