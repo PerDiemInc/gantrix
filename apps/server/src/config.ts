@@ -44,40 +44,6 @@ const ConfigSchema = z.object({
   // Give each step its own folder (steps/<id>/) with copies of its inputs, instead of one
   // shared project folder. Off by default: new projects keep the shared layout.
   GANTRIX_ISOLATED_STEPS: z.stringbool().default(false),
-  // Scheduled PR discussions. Credentials stay in the server environment.
-  GITHUB_TOKEN: z.string().optional(),
-  GITHUB_PR_REPOS: z
-    .string()
-    .default('')
-    .transform((value) => [
-      ...new Set(
-        value
-          .split(',')
-          .map((repo) => repo.trim())
-          .filter(Boolean),
-      ),
-    ])
-    .pipe(
-      z.array(
-        z
-          .string()
-          .regex(/^[\w.-]+\/[\w.-]+$/)
-          .refine((repo) => repo.split('/').every((part) => part !== '.' && part !== '..')),
-      ),
-    ),
-  GITHUB_PR_ORG: optionalMatch(
-    /^[a-zA-Z0-9][a-zA-Z0-9-]*$/,
-    'GITHUB_PR_ORG is a GitHub organization login',
-  ),
-  GITHUB_PR_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
-  GITHUB_PR_SLACK: z.stringbool().default(false),
-  GITHUB_PR_MODEL: z.string().default('qwen3:8b'),
-  PR_SMTP_URL: z.url({ protocol: /^smtps?$/ }).optional(),
-  PR_EMAIL_FROM: z.email().optional(),
-  PR_EMAIL_TO: z.email().optional(),
-  PR_IMAP_HOST: z.hostname().optional(),
-  PR_IMAP_USER: z.string().optional(),
-  PR_IMAP_PASSWORD: z.string().optional(),
   // Slack (optional). Bot token + channel: projects post progress to a thread.
   // Add the app-level token (Socket Mode) and replies in the thread steer the project.
   SLACK_BOT_TOKEN: optionalMatch(/^xoxb-/, 'SLACK_BOT_TOKEN starts with xoxb-'),

@@ -780,21 +780,21 @@ tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. S
 
 ### GitHub PR discussions
 
-The API can scan open pull requests on a schedule. Add a fine-grained GitHub token with
-read access to pull requests and set `GITHUB_PR_REPOS` to a comma-separated list of
-`owner/repository` names in `.env`. Set `GITHUB_PR_ORG` to discover active repositories
-visible to the token in a GitHub organization. You can combine the two settings. Restart the API. It polls every five minutes by
-default, reads conversation comments, inline comments and review summaries, and uses
-`GITHUB_PR_MODEL` on the configured Ollama server to summarize changes. The first run
-covers existing discussions. Gantrix stores summaries and delivery state in Redis.
-The PR model receives discussion text as data and has no tools.
+Open the Gantrix project that should own the scan and expand **GitHub PR scan**.
+Enter a fine-grained GitHub token with **Pull requests: Read** permission. Set an
+organization (for example, `PerDiemInc`), a list of repositories, or both.
+Enable the scan and save. It polls immediately and then every five minutes by
+default. The first scan includes existing discussions on open PRs.
 
-- **Slack** — Set `GITHUB_PR_SLACK=true` and configure the Slack bot token and channel.
-  Use a private channel for private repositories. With the app token, Socket Mode
-  subscriptions, and `SLACK_ALLOWED_USERS` configured, reply in a report's thread to
-  ask about that PR.
-- **Email** — Set `PR_SMTP_URL`, `PR_EMAIL_FROM` and `PR_EMAIL_TO` for delivery.
-  For replies, also configure `PR_IMAP_HOST`, `PR_IMAP_USER` and `PR_IMAP_PASSWORD`
-  for the dedicated sender mailbox. Reply from the configured recipient address and
-  keep the subject intact. Gantrix replies only to the configured recipient. On
-  first startup the bridge begins reading new mail from that point onward.
+- **Slack** — Enter a bot token and channel. Use a private channel for private
+  repositories. To answer replies in report threads, add a Socket Mode app token
+  and allowed Slack user IDs.
+- **Email** — Enter an SMTP URL with credentials, a sender, and a recipient.
+  To answer replies, enter the sender mailbox's IMAP host, username, and password.
+  Reply from the configured recipient address and keep the subject intact.
+
+Settings and delivery history are scoped to the project in Valkey. Credentials are
+encrypted using the Gantrix API token and omitted from the settings response.
+If you rotate that token, remove the saved scan and enter its settings again.
+Uncheck **Enable scheduled scan** to pause it independently of the project's
+normal plan. The local Ollama model summarizes PR discussion text with no tools.

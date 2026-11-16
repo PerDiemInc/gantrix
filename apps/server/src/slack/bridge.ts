@@ -57,13 +57,13 @@ export class SlackBridge {
   #botUserId = '';
   #unsubscribe: (() => void) | null = null;
 
-  readonly #handlePrReply: ((event: SlackEvent, text: string) => Promise<boolean>) | undefined;
+  readonly #handlePrReply: ((event: SlackEvent) => Promise<boolean>) | undefined;
 
   constructor(
     deps: EngineDeps,
     hub: EventHub,
     api?: SlackApi,
-    handlePrReply?: (event: SlackEvent, text: string) => Promise<boolean>,
+    handlePrReply?: (event: SlackEvent) => Promise<boolean>,
   ) {
     const { config } = deps;
     if (!config.SLACK_BOT_TOKEN || !config.SLACK_CHANNEL_ID) {
@@ -291,6 +291,7 @@ export class SlackBridge {
   async handle(ev: SlackEvent): Promise<void> {
     if (ev.type !== 'app_mention' && ev.type !== 'message') return;
     if (ev.bot_id || ev.subtype || !ev.user || !ev.ts || !ev.text) return;
+    if (await this.#handlePrReply?.(ev)) return;
     if (ev.channel !== this.#channel) return;
     // Slack can deliver an event twice; and a mention also arrives as a plain message.
     const key = `${ev.type === 'app_mention' ? 'm' : 'p'}:${ev.ts}`;
@@ -315,7 +316,6 @@ export class SlackBridge {
         })
       : undefined;
     if (!task) {
-      if (await this.#handlePrReply?.(ev, text)) return;
       if (mention) await reply(await this.#overview());
       return;
     }

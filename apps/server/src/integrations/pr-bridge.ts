@@ -4,11 +4,11 @@ import type { Redis } from 'ioredis';
 import { simpleParser } from 'mailparser';
 import { createTransport } from 'nodemailer';
 import type { Pool } from 'pg';
-import type { Config } from '../config.ts';
 import { createChatModel } from '../models/provider.ts';
 import { SlackApi } from '../slack/api.ts';
 import type { SlackEvent } from '../slack/socket.ts';
 import { type Discussion, GitHubDiscussions } from './github.ts';
+import type { PrSettings } from './pr-settings.ts';
 
 interface Report {
   discussion: Omit<Discussion, 'comments'>;
@@ -18,7 +18,6 @@ interface Report {
   emailSent?: boolean;
 }
 
-const prefix = 'gantrix:pr-bridge:';
 const retention = 30 * 24 * 60 * 60;
 const system = [
   'You are Gantrix, an engineering assistant summarizing a GitHub pull request discussion.',
@@ -65,19 +64,26 @@ export class PrBridge {
   private readonly github;
   private timer?: ReturnType<typeof setInterval>;
   private pending: Promise<void> | undefined;
-  private readonly config: Config;
+  private readonly config: PrSettings & { OLLAMA_BASE_URL: string };
+  private readonly prefix: string;
   private readonly redis: Redis;
   private readonly pool: Pool;
   private stopped = false;
 
-  constructor(config: Config, redis: Redis, pool: Pool, token: string) {
+  constructor(
+    config: PrSettings & { OLLAMA_BASE_URL: string },
+    redis: Redis,
+    pool: Pool,
+    taskId: string,
+  ) {
     this.config = config;
+    this.prefix = `gantrix:pr-bridge:${taskId}:`;
     this.redis = redis;
     this.pool = pool;
-    this.github = new GitHubDiscussions(token);
+    this.github = new GitHubDiscussions(config.GITHUB_TOKEN);
     this.slack =
-      config.GITHUB_PR_SLACK && config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID
-        ? new SlackApi(config.SLACK_BOT_TOKEN, config.SLACK_API_URL)
+      config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID
+        ? new SlackApi(config.SLACK_BOT_TOKEN)
         : undefined;
     this.mail =
       config.PR_SMTP_URL && config.PR_EMAIL_FROM && config.PR_EMAIL_TO
@@ -114,7 +120,10 @@ export class PrBridge {
   private async poll() {
     const client = await this.pool.connect();
     try {
-      const { rows } = await client.query('SELECT pg_try_advisory_lock(19415972) AS locked');
+      const { rows } = await client.query(
+        'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS locked',
+        [this.prefix],
+      );
       if (!rows[0]?.locked) return;
       try {
         await this.receiveMail().catch(() => console.error('PR bridge could not check its inbox.'));
@@ -143,7 +152,7 @@ export class PrBridge {
           }
         }
       } finally {
-        await client.query('SELECT pg_advisory_unlock(19415972)');
+        await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [this.prefix]);
       }
     } finally {
       // Closing the dedicated connection also releases the lock if unlock failed.
@@ -166,7 +175,7 @@ export class PrBridge {
   }
 
   private async publish(discussion: Discussion) {
-    const key = `${prefix}report:${discussion.key}`;
+    const key = `${this.prefix}report:${discussion.key}`;
     const previous = await this.redis.get(key);
     let report = previous ? (JSON.parse(previous) as Report) : undefined;
     const save = (value: Report) => this.redis.set(key, JSON.stringify(value));
@@ -174,6 +183,7 @@ export class PrBridge {
       const { comments, ...metadata } = discussion;
       let summary = '';
       for (const batch of commentBatches(comments)) {
+        if (this.stopped) return;
         summary = await this.answer(
           discussion.title,
           'Update the running summary with this batch. Retain outstanding actions from earlier batches.',
@@ -183,7 +193,8 @@ export class PrBridge {
       report = { discussion: metadata, reference: randomUUID(), summary };
       await save(report);
     }
-    await this.redis.set(`${prefix}email:${report.reference}`, key, 'EX', retention);
+    if (this.stopped) return;
+    await this.redis.set(`${this.prefix}email:${report.reference}`, key, 'EX', retention);
     const text = `${discussion.key} — ${discussion.title}\n${discussion.url}\n\n${report.summary}`;
     const deliveries: unknown[] = [];
     if (this.slack && !report.slackSent) {
@@ -196,7 +207,7 @@ export class PrBridge {
           unfurl_media: false,
         });
         await this.redis.set(
-          `${prefix}slack:${this.config.SLACK_CHANNEL_ID}:${result.ts}`,
+          `${this.prefix}slack:${this.config.SLACK_CHANNEL_ID}:${result.ts}`,
           key,
           'EX',
           retention,
@@ -220,7 +231,7 @@ export class PrBridge {
   }
 
   private async lookup(kind: 'slack' | 'email', reference: string): Promise<Report | undefined> {
-    const key = await this.redis.get(`${prefix}${kind}:${reference}`);
+    const key = await this.redis.get(`${this.prefix}${kind}:${reference}`);
     const report = key ? await this.redis.get(key) : null;
     if (!report) return;
     const parsed = JSON.parse(report) as Report;
@@ -233,23 +244,41 @@ export class PrBridge {
   }
 
   async handleSlack(ev: SlackEvent, question: string): Promise<boolean> {
-    if (!this.slack || !ev.thread_ts || !ev.user || !ev.ts) return false;
+    if (
+      !this.slack ||
+      this.stopped ||
+      (ev.type !== 'message' && ev.type !== 'app_mention') ||
+      ev.bot_id ||
+      ev.subtype ||
+      ev.channel !== this.config.SLACK_CHANNEL_ID ||
+      !ev.thread_ts ||
+      !ev.user ||
+      !ev.ts
+    )
+      return false;
     const report = await this.lookup('slack', `${ev.channel}:${ev.thread_ts}`);
     if (!report) return false;
     if (!question || !this.config.SLACK_ALLOWED_USERS.includes(ev.user)) return true;
-    const answer = await this.answer(
-      report.discussion.title,
-      question.slice(0, 3000),
-      report.summary,
-    );
-    await this.slack.call('chat.postMessage', {
-      channel: ev.channel,
-      thread_ts: ev.thread_ts,
-      text: answer,
-      mrkdwn: false,
-      unfurl_links: false,
-      unfurl_media: false,
-    });
+    const eventKey = `${this.prefix}slack-event:${ev.channel}:${ev.ts}`;
+    if (!(await this.redis.set(eventKey, '1', 'EX', 600, 'NX'))) return true;
+    try {
+      const answer = await this.answer(
+        report.discussion.title,
+        question.slice(0, 3000),
+        report.summary,
+      );
+      await this.slack.call('chat.postMessage', {
+        channel: ev.channel,
+        thread_ts: ev.thread_ts,
+        text: answer,
+        mrkdwn: false,
+        unfurl_links: false,
+        unfurl_media: false,
+      });
+    } catch (error) {
+      await this.redis.del(eventKey);
+      throw error;
+    }
     return true;
   }
 
@@ -280,7 +309,7 @@ export class PrBridge {
     try {
       await client.connect();
       const inbox = await client.mailboxOpen('INBOX');
-      const cursorKey = `${prefix}imap:${host}:${user}:${inbox.uidValidity}`;
+      const cursorKey = `${this.prefix}imap:${host}:${user}:${inbox.uidValidity}`;
       const cursor = await this.redis.get(cursorKey);
       const first = cursor ? Number(cursor) + 1 : inbox.uidNext;
       if (!cursor) await this.redis.set(cursorKey, first - 1);
