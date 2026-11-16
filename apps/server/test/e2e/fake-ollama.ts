@@ -50,6 +50,24 @@ export async function startFakeOllama() {
       res.end(JSON.stringify({ models: [{ name: 'fake' }, { name: 'fake-big' }] }));
       return;
     }
+    if (req.url === '/api/ps') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          models: [
+            {
+              name: 'fake',
+              size: 5_000_000_000,
+              size_vram: 5_000_000_000,
+              context_length: 16384,
+              details: { parameter_size: '8.2B', quantization_level: 'Q4_K_M' },
+              expires_at: '2099-01-01T00:00:00Z',
+            },
+          ],
+        }),
+      );
+      return;
+    }
     if (req.url !== '/api/chat') {
       res.writeHead(404).end();
       return;
