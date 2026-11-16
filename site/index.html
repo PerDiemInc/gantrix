@@ -5,7 +5,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gantrix: Open-Source AI Agent Orchestrator for Local Models</title>
-<meta name="description" content="Gantrix plans a goal as dependent steps, runs them in parallel on local Ollama models, judges every result, and can make images and video. MIT licensed.">
+<meta name="description" content="Gantrix is an open-source AI agent orchestrator. It plans a goal as steps, runs them in parallel on local Ollama models and judges every result. MIT licensed.">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="author" content="Per Diem">
+<meta name="theme-color" content="#fff6df" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17152a" media="(prefers-color-scheme: dark)">
 <link rel="canonical" href="https://perdieminc.github.io/gantrix/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,6 +17,7 @@
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Gantrix">
+<meta property="og:locale" content="en_US">
 <meta property="og:title" content="Gantrix: open-source AI agents that work the plan">
 <meta property="og:description" content="Plan a goal as dependent steps, run them in parallel on local models, judge every result. MIT licensed.">
 <meta property="og:image" content="https://perdieminc.github.io/gantrix/assets/social.png">
@@ -21,9 +26,14 @@
 <meta property="og:image:alt" content="Gant, the Gantrix mascot, next to the Gantrix wordmark">
 <meta property="og:url" content="https://perdieminc.github.io/gantrix/">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Gantrix: open-source AI agents that work the plan">
+<meta name="twitter:description" content="Plan a goal as dependent steps, run them in parallel on local models, judge every result. MIT licensed.">
+<meta name="twitter:image" content="https://perdieminc.github.io/gantrix/assets/social.png">
+<meta name="twitter:image:alt" content="Gant, the Gantrix mascot, next to the Gantrix wordmark">
+<link rel="sitemap" type="application/xml" href="sitemap.xml">
 <link rel="stylesheet" href="assets/site.css">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Gantrix","applicationCategory":"DeveloperApplication","operatingSystem":"macOS, Linux","description":"Open-source, local-first AI agent orchestrator. It plans a goal as dependent steps, runs ready steps in parallel on Ollama models, has a judge check each result, and asks before risky tools run.","url":"https://perdieminc.github.io/gantrix/","image":"https://perdieminc.github.io/gantrix/assets/social.png","license":"https://opensource.org/licenses/MIT","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"codeRepository":"https://github.com/PerDiemInc/gantrix","programmingLanguage":"TypeScript","sameAs":["https://github.com/PerDiemInc/gantrix"],"publisher":{"@type":"Organization","name":"Per Diem","url":"https://tryperdiem.com"}}
+{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://tryperdiem.com/#org","name":"Per Diem","url":"https://tryperdiem.com"},{"@type":"WebSite","@id":"https://perdieminc.github.io/gantrix/#website","url":"https://perdieminc.github.io/gantrix/","name":"Gantrix","description":"Open-source AI agents that work a plan like a Gantt chart, on your own machine.","inLanguage":"en","publisher":{"@id":"https://tryperdiem.com/#org"}},{"@type":"SoftwareApplication","@id":"https://perdieminc.github.io/gantrix/#software","name":"Gantrix","applicationCategory":"DeveloperApplication","applicationSubCategory":"AI agent orchestrator","operatingSystem":"macOS, Linux","softwareVersion":"0.1","softwareRequirements":"Node.js 26.13 or newer, Docker, Ollama","description":"Open-source, local-first AI agent orchestrator. It plans a goal as dependent steps, runs ready steps in parallel on Ollama models, has a judge check each result, and asks before risky tools run.","featureList":["Plans a goal as dependent steps and replans when steps fail","Runs ready steps in parallel, shown as a live Gantt chart","A judge checks every step and retries with feedback","Runs on local Ollama models; OpenAI, Anthropic, Claude Code and Codex are optional","Live page: the agents working now and the models loaded in memory","Skills as SKILL.md folders and MCP servers","Approvals before shell, web, MCP and email tools","Local image and video generation with ComfyUI"],"url":"https://perdieminc.github.io/gantrix/","image":"https://perdieminc.github.io/gantrix/assets/social.png","screenshot":"https://perdieminc.github.io/gantrix/assets/screenshots/projects.webp","license":"https://opensource.org/licenses/MIT","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"codeRepository":"https://github.com/PerDiemInc/gantrix","programmingLanguage":"TypeScript","sameAs":["https://github.com/PerDiemInc/gantrix"],"publisher":{"@id":"https://tryperdiem.com/#org"}},{"@type":"FAQPage","@id":"https://perdieminc.github.io/gantrix/#faq","mainEntity":[{"@type":"Question","name":"What is Gantrix?","acceptedAnswer":{"@type":"Answer","text":"Gantrix is an open-source, local-first AI agent orchestrator. You give it a goal and a team of agents with skills. It plans the goal as steps that depend on each other, runs the ready steps in parallel, has a judge check every result, and retries or replans until the goal is met or a budget runs out."}},{"@type":"Question","name":"Does my data leave my machine?","acceptedAnswer":{"@type":"Answer","text":"Not by default. Agents run on Ollama models on your machine, state lives in a local Postgres, and the API listens on 127.0.0.1 only. Task content leaves your machine only if you add a cloud connection such as OpenAI, Anthropic or Claude Code, or give an agent the web_fetch tool. Cloud connections are labelled cloud in the dashboard."}},{"@type":"Question","name":"Which models does Gantrix work with?","acceptedAnswer":{"@type":"Answer","text":"Ollama out of the box; the default model is qwen3:8b. You can also connect OpenAI, Anthropic, and anything that speaks their APIs: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter or your own gateway. One switch runs a project on Claude Code or the Codex CLI with your own login. Each agent can use a different model."}},{"@type":"Question","name":"What do I need to run it?","acceptedAnswer":{"@type":"Answer","text":"Node.js 26.13 or newer, Docker for Postgres and Valkey, and Ollama, on macOS or Linux. The default model is about a 5 GB download, and the first task takes about 10 minutes to set up."}},{"@type":"Question","name":"How do I see which agents and models are running?","acceptedAnswer":{"@type":"Answer","text":"Open the Live page in the dashboard. It lists every agent working right now, the task and project it is on, the model it runs on, and whether that model is local or cloud. Below it are the models Ollama holds in memory: size, GPU or CPU, which agents use each one, and when it unloads."}},{"@type":"Question","name":"How is Gantrix different from CrewAI or LangGraph?","acceptedAnswer":{"@type":"Answer","text":"CrewAI and LangGraph are frameworks you build agent systems with in code. Gantrix is a ready-to-run app: API, worker, web dashboard and CLI. A planner writes the plan for you, steps run in parallel, and a judge checks each one. Gantrix is built on LangGraph.js. See Gantrix vs CrewAI and Gantrix vs LangGraph.js."}},{"@type":"Question","name":"Can agents run shell commands, and is that safe?","acceptedAnswer":{"@type":"Answer","text":"Only agents whose skills include the shell tool can. Shell is not sandboxed: it can do anything your user account can. Turn on Ask me before risky tools and every shell, web, MCP and email call waits for your approval. Shell commands and MCP servers never get the server's environment, so they cannot read your API keys."}},{"@type":"Question","name":"Is Gantrix free?","acceptedAnswer":{"@type":"Answer","text":"Yes. Gantrix is MIT licensed and built on open-source software. Running it on local models costs nothing but your own hardware."}}]}]}
 </script>
 </head>
 <body>
@@ -39,7 +49,9 @@
       <a class="opt" href="#skills">Skills</a>
       <a class="opt" href="#team">Team</a>
       <a class="opt" href="#media">Media</a>
+      <a class="opt" href="#live">Live</a>
       <a class="opt" href="#safety">Safety</a>
+      <a class="opt" href="#faq">FAQ</a>
       <a href="https://github.com/PerDiemInc/gantrix">GitHub</a>
     </nav>
   </div>
@@ -49,7 +61,7 @@
   <div class="wrap">
     <section class="hero">
       <h1>Open-source AI agents that work <em>the plan.</em></h1>
-      <img class="mascot" src="assets/logo.svg" alt="Gant, the Gantrix mascot: three Gantt bars with googly eyes, antennae and pink sneakers" width="380" height="309">
+      <img class="mascot" src="assets/logo.svg" fetchpriority="high" alt="Gant, the Gantrix mascot: three Gantt bars with googly eyes, antennae and pink sneakers" width="380" height="309">
       <p class="lede">Give Gantrix a goal and a team of agents with skills. It plans the work as steps that depend on each other, runs whatever is ready in parallel, checks every result, and keeps going until the goal is met. It runs entirely on your machine, with open-source models.</p>
       <div class="cta">
         <a class="btn primary" href="#start">Get started <small>about 10 min</small></a>
@@ -114,27 +126,27 @@
       <p class="intro">The dashboard runs on your machine. These screenshots are from a demo with a made-up bakery.</p>
       <div class="shots">
         <figure class="shot">
-          <a href="assets/screenshots/projects.webp"><img src="assets/screenshots/projects.webp" alt="The Projects page: four project cards with progress bars, agent avatars and a Now line; one card is highlighted because an agent is waiting for the user" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/projects.webp"><img src="assets/screenshots/projects.webp" alt="The Projects page: four project cards with progress bars, agent avatars and a Now line; one card is highlighted because an agent is waiting for the user" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>Every project at a glance.</b> Progress, the agents on it, what each one is doing now, and which projects wait for you.</figcaption>
         </figure>
         <figure class="shot">
-          <a href="assets/screenshots/project.webp"><img src="assets/screenshots/project.webp" alt="The Crumb & Co website project page: title with rename, Stop and Cancel buttons, token and time budgets, a question from the cpo agent with three answer options, the team panel and the chat" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/project.webp"><img src="assets/screenshots/project.webp" alt="The Crumb & Co website project page: title with rename, Stop and Cancel buttons, token and time budgets, a question from the cpo agent with three answer options, the team panel and the chat" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>A project, its team and its questions.</b> Name, description and OKR goal, budgets you can extend, Stop and Cancel, and a question an agent asked you with options to pick.</figcaption>
         </figure>
         <figure class="shot">
-          <a href="assets/screenshots/board.webp"><img src="assets/screenshots/board.webp" alt="The task board: cards for each task with assignee avatars, including a sub-task for aws-engineer marked as a sub-task of Set up hosting on AWS, and three design style previews below" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/board.webp"><img src="assets/screenshots/board.webp" alt="The task board: cards for each task with assignee avatars, including a sub-task for aws-engineer marked as a sub-task of Set up hosting on AWS, and three design style previews below" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>A task board with sub-agents.</b> To do, In progress, Needs you and Done. The devops lead waits while its aws-engineer sub-agent writes Terraform; designs show as previews below.</figcaption>
         </figure>
         <figure class="shot">
-          <a href="assets/screenshots/new-project.webp"><img src="assets/screenshots/new-project.webp" alt="The New project form with numbered sections: name and description, goal with a Generate from description button, and the team picker with ten agents" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/new-project.webp"><img src="assets/screenshots/new-project.webp" alt="The New project form with numbered sections: name and description, goal with a Generate from description button, and the team picker with ten agents" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>Describe it, set an OKR, pick the team.</b> Name and description, a goal with an OKR example and Generate from description, the team, each member’s model and a time limit.</figcaption>
         </figure>
         <figure class="shot">
-          <a href="assets/screenshots/offload.webp"><img src="assets/screenshots/offload.webp" alt="The Models section of the New project form: Run the work on set to ChatGPT, with cpo, designer and engineer each showing ChatGPT for this project, then a 3 hour time limit" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/offload.webp"><img src="assets/screenshots/offload.webp" alt="The Models section of the New project form: Run the work on set to ChatGPT, with cpo, designer and engineer each showing ChatGPT for this project, then a 3 hour time limit" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>Hand the work to Claude or ChatGPT.</b> One switch runs the team on the coding agents you already have on this machine, with your own login. The planner and judge stay on your default model.</figcaption>
         </figure>
         <figure class="shot">
-          <a href="assets/screenshots/agents.webp"><img src="assets/screenshots/agents.webp" alt="The Agents page: agent cards showing Runs on the default model with a Change button, and the Add agent form with Runs on and Model pickers" width="1600" height="1000" loading="lazy"></a>
+          <a href="assets/screenshots/agents.webp"><img src="assets/screenshots/agents.webp" alt="The Agents page: agent cards showing Runs on the default model with a Change button, and the Add agent form with Runs on and Model pickers" width="1600" height="1000" loading="lazy" decoding="async"></a>
           <figcaption><b>Each agent on its own model.</b> Local Ollama by default; switch any agent to Claude Code, OpenAI, Anthropic or your own server.</figcaption>
         </figure>
       </div>
@@ -377,6 +389,20 @@ npm run gantrix -- connections test claude claude-sonnet-5-5
 npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonnet-5-5</pre></div>
     </section>
 
+    <section class="block" id="live">
+      <p class="eyebrow">Live</p>
+      <h2>See which agents and local models are running</h2>
+      <p class="intro">The dashboard's Live page answers “what is my machine doing right now?” in one screen. It refreshes every 3 seconds and reads only from your own machine.</p>
+      <ul class="safety">
+        <li><b>Every agent at work.</b> The task and project it is on, how long it has been at it, the tokens it has used, and whether it is working, being judged or waiting for you.</li>
+        <li><b>The model behind each agent.</b> The model name and where it runs: Ollama, your own server, Claude Code or a cloud API.</li>
+        <li><b>Local or cloud, at a glance.</b> A count of the agents sending prompts off your machine. With the defaults it reads zero.</li>
+        <li><b>Models loaded in Ollama.</b> Each model in memory with its size, GPU or CPU split, context length, the agents using it and when Ollama unloads it.</li>
+        <li><b>Stopped means stopped.</b> A project you stop drops off the page; its work is kept for when you resume.</li>
+      </ul>
+      <p class="intro" style="margin-top:22px">Next to it, the System page shows memory, CPU load and every running Docker container. New to local models? Read <a href="local-ai-agents-ollama/">how to run AI agents locally with Ollama</a>.</p>
+    </section>
+
     <section class="block" id="stack">
       <p class="eyebrow">Built with</p>
       <h2>Open source, top to bottom</h2>
@@ -393,13 +419,38 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
         <span>Qwen3 models<small>Apache-2.0</small></span>
       </div>
     </section>
+
+    <section class="block" id="faq">
+      <p class="eyebrow">FAQ</p>
+      <h2>Questions people ask</h2>
+      <div class="faq">
+        <details open><summary>What is Gantrix?</summary><p>Gantrix is an open-source, local-first AI agent orchestrator. You give it a goal and a team of agents with skills. It plans the goal as steps that depend on each other, runs the ready steps in parallel, has a judge check every result, and retries or replans until the goal is met or a budget runs out.</p></details>
+        <details><summary>Does my data leave my machine?</summary><p>Not by default. Agents run on Ollama models on your machine, state lives in a local Postgres, and the API listens on 127.0.0.1 only. Task content leaves your machine only if you add a cloud connection such as OpenAI, Anthropic or Claude Code, or give an agent the web_fetch tool. Cloud connections are labelled cloud in the dashboard.</p></details>
+        <details><summary>Which models does Gantrix work with?</summary><p>Ollama out of the box; the default model is qwen3:8b. You can also connect OpenAI, Anthropic, and anything that speaks their APIs: vLLM, llama.cpp, LM Studio, LiteLLM, OpenRouter or your own gateway. One switch runs a project on Claude Code or the Codex CLI with your own login. Each agent can use a different model.</p></details>
+        <details><summary>What do I need to run it?</summary><p>Node.js 26.13 or newer, Docker for Postgres and Valkey, and Ollama, on macOS or Linux. The default model is about a 5 GB download, and the first task takes about 10 minutes to set up.</p></details>
+        <details><summary>How do I see which agents and models are running?</summary><p>Open the Live page in the dashboard. It lists every agent working right now, the task and project it is on, the model it runs on, and whether that model is local or cloud. Below it are the models Ollama holds in memory: size, GPU or CPU, which agents use each one, and when it unloads.</p></details>
+        <details><summary>How is Gantrix different from CrewAI or LangGraph?</summary><p>CrewAI and LangGraph are frameworks you build agent systems with in code. Gantrix is a ready-to-run app: API, worker, web dashboard and CLI. A planner writes the plan for you, steps run in parallel, and a judge checks each one. Gantrix is built on LangGraph.js. See <a href="vs/crewai/">Gantrix vs CrewAI</a> and <a href="vs/langgraph/">Gantrix vs LangGraph.js</a>.</p></details>
+        <details><summary>Can agents run shell commands, and is that safe?</summary><p>Only agents whose skills include the shell tool can. Shell is not sandboxed: it can do anything your user account can. Turn on Ask me before risky tools and every shell, web, MCP and email call waits for your approval. Shell commands and MCP servers never get the server's environment, so they cannot read your API keys.</p></details>
+        <details><summary>Is Gantrix free?</summary><p>Yes. Gantrix is MIT licensed and built on open-source software. Running it on local models costs nothing but your own hardware.</p></details>
+      </div>
+    </section>
+
+    <section class="block" id="more">
+      <p class="eyebrow">Read more</p>
+      <h2>Guides and comparisons</h2>
+      <ul class="safety">
+        <li><a href="local-ai-agents-ollama/"><b>Run AI agents locally with Ollama.</b></a> What you need, the five steps, and how to see what is running.</li>
+        <li><a href="vs/crewai/"><b>Gantrix vs CrewAI.</b></a> A ready-to-run TypeScript app next to a mature Python framework.</li>
+        <li><a href="vs/langgraph/"><b>Gantrix vs LangGraph.js.</b></a> What an orchestrator adds on top of the library it is built on.</li>
+      </ul>
+    </section>
   </div>
 </main>
 
 <footer>
   <div class="wrap">
     <span><img src="assets/logo.svg" alt="" width="34" height="28">Gantrix · MIT license</span>
-    <nav class="foot-links" aria-label="Compare"><a href="vs/crewai/">Gantrix vs CrewAI</a><a href="vs/langgraph/">Gantrix vs LangGraph.js</a></nav>
+    <nav class="foot-links" aria-label="Guides and comparisons"><a href="local-ai-agents-ollama/">AI agents with Ollama</a><a href="vs/crewai/">Gantrix vs CrewAI</a><a href="vs/langgraph/">Gantrix vs LangGraph.js</a></nav>
     <a class="powered" href="https://tryperdiem.com">Powered by <b>Per Diem</b></a>
     <a href="https://github.com/PerDiemInc/gantrix">github.com/PerDiemInc/gantrix</a>
   </div>
