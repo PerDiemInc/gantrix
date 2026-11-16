@@ -18,6 +18,7 @@ interface Report {
   emailSent?: boolean;
 }
 
+const taskPrefix = (taskId: string) => `gantrix:pr-bridge:${taskId}:`;
 const retention = 30 * 24 * 60 * 60;
 const system = [
   'You are Gantrix, an engineering assistant summarizing a GitHub pull request discussion.',
@@ -77,7 +78,7 @@ export class PrBridge {
     taskId: string,
   ) {
     this.config = config;
-    this.prefix = `gantrix:pr-bridge:${taskId}:`;
+    this.prefix = taskPrefix(taskId);
     this.redis = redis;
     this.pool = pool;
     this.github = new GitHubDiscussions(config.GITHUB_TOKEN);
@@ -95,6 +96,18 @@ export class PrBridge {
       { defaultModel: config.GITHUB_PR_MODEL, ollamaBaseUrl: config.OLLAMA_BASE_URL },
       0,
     );
+  }
+
+  static async recentReports(redis: Redis, taskId: string) {
+    const prefix = taskPrefix(taskId);
+    const keys = await redis.zrevrange(`${prefix}recent`, 0, 9);
+    if (!keys.length) return [];
+    const values = await redis.mget(...keys);
+    return values.flatMap((value) => {
+      if (!value) return [];
+      const { discussion, summary } = JSON.parse(value) as Report;
+      return [{ title: discussion.title, url: discussion.url, key: discussion.key, summary }];
+    });
   }
 
   start() {
@@ -191,7 +204,11 @@ export class PrBridge {
         );
       }
       report = { discussion: metadata, reference: randomUUID(), summary };
-      await save(report);
+      await this.redis
+        .multi()
+        .set(key, JSON.stringify(report))
+        .zadd(`${this.prefix}recent`, Date.now(), key)
+        .exec();
     }
     if (this.stopped) return;
     await this.redis.set(`${this.prefix}email:${report.reference}`, key, 'EX', retention);

@@ -15,6 +15,7 @@ import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
 import { useSlackStatus } from '../components/ProjectControls.tsx';
+import { PrScanSettings } from '../components/PrScanSettings.tsx';
 import { Avatar, nowText, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { ago, duration, label } from '../format.ts';
 import { go, useAgents, useLive } from '../hooks.ts';
@@ -570,6 +571,8 @@ export function ProjectsPage() {
           </button>
         )}
       </header>
+
+      <PrScanSettings taskId="github-pr-scan" builtIn />
 
       {creating && <NewProject onClose={() => setCreating(false)} />}
 

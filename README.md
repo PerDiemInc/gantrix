@@ -780,11 +780,15 @@ tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. S
 
 ### GitHub PR discussions
 
-Open the Gantrix project that should own the scan and expand **GitHub PR scan**.
+Open **Projects → GitHub PR Scan** and press **Play**. The built-in project is
+available on every installation. To add a separate scan to an existing project,
+open that project and expand **GitHub PR scan**.
 Enter a fine-grained GitHub token with **Pull requests: Read** permission. Set an
 organization (for example, `PerDiemInc`), a list of repositories, or both.
-Enable the scan and save. It polls immediately and then every five minutes by
-default. The first scan includes existing discussions on open PRs.
+Choose **Save and play** on the first run. After setup, **Play** and **Pause**
+control the built-in project. It polls immediately and then every five minutes by
+default. The first scan includes existing discussions on open PRs. The built-in
+project shows recent summaries in the dashboard.
 
 - **Slack** — Enter a bot token and channel. Use a private channel for private
   repositories. To answer replies in report threads, add a Socket Mode app token

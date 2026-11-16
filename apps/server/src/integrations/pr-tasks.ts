@@ -11,6 +11,7 @@ import { type SlackEvent, SocketMode } from '../slack/socket.ts';
 import { PrBridge } from './pr-bridge.ts';
 import { openSettings, PrSettingsSchema, sealSettings, secretFields } from './pr-settings.ts';
 
+const builtInId = 'github-pr-scan';
 const settingsKey = 'gantrix:pr-task-settings';
 
 export function prTasks(
@@ -37,10 +38,11 @@ export function prTasks(
 
   async function sync() {
     const saved = await redis.hgetall(settingsKey);
-    const ids = Object.keys(saved);
+    const ids = Object.keys(saved).filter((id) => id !== builtInId);
     const existing = ids.length
       ? await db.select({ id: tasks.id }).from(tasks).where(inArray(tasks.id, ids))
       : [];
+    if (saved[builtInId]) existing.push({ id: builtInId });
     const alive = new Set(existing.map(({ id }) => id));
     for (const id of ids) {
       if (!alive.has(id)) await redis.hdel(settingsKey, id);
@@ -95,6 +97,7 @@ export function prTasks(
 
   const route = '/api/tasks/:id/pr-scan';
   async function taskId(params: unknown) {
+    if ((params as { id?: string } | undefined)?.id === builtInId) return builtInId;
     const { id } = parse(IdParams, params);
     const exists = await db.query.tasks.findFirst({
       columns: { id: true },
@@ -116,6 +119,20 @@ export function prTasks(
     const fields = { ...value };
     for (const field of secretFields) Reflect.deleteProperty(fields, field);
     return { ...fields, savedSecrets: secretFields.filter((field) => Boolean(value[field])) };
+  });
+  app.post(`${route}/state`, async (request) => {
+    const id = await taskId(request.params);
+    const { enabled } = parse(z.object({ enabled: z.boolean() }), request.body);
+    const previous = await get(id);
+    if (!previous) throw notFound('PR scan settings');
+    await redis.hset(settingsKey, id, sealSettings(id, token, { ...previous, enabled }));
+    refresh();
+    return { ok: true };
+  });
+  app.get(`${route}/reports`, async (request, reply) => {
+    const id = await taskId(request.params);
+    reply.header('Cache-Control', 'no-store');
+    return PrBridge.recentReports(redis, id);
   });
   app.put(route, async (request) => {
     const id = await taskId(request.params);
