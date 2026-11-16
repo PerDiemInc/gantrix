@@ -46,6 +46,16 @@ export class GitHubDiscussions {
     }
   }
 
+  async *repositories(org: string): AsyncGenerator<string> {
+    for await (const repo of this.pages<{
+      full_name: string;
+      archived: boolean;
+      disabled: boolean;
+    }>(`/orgs/${org}/repos`)) {
+      if (!repo.archived && !repo.disabled) yield repo.full_name;
+    }
+  }
+
   async *scan(repo: string): AsyncGenerator<Discussion> {
     const base = `/repos/${repo}`;
     for await (const pull of this.pages<Pull>(`${base}/pulls`)) {

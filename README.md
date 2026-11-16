@@ -782,7 +782,8 @@ tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. S
 
 The API can scan open pull requests on a schedule. Add a fine-grained GitHub token with
 read access to pull requests and set `GITHUB_PR_REPOS` to a comma-separated list of
-`owner/repository` names in `.env`. Restart the API. It polls every five minutes by
+`owner/repository` names in `.env`. Set `GITHUB_PR_ORG` to discover active repositories
+visible to the token in a GitHub organization. You can combine the two settings. Restart the API. It polls every five minutes by
 default, reads conversation comments, inline comments and review summaries, and uses
 `GITHUB_PR_MODEL` on the configured Ollama server to summarize changes. The first run
 covers existing discussions. Gantrix stores summaries and delivery state in Redis.

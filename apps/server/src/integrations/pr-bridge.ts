@@ -118,7 +118,18 @@ export class PrBridge {
       if (!rows[0]?.locked) return;
       try {
         await this.receiveMail().catch(() => console.error('PR bridge could not check its inbox.'));
-        for (const repo of this.config.GITHUB_PR_REPOS) {
+        const repos = new Set(this.config.GITHUB_PR_REPOS.map((repo) => repo.toLowerCase()));
+        if (this.config.GITHUB_PR_ORG && !this.stopped) {
+          try {
+            for await (const repo of this.github.repositories(this.config.GITHUB_PR_ORG)) {
+              repos.add(repo.toLowerCase());
+              if (this.stopped) break;
+            }
+          } catch {
+            console.error('PR bridge could not finish listing organization repositories.');
+          }
+        }
+        for (const repo of repos) {
           if (this.stopped) break;
           try {
             for await (const discussion of this.github.scan(repo)) {
@@ -214,7 +225,9 @@ export class PrBridge {
     if (!report) return;
     const parsed = JSON.parse(report) as Report;
     const repo = parsed.discussion.key.split('#')[0];
-    return this.config.GITHUB_PR_REPOS.some((value) => value.toLowerCase() === repo)
+    const org = this.config.GITHUB_PR_ORG?.toLowerCase();
+    const inOrg = org && repo?.startsWith(`${org}/`);
+    return inOrg || this.config.GITHUB_PR_REPOS.some((value) => value.toLowerCase() === repo)
       ? parsed
       : undefined;
   }

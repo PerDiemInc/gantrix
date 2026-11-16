@@ -38,7 +38,7 @@ preview.on('error', (error) => console.error(`Preview server: ${error.message}`)
 preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 
 const prBridge =
-  config.GITHUB_TOKEN && config.GITHUB_PR_REPOS.length
+  config.GITHUB_TOKEN && (config.GITHUB_PR_REPOS.length || config.GITHUB_PR_ORG)
     ? new PrBridge(config, connection, pool, config.GITHUB_TOKEN)
     : null;
 prBridge?.start();

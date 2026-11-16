@@ -65,6 +65,10 @@ const ConfigSchema = z.object({
           .refine((repo) => repo.split('/').every((part) => part !== '.' && part !== '..')),
       ),
     ),
+  GITHUB_PR_ORG: optionalMatch(
+    /^[a-zA-Z0-9][a-zA-Z0-9-]*$/,
+    'GITHUB_PR_ORG is a GitHub organization login',
+  ),
   GITHUB_PR_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
   GITHUB_PR_SLACK: z.stringbool().default(false),
   GITHUB_PR_MODEL: z.string().default('qwen3:8b'),

@@ -49,6 +49,28 @@ describe('GitHub PR discussions', () => {
     expect(repeated?.fingerprint).toBe(discussion?.fingerprint);
   });
 
+  it('discovers active organization repositories across pages', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(input);
+        expect(url.pathname).toBe('/orgs/PerDiemInc/repos');
+        return url.searchParams.get('page') === '1'
+          ? Response.json(
+              [{ full_name: 'PerDiemInc/api' }, { full_name: 'PerDiemInc/old', archived: true }],
+              { headers: { Link: '<https://api.github.com/example?page=2>; rel="next"' } },
+            )
+          : Response.json([
+              { full_name: 'PerDiemInc/app' },
+              { full_name: 'PerDiemInc/disabled', disabled: true },
+            ]);
+      }),
+    );
+    expect(
+      await Array.fromAsync(new GitHubDiscussions('test-token').repositories('PerDiemInc')),
+    ).toEqual(['PerDiemInc/api', 'PerDiemInc/app']);
+  });
+
   it('includes every part of long comments and preserves their order', () => {
     const body = 'x'.repeat(19_000);
     const batches = [
