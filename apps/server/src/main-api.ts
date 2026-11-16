@@ -5,6 +5,7 @@ import { buildServer } from './api/server.ts';
 import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
+import { PrBridge } from './integrations/pr-bridge.ts';
 import { createPreviewServer } from './preview.ts';
 import { SlackBridge } from './slack/bridge.ts';
 
@@ -36,10 +37,21 @@ const preview = createPreviewServer(config.GANTRIX_SITES_DIR, {
 preview.on('error', (error) => console.error(`Preview server: ${error.message}`));
 preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 
+const prBridge =
+  config.GITHUB_TOKEN && config.GITHUB_PR_REPOS.length
+    ? new PrBridge(config, connection, pool, config.GITHUB_TOKEN)
+    : null;
+prBridge?.start();
+
 // Slack (optional): progress posts to a thread per project; Socket Mode brings replies back.
 let slack: SlackBridge | null = null;
 if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
-  slack = new SlackBridge({ db, queues, checkpointer, config }, hub);
+  slack = new SlackBridge(
+    { db, queues, checkpointer, config },
+    hub,
+    undefined,
+    prBridge?.handleSlack.bind(prBridge),
+  );
   await slack.start().then(
     () =>
       console.log(
@@ -60,6 +72,7 @@ async function shutdown() {
   preview.close();
   await app.close();
   await slack?.close();
+  await prBridge?.close();
   await hub.close();
   await queues.close();
   connection.disconnect();

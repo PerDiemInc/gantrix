@@ -57,13 +57,21 @@ export class SlackBridge {
   #botUserId = '';
   #unsubscribe: (() => void) | null = null;
 
-  constructor(deps: EngineDeps, hub: EventHub, api?: SlackApi) {
+  readonly #handlePrReply: ((event: SlackEvent, text: string) => Promise<boolean>) | undefined;
+
+  constructor(
+    deps: EngineDeps,
+    hub: EventHub,
+    api?: SlackApi,
+    handlePrReply?: (event: SlackEvent, text: string) => Promise<boolean>,
+  ) {
     const { config } = deps;
     if (!config.SLACK_BOT_TOKEN || !config.SLACK_CHANNEL_ID) {
       throw new Error('SlackBridge needs SLACK_BOT_TOKEN and SLACK_CHANNEL_ID');
     }
     this.#deps = deps;
     this.#hub = hub;
+    this.#handlePrReply = handlePrReply;
     this.#api = api ?? new SlackApi(config.SLACK_BOT_TOKEN, config.SLACK_API_URL);
     this.#channel = config.SLACK_CHANNEL_ID;
     this.#socket = config.SLACK_APP_TOKEN
@@ -307,6 +315,7 @@ export class SlackBridge {
         })
       : undefined;
     if (!task) {
+      if (await this.#handlePrReply?.(ev, text)) return;
       if (mention) await reply(await this.#overview());
       return;
     }

@@ -777,3 +777,23 @@ Run the live model through two small business workflows and check artifacts inde
 of the judge with `npm run evaluate -- <file-only-agent-uuid>`. Reports include correctness,
 tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. See
 [the evaluation guide](docs/evaluation.md) for setup, safety limits and comparison guidance.
+
+### GitHub PR discussions
+
+The API can scan open pull requests on a schedule. Add a fine-grained GitHub token with
+read access to pull requests and set `GITHUB_PR_REPOS` to a comma-separated list of
+`owner/repository` names in `.env`. Restart the API. It polls every five minutes by
+default, reads conversation comments, inline comments and review summaries, and uses
+`GITHUB_PR_MODEL` on the configured Ollama server to summarize changes. The first run
+covers existing discussions. Gantrix stores summaries and delivery state in Redis.
+The PR model receives discussion text as data and has no tools.
+
+- **Slack** — Set `GITHUB_PR_SLACK=true` and configure the Slack bot token and channel.
+  Use a private channel for private repositories. With the app token, Socket Mode
+  subscriptions, and `SLACK_ALLOWED_USERS` configured, reply in a report's thread to
+  ask about that PR.
+- **Email** — Set `PR_SMTP_URL`, `PR_EMAIL_FROM` and `PR_EMAIL_TO` for delivery.
+  For replies, also configure `PR_IMAP_HOST`, `PR_IMAP_USER` and `PR_IMAP_PASSWORD`
+  for the dedicated sender mailbox. Reply from the configured recipient address and
+  keep the subject intact. Gantrix replies only to the configured recipient. On
+  first startup the bridge begins reading new mail from that point onward.
