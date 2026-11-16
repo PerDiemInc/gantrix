@@ -61,6 +61,6 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
   taskRoutes(app, deps);
   approvalRoutes(app, deps);
   streamRoutes(app, deps);
-  systemRoutes(app);
+  systemRoutes(app, deps);
   return app;
 }

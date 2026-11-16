@@ -53,6 +53,7 @@ The screenshots come from a demo with a made-up bakery.
 **Site:** https://perdieminc.github.io/gantrix/ has an overview and the same getting-started steps.
 Compare: [Gantrix vs CrewAI](https://perdieminc.github.io/gantrix/vs/crewai/) ·
 [Gantrix vs LangGraph.js](https://perdieminc.github.io/gantrix/vs/langgraph/).
+Guide: [Run AI agents locally with Ollama](https://perdieminc.github.io/gantrix/local-ai-agents-ollama/).
 The mascot is Gant; the logo files are in [`site/assets`](site/assets).
 
 ---
@@ -472,6 +473,14 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 - **Delete** (finished or stopped projects only) removes the project, its tasks, chat and
   history, and its workspace folder. Sites it deployed stay. The dashboard asks first; the CLI
   needs `--yes`.
+
+### What's running right now
+
+The dashboard's **Live** page lists every agent working at this moment: its task and project,
+the model it runs on, whether that model is local or cloud, how long it has been at it and the
+tokens used. Below it are the models Ollama holds in memory, with size, GPU or CPU split, the
+agents using each one and when it unloads. A stopped project drops off the page. `GET /api/live`
+returns the same data. The **System** page shows memory, CPU load and running Docker containers.
 
 ## Slack (optional)
 

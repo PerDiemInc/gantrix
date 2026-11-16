@@ -6,6 +6,7 @@ import { useRoute } from './hooks.ts';
 import { AgentsPage } from './pages/AgentsPage.tsx';
 import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
 import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
+import { LivePage } from './pages/LivePage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
@@ -68,6 +69,7 @@ export function App() {
 
   const nav = [
     ['projects', 'Projects'],
+    ['live', 'Live'],
     ['agents', 'Agents'],
     ['skills', 'Skills'],
     ['connections', 'Connections'],
@@ -114,6 +116,7 @@ export function App() {
           {route.page === 'skills' && <SkillsPage />}
           {route.page === 'connections' && <ConnectionsPage />}
           {route.page === 'approvals' && <ApprovalsPage />}
+          {route.page === 'live' && <LivePage />}
           {route.page === 'system' && <SystemPage />}
         </ErrorBoundary>
       </main>

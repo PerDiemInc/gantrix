@@ -234,3 +234,65 @@ export interface SystemDto {
     | { available: false; error: string };
   sampledAt: string;
 }
+
+/** One agent (or the planner, or a judge) holding work right now. */
+export interface LiveAgentDto {
+  /** The step's id; for the planner, the project's id. */
+  id: string;
+  role: 'agent' | 'judge' | 'planner';
+  agentId: string | null;
+  agentName: string;
+  avatar: string | null;
+  taskId: string;
+  /** The project's title. */
+  project: string;
+  stepId: string | null;
+  stepTitle: string | null;
+  status: StepStatus | 'planning';
+  attempt: number;
+  tokensUsed: number;
+  /** When this piece of work started. */
+  since: string | null;
+  /** The model this work runs on, and where. */
+  model: string;
+  provider: ModelProvider;
+  /** The saved connection's name; null = the default Ollama or the agent's own URL. */
+  connection: string | null;
+  /** False when prompts and task content leave this machine. */
+  isLocal: boolean;
+}
+
+/** A model an Ollama server holds in memory, from its /api/ps. */
+export interface LoadedModelDto {
+  name: string;
+  sizeBytes: number;
+  /** The part on the GPU; the rest runs on the CPU. */
+  vramBytes: number;
+  /** "8.2B" */
+  parameterSize: string | null;
+  /** "Q4_K_M" */
+  quantization: string | null;
+  contextLength: number | null;
+  /** When Ollama unloads it if nothing else uses it. */
+  expiresAt: string | null;
+}
+
+export interface ModelServerDto {
+  name: string;
+  url: string;
+  isLocal: boolean;
+  available: boolean;
+  models: LoadedModelDto[];
+  error?: string;
+}
+
+/** Who is working right now, on which model, and which models are loaded in memory. */
+export interface LiveDto {
+  agents: LiveAgentDto[];
+  /** Steps waiting for a free slot. */
+  queued: number;
+  servers: ModelServerDto[];
+  /** The model the planner, judges and agents without their own use. */
+  defaultModel: string;
+  sampledAt: string;
+}

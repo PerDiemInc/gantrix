@@ -10,7 +10,8 @@ export type Route =
   | { page: 'skills' }
   | { page: 'connections' }
   | { page: 'approvals' }
-  | { page: 'system' };
+  | { page: 'system' }
+  | { page: 'live' };
 
 function parseHash(hash: string): Route {
   const [, page, id, sub, stepId] = hash.replace(/^#/, '').split('/');
@@ -25,7 +26,8 @@ function parseHash(hash: string): Route {
     page === 'skills' ||
     page === 'connections' ||
     page === 'approvals' ||
-    page === 'system'
+    page === 'system' ||
+    page === 'live'
   ) {
     return { page };
   }

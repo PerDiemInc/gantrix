@@ -187,6 +187,57 @@ describe('api', () => {
     expect(byName.dead.error).toBeTruthy();
   });
 
+  it('shows who is working on which model, the loaded models, and drops a stopped project', async () => {
+    const fetcher = await e.addAgent('fetcher', ['web_fetch']);
+    e.fake.script.plan = () => ({
+      steps: [
+        {
+          key: 'fetch',
+          title: 'Fetch the page',
+          agent: 'fetcher',
+          instructions: 'go',
+          acceptance: 'ok',
+          dependsOn: [],
+        },
+      ],
+    });
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length ? 'Fetched.' : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } };
+    const live = async () => (await app.inject({ url: '/api/live', headers: auth })).json();
+
+    expect(await live()).toMatchObject({ agents: [], queued: 0, defaultModel: 'fake' });
+
+    const task = await createTask(e.deps, { goal: 'Fetch', name: 'Fetching', approveAll: false });
+    await e.waitFor(task.id, (t) => t.status === 'awaiting_approval');
+    const now = await live();
+    expect(now.agents).toHaveLength(1);
+    expect(now.agents[0]).toMatchObject({
+      role: 'agent',
+      agentId: fetcher.id,
+      agentName: 'fetcher',
+      taskId: task.id,
+      project: 'Fetching',
+      stepTitle: 'Fetch the page',
+      status: 'awaiting_approval',
+      model: 'fake',
+      provider: 'ollama',
+      connection: null,
+      isLocal: true,
+    });
+    expect(now.servers).toEqual([
+      expect.objectContaining({
+        name: 'Ollama (default)',
+        available: true,
+        isLocal: true,
+        models: [expect.objectContaining({ name: 'fake', parameterSize: '8.2B' })],
+      }),
+    ]);
+
+    // A stopped project keeps its step where it was, but nobody is working on it.
+    await app.inject({ method: 'POST', url: `/api/tasks/${task.id}/stop`, headers: auth });
+    expect((await live()).agents).toEqual([]);
+  });
+
   it('lists projects with their team, active tasks, approvals and latest event', async () => {
     const writer = await e.addAgent('writer');
     e.fake.script.plan = () => ({
