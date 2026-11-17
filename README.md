@@ -74,6 +74,18 @@ On a Mac, run Ollama natively, not in Docker: Docker on a Mac can't use the GPU.
 
 ### 2. Install and configure
 
+**Fastest:** `./init.sh` installs nvm if missing, installs the Node version from `.nvmrc`, runs
+`npm install`, starts Postgres and Valkey with Docker, applies migrations and starts the API,
+worker and dashboard. Docker must be running. Then pull the model in another terminal
+(`ollama pull qwen3:8b`) and skip to step 4.
+
+```bash
+git clone git@github.com:PerDiemInc/gantrix.git && cd gantrix
+./init.sh
+```
+
+Or do it by hand:
+
 ```bash
 git clone git@github.com:PerDiemInc/gantrix.git && cd gantrix
 nvm use
@@ -86,7 +98,14 @@ ollama pull qwen3:8b   # the default model, about 5 GB
 
 ### 3. Start Gantrix
 
-Open three terminals in the repo and run one command in each:
+If you didn't use `./init.sh`, one command does setup, infra, migrations and starts the API, worker and dashboard
+(agents run on your local Ollama):
+
+```bash
+npm start
+```
+
+Or run each piece yourself. Open three terminals in the repo and run one command in each:
 
 ```bash
 npm run dev:api        # the API on http://127.0.0.1:4700

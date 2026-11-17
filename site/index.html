@@ -171,7 +171,9 @@
       <ol class="steps">
         <li><span class="n">1</span><div class="body">
           <h3>Install and configure</h3>
-          <p><code>npm run setup</code> creates <code>.env</code> with a random API token. <code>db:migrate</code> prints “Migrations applied.”</p>
+          <p>Fastest: <code>./init.sh</code> installs nvm and the right Node, runs <code>npm install</code>, starts Postgres and Valkey, migrates, and starts the API, worker and dashboard. Docker must be running. Prefer to do it by hand? The commands are below; <code>npm run setup</code> creates <code>.env</code> with a random API token.</p>
+          <div class="code"><button class="copy" type="button">Copy</button><pre>git clone git@github.com:PerDiemInc/gantrix.git &amp;&amp; cd gantrix
+./init.sh</pre></div>
           <div class="code"><button class="copy" type="button">Copy</button><pre>git clone git@github.com:PerDiemInc/gantrix.git &amp;&amp; cd gantrix
 nvm use
 npm install
@@ -182,8 +184,9 @@ ollama pull qwen3:8b  <span class="c"># the default model, about 5 GB</span></pr
         </div></li>
         <li><span class="n">2</span><div class="body">
           <h3>Start Gantrix</h3>
-          <p>Three terminals, one command each. The worker prints “Gantrix worker ready”.</p>
-          <div class="code"><button class="copy" type="button">Copy</button><pre>npm run dev:api      <span class="c"># API on 127.0.0.1:4700</span>
+          <p><code>npm start</code> runs all three together. Or use three terminals, one command each; the worker prints “Gantrix worker ready”.</p>
+          <div class="code"><button class="copy" type="button">Copy</button><pre>npm start            <span class="c"># or the three commands below</span>
+npm run dev:api      <span class="c"># API on 127.0.0.1:4700</span>
 npm run dev:worker   <span class="c"># runs plans, steps and judges</span>
 npm run dev:web      <span class="c"># dashboard on 127.0.0.1:4701</span></pre></div>
         </div></li>

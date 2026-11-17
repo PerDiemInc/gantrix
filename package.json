@@ -10,6 +10,7 @@
     "apps/*"
   ],
   "scripts": {
+    "start": "node scripts/start.ts",
     "setup": "node scripts/setup.ts",
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
