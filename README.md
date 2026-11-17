@@ -117,6 +117,13 @@ Open http://127.0.0.1:4701. It asks for your token once; print it with `npm run 
 
 ### 4. Add a skill and two agents
 
+A first start already adds a **starter team** (CTO, CMO, CRO, CISO, designer, engineer, CPO,
+DevOps and the AWS and GCP engineers, each with its skills), so the Agents page isn't empty.
+Press **Edit** on any agent to change its name, description, instructions and skills, or
+**Remove** the ones you don't want; they don't come back. Skip this step if the starter team is
+enough. To add your own:
+
+
 ```bash
 npm run gantrix -- skills add examples/skills/workspace-files
 npm run gantrix -- agents add researcher -d "Collects facts and writes notes" -s workspace-files --max-concurrency 2

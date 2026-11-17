@@ -9,6 +9,7 @@ import { prTasks } from './integrations/pr-tasks.ts';
 import { createPreviewServer } from './preview.ts';
 import { AgentSlack } from './slack/agent-chat.ts';
 import { SlackBridge } from './slack/bridge.ts';
+import { seedDefaultTeam } from './team-seed.ts';
 
 const config = loadConfig();
 if (!config.GANTRIX_TOKEN) {
@@ -27,6 +28,15 @@ const queues = createQueues(connection);
 const checkpointer = new PostgresSaver(pool, undefined, { schema: 'langgraph' });
 const hub = new EventHub(db, config.DATABASE_URL);
 await hub.start();
+
+// A first run starts with the built-in team instead of an empty Agents page.
+const seeded = await seedDefaultTeam(db, connection, config).catch((error: unknown) => {
+  console.error(
+    `Starter team not added: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  return 0;
+});
+if (seeded) console.log(`Added ${seeded} starter agents. Edit them on the Agents page.`);
 
 const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRIX_TOKEN);
 const prScans = prTasks(app, db, connection, pool, config, config.GANTRIX_TOKEN);

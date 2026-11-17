@@ -1,8 +1,8 @@
 import type { AgentDto, JobDto } from '@gantrix/shared';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { ago, label } from '../format.ts';
-import { go, useAgents, useLive } from '../hooks.ts';
+import { go, useLive } from '../hooks.ts';
 import { Icon } from './Icon.tsx';
 
 const PRESETS: [string, string][] = [
@@ -40,17 +40,32 @@ function scheduleText(job: JobDto) {
   return `${preset ? preset[0] : `cron ${job.schedule}`} (${job.timezone})`;
 }
 
+const clipText = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
 function JobForm({
   editing,
-  agents,
   onClose,
   onSaved,
 }: {
   editing: JobDto | null;
-  agents: AgentDto[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  // Loaded when the form opens, so it always lists the agents that exist now.
+  const [agents, setAgents] = useState<AgentDto[] | null>(null);
+  useEffect(() => {
+    api.get<AgentDto[]>('/api/agents').then(
+      (list) => {
+        setAgents(list);
+        // Steps that have no agent yet start on the first one.
+        setSteps((current) =>
+          current.map((s) => (s.agentId ? s : { ...s, agentId: list[0]?.id ?? '' })),
+        );
+      },
+      () => setAgents([]),
+    );
+  }, []);
+  const choices = agents ?? [];
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [goal, setGoal] = useState(editing?.goal ?? '');
@@ -59,9 +74,7 @@ function JobForm({
   const [timezone, setTimezone] = useState(editing?.timezone ?? localZone());
   const [slack, setSlack] = useState(editing?.slack ?? false);
   const [steps, setSteps] = useState<StepForm[]>(
-    editing
-      ? editing.steps.map((s) => ({ ...s, key: nextKey++ }))
-      : [blankStep(agents[0]?.id ?? '')],
+    editing ? editing.steps.map((s) => ({ ...s, key: nextKey++ })) : [blankStep()],
   );
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -146,7 +159,7 @@ function JobForm({
       <fieldset className="header-rows">
         <legend>Steps, in order</legend>
         {steps.map((s, i) => {
-          const agent = agents.find((a) => a.id === s.agentId);
+          const agent = choices.find((a) => a.id === s.agentId);
           return (
             <div key={s.key} className="item">
               <div className="item-head">
@@ -198,9 +211,10 @@ function JobForm({
                   <option value="" disabled>
                     Choose an agent
                   </option>
-                  {agents.map((a) => (
+                  {choices.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.name}
+                      {a.description ? ` — ${clipText(a.description, 60)}` : ''}
                     </option>
                   ))}
                 </select>
@@ -234,9 +248,12 @@ function JobForm({
         <button
           type="button"
           className="ghost small"
-          onClick={() =>
-            setSteps([...steps, blankStep(steps.at(-1)?.agentId ?? agents[0]?.id ?? '')])
-          }
+          onClick={() => {
+            // A new step starts on an agent no earlier step uses, so the team varies.
+            const used = new Set(steps.map((s) => s.agentId));
+            const next = choices.find((a) => !used.has(a.id)) ?? choices[0];
+            setSteps([...steps, blankStep(next?.id ?? '')]);
+          }}
         >
           <Icon name="plus" size={14} /> Add step
         </button>
@@ -276,15 +293,18 @@ function JobForm({
         each run's progress to Slack
       </label>
 
-      {agents.length === 0 && (
-        <p className="error small">Add an agent first (Agents page); every step needs one.</p>
+      {agents && agents.length === 0 && (
+        <p className="error small">
+          There are no agents yet, and every step needs one. <a href="#/agents">Create an agent</a>{' '}
+          first, then come back.
+        </p>
       )}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
-      <button type="submit" className="primary" disabled={busy || agents.length === 0}>
+      <button type="submit" className="primary" disabled={busy || choices.length === 0}>
         {editing ? 'Save job' : 'Create job'}
       </button>
     </form>
@@ -293,8 +313,6 @@ function JobForm({
 
 export function JobsPanel({ creating, onClose }: { creating: boolean; onClose: () => void }) {
   const { data, reload } = useLive(() => api.get<JobDto[]>('/api/jobs'), '/api/stream', []);
-  const agentMap = useAgents();
-  const agents = [...agentMap.values()];
   const [editing, setEditing] = useState<JobDto | null>(null);
   const [message, setMessage] = useState('');
   const jobs = data ?? [];
@@ -333,7 +351,6 @@ export function JobsPanel({ creating, onClose }: { creating: boolean; onClose: (
         <JobForm
           key={editing?.id ?? 'new'}
           editing={editing}
-          agents={agents}
           onClose={() => {
             setEditing(null);
             onClose();

@@ -85,6 +85,132 @@ function RunsOn({
   );
 }
 
+/** Edit an agent in place: its name, what it does, its instructions and its skills. */
+function AgentEditor({
+  agent,
+  skills,
+  onSaved,
+}: {
+  agent: AgentDto;
+  skills: SkillDto[];
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: agent.name,
+    description: agent.description,
+    systemPrompt: agent.systemPrompt,
+    maxConcurrency: String(agent.maxConcurrency),
+  });
+  const [picked, setPicked] = useState(new Set(agent.skills.map((s) => s.id)));
+  const [error, setError] = useState('');
+  const start = () => {
+    setForm({
+      name: agent.name,
+      description: agent.description,
+      systemPrompt: agent.systemPrompt,
+      maxConcurrency: String(agent.maxConcurrency),
+    });
+    setPicked(new Set(agent.skills.map((s) => s.id)));
+    setError('');
+    setOpen(true);
+  };
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await api.patch(`/api/agents/${agent.id}`, {
+        name: form.name,
+        description: form.description,
+        systemPrompt: form.systemPrompt,
+        maxConcurrency: Number(form.maxConcurrency),
+        skillIds: [...picked],
+      });
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  if (!open) {
+    return (
+      <button type="button" className="ghost small" onClick={start}>
+        Edit
+      </button>
+    );
+  }
+  return (
+    <form className="runs-on-edit" onSubmit={(e) => void save(e)}>
+      <label>
+        Name
+        <input
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          pattern="[a-z0-9][a-z0-9-]*"
+          required
+        />
+      </label>
+      <label>
+        What it does <span className="muted small">(the planner reads this)</span>
+        <textarea
+          rows={3}
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+      </label>
+      <label>
+        Extra instructions <span className="muted small">(system prompt)</span>
+        <textarea
+          rows={4}
+          value={form.systemPrompt}
+          onChange={(e) => setForm({ ...form, systemPrompt: e.target.value })}
+        />
+      </label>
+      <label>
+        Steps at a time
+        <input
+          type="number"
+          min={1}
+          max={16}
+          value={form.maxConcurrency}
+          onChange={(e) => setForm({ ...form, maxConcurrency: e.target.value })}
+        />
+      </label>
+      <fieldset className="chips">
+        <legend className="muted small">Skills</legend>
+        {skills.map((s) => (
+          <label key={s.id} className="chip">
+            <input
+              type="checkbox"
+              checked={picked.has(s.id)}
+              onChange={() => {
+                const next = new Set(picked);
+                if (next.has(s.id)) next.delete(s.id);
+                else next.add(s.id);
+                setPicked(next);
+              }}
+            />{' '}
+            {s.name}
+          </label>
+        ))}
+      </fieldset>
+      <div className="row-actions">
+        <button type="submit" className="primary small">
+          Save
+        </button>
+        <button type="button" className="ghost small" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="error small" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
 /** Chat with an agent in Slack: needs a Slack connection with bot and app tokens. */
 function SlackChat({
   agent,
@@ -217,7 +343,10 @@ export function AgentsPage() {
       <section className="card">
         <h2>Agents</h2>
         {!agents.length && (
-          <p className="muted">No agents yet. The planner assigns each step to one of them.</p>
+          <p className="muted">
+            No agents yet. The planner assigns each step to one of them. A first run adds a starter
+            team you can edit here.
+          </p>
         )}
         <ul className="cards">
           {agents.map((a) => (
@@ -226,6 +355,12 @@ export function AgentsPage() {
                 <AvatarPicker agent={a} onSaved={load} />
                 <strong>{a.name}</strong>
                 <span className="muted small">{a.maxConcurrency} at a time</span>
+                <AgentEditor
+                  key={`${a.id}-${a.updatedAt}`}
+                  agent={a}
+                  skills={skills}
+                  onSaved={load}
+                />
                 <button type="button" className="ghost danger small" onClick={() => void remove(a)}>
                   Remove
                 </button>
