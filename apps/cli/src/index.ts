@@ -48,6 +48,10 @@ agents
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
   .option('--prompt <text>', 'extra system prompt')
   .option('-c, --connection <name>', 'a saved model connection (see gantrix connections)')
+  .option(
+    '--slack <connection>',
+    'a Slack connection (bot token, app token, allowed users) to chat with this agent in Slack',
+  )
   .action(run((name: string, o) => cmd.addAgent(client, name, o)));
 agents
   .command('rm <name>')
@@ -80,7 +84,11 @@ connections
   .description('save a connection')
   .requiredOption(
     '-p, --provider <provider>',
-    'ollama, openai, anthropic, http, claude-code or codex',
+    'ollama, openai, anthropic, http, claude-code, codex, github or slack',
+  )
+  .option(
+    '--setting <key=value...>',
+    'github: org, repos; slack: channel (ID), allowedUsers. e.g. --setting org=PerDiemInc',
   )
   .option(
     '-u, --url <url>',
@@ -107,6 +115,43 @@ connections
   .command('rm <name>')
   .description('remove a connection no agent uses')
   .action(run((name: string) => cmd.removeConnection(client, name)));
+
+const jobs = program
+  .command('jobs')
+  .description('saved, repeatable lists of steps, run on demand or on a cron schedule');
+jobs
+  .command('list', { isDefault: true })
+  .description('list jobs')
+  .action(run(() => cmd.listJobs(client)));
+jobs
+  .command('add <name>')
+  .description('create a job: ordered steps, each done by one agent')
+  .requiredOption('--goal <text>', 'what a finished run looks like')
+  .requiredOption(
+    '--step <agent|title|instructions...>',
+    'a step, in order; repeat for each (e.g. --step "researcher|Fetch PRs|List open PRs")',
+  )
+  .option('--description <text>', 'what the job is for')
+  .option('--schedule <cron>', 'e.g. "0 9 * * *" (daily at 09:00); omit to run only on demand')
+  .option('--timezone <zone>', 'e.g. America/New_York (default: this machine)')
+  .option('--slack', 'post each run to Slack')
+  .action(run((name: string, o) => cmd.addJob(client, name, o)));
+jobs
+  .command('run <name>')
+  .description('start a run now')
+  .action(run((name: string) => cmd.runJob(client, name)));
+jobs
+  .command('pause <name>')
+  .description("stop a job's schedule")
+  .action(run((name: string) => cmd.setJobEnabled(client, name, false)));
+jobs
+  .command('play <name>')
+  .description("turn a job's schedule back on")
+  .action(run((name: string) => cmd.setJobEnabled(client, name, true)));
+jobs
+  .command('rm <name>')
+  .description('delete a job (its past runs stay as projects)')
+  .action(run((name: string) => cmd.removeJob(client, name)));
 
 const team = program.command('team').description('the built-in executive agents');
 team

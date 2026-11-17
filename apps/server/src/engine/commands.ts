@@ -10,7 +10,16 @@ import {
 } from '@gantrix/shared';
 import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
-import { agents, approvals, delegations, steps, taskMessages, tasks } from '../db/schema.ts';
+import {
+  agents,
+  approvals,
+  delegations,
+  type JobStep,
+  plans,
+  steps,
+  taskMessages,
+  tasks,
+} from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
 import { resumeIfReady } from './delegation.ts';
@@ -34,6 +43,8 @@ export async function createTask(
     agentIds?: string[];
     agentModels?: Record<string, AgentModelChoice>;
     offloadConnectionId?: string;
+    /** A run of this job: its steps become the plan, one after another, with no planner. */
+    job?: { id: string; steps: JobStep[] };
   },
 ) {
   const id = randomUUIDv7();
@@ -59,12 +70,36 @@ export async function createTask(
         agentModels:
           input.agentModels && Object.keys(input.agentModels).length ? input.agentModels : null,
         offloadConnectionId: input.offloadConnectionId ?? null,
+        jobId: input.job?.id ?? null,
+        ...(input.job ? { status: 'running' as const, startedAt: new Date() } : {}),
       })
       .returning();
-    await emit(tx, id, { type: 'task.status', status: 'planning' });
+    if (row && input.job) {
+      // The job's steps are the plan: each one waits for the one before it.
+      const keys = input.job.steps.map((_, i) => `step_${i + 1}`);
+      await tx.insert(plans).values({ taskId: id, version: 1, reason: 'job' });
+      await tx.insert(steps).values(
+        input.job.steps.map((s, i) => ({
+          taskId: id,
+          planVersion: 1,
+          key: keys[i] ?? `step_${i + 1}`,
+          title: s.title,
+          instructions: s.instructions,
+          acceptance:
+            s.acceptance.trim() || 'The instructions were carried out and the result is reported.',
+          agentId: s.agentId,
+          dependsOn: i === 0 ? [] : [keys[i - 1] ?? ''],
+        })),
+      );
+      await emit(tx, id, { type: 'plan.created', version: 1, stepKeys: keys, reason: 'job' });
+      await emit(tx, id, { type: 'task.status', status: 'running' });
+    } else {
+      await emit(tx, id, { type: 'task.status', status: 'planning' });
+    }
     return row;
   });
   if (!task) throw new Error('Task insert returned no row');
+  if (input.job) await deps.queues.tick(id, budget.maxMinutes * 60_000 + 1_000);
   await deps.queues.tick(id);
   return task;
 }

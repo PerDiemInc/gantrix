@@ -7,6 +7,7 @@ import {
   type ConnectionDto,
   EXAMPLES,
   isTerminal,
+  type JobDto,
   type SkillDto,
   type StepConversationDto,
   type TaskDetailDto,
@@ -67,10 +68,12 @@ export async function addAgent(
     skills?: string;
     prompt?: string;
     connection?: string;
+    slack?: string;
   },
 ): Promise<void> {
   const skillIds = o.skills ? await skillIdsByName(client, o.skills.split(',')) : [];
   const connectionId = o.connection ? (await connectionByName(client, o.connection)).id : undefined;
+  const slackConnectionId = o.slack ? (await connectionByName(client, o.slack)).id : undefined;
   const agent = await client.post<AgentDto>('/api/agents', {
     name,
     skillIds,
@@ -80,6 +83,7 @@ export async function addAgent(
     ...(o.maxConcurrency ? { maxConcurrency: Number(o.maxConcurrency) } : {}),
     ...(o.prompt ? { systemPrompt: o.prompt } : {}),
     ...(connectionId ? { connectionId } : {}),
+    ...(slackConnectionId ? { slackConnectionId } : {}),
   });
   console.log(`Added agent ${paint('bold', agent.name)} with ${agent.skills.length} skill(s).`);
 }
@@ -536,9 +540,18 @@ export async function addConnection(
     contentType?: string;
     body?: string;
     replyPath?: string;
+    setting?: string[];
   },
 ): Promise<void> {
   const headers = Object.fromEntries((o.header ?? []).map(parseHeader));
+  // GitHub and Slack: --setting org=PerDiemInc, --setting channel=C0123456789
+  const settings = Object.fromEntries(
+    (o.setting ?? []).map((s) => {
+      const i = s.indexOf('=');
+      if (i < 1) throw new Error(`--setting needs key=value, got "${s}".`);
+      return [s.slice(0, i).trim(), s.slice(i + 1).trim()];
+    }),
+  );
   if (o.apiKeyEnv) {
     const provider = o.provider as keyof typeof KEY_HEADER;
     const header = KEY_HEADER[provider] ?? 'Authorization';
@@ -550,6 +563,7 @@ export async function addConnection(
     provider: o.provider,
     ...(o.url ? { baseUrl: o.url } : {}),
     headers,
+    ...(Object.keys(settings).length ? { settings } : {}),
     ...(o.provider === 'http'
       ? {
           request: {
@@ -590,6 +604,97 @@ export async function testConnection(client: Client, name: string, model: string
       `${paint('green', '✔')} ${model} on ${c.name} replied "${r.reply}" in ${duration(r.ms)}.`,
     );
   else throw new Error(`${model} on ${c.name} failed after ${duration(r.ms)}: ${r.error}`);
+}
+
+// ---- jobs
+
+async function jobByName(client: Client, name: string): Promise<JobDto> {
+  const job = (await client.get<JobDto[]>('/api/jobs')).find((j) => j.name === name);
+  if (!job) throw new Error(`No job named "${name}". See: gantrix jobs`);
+  return job;
+}
+
+export async function listJobs(client: Client): Promise<void> {
+  const [list, agents] = await Promise.all([
+    client.get<JobDto[]>('/api/jobs'),
+    client.get<AgentDto[]>('/api/agents'),
+  ]);
+  if (!list.length) {
+    return console.log(
+      'No jobs. Add one: gantrix jobs add "Daily scan" --goal "..." --step "researcher|Fetch PRs|List open PRs" --schedule "0 9 * * *"',
+    );
+  }
+  const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? '?';
+  console.log(
+    table([
+      ['NAME', 'SCHEDULE', 'STEPS', 'LAST RUN'].map((h) => paint('bold', h)),
+      ...list.map((j) => [
+        j.name,
+        j.schedule
+          ? `${j.schedule} (${j.timezone})${j.enabled ? '' : paint('yellow', ' paused')}`
+          : paint('gray', 'manual'),
+        j.steps.map((s) => `${s.title} [${agentName(s.agentId)}]`).join(' → '),
+        j.lastRun ? `${j.lastRun.status} ${short(j.lastRun.id)}` : paint('gray', 'never'),
+      ]),
+    ]),
+  );
+}
+
+export async function addJob(
+  client: Client,
+  name: string,
+  o: {
+    goal: string;
+    description?: string;
+    step: string[];
+    schedule?: string;
+    timezone?: string;
+    slack?: boolean;
+  },
+): Promise<void> {
+  const agents = await client.get<AgentDto[]>('/api/agents');
+  const steps = o.step.map((raw) => {
+    const [agent, title, ...rest] = raw.split('|').map((p) => p.trim());
+    const instructions = rest.join('|').trim();
+    if (!agent || !title || !instructions) {
+      throw new Error(`--step is "agent|title|instructions", got "${raw}".`);
+    }
+    const found = agents.find((a) => a.name === agent);
+    if (!found) throw new Error(`No agent named "${agent}". See: gantrix agents`);
+    return { title, agentId: found.id, instructions, acceptance: '' };
+  });
+  const job = await client.post<JobDto>('/api/jobs', {
+    name,
+    goal: o.goal,
+    ...(o.description ? { description: o.description } : {}),
+    steps,
+    ...(o.schedule ? { schedule: o.schedule } : {}),
+    ...(o.timezone ? { timezone: o.timezone } : {}),
+    ...(o.slack ? { slack: true } : {}),
+  });
+  console.log(`Added job ${paint('bold', job.name)} with ${job.steps.length} step(s).`);
+  if (job.nextRunAt) console.log(`Next run: ${new Date(job.nextRunAt).toLocaleString()}`);
+  console.log(paint('gray', `Run it now: gantrix jobs run "${job.name}"`));
+}
+
+export async function runJob(client: Client, name: string): Promise<void> {
+  const job = await jobByName(client, name);
+  const { taskId } = await client.post<{ taskId: string }>(`/api/jobs/${job.id}/run`, {});
+  console.log(`Started ${paint('bold', job.name)} as project ${short(taskId)}.`);
+  console.log(paint('gray', `Follow it: gantrix tail ${short(taskId)}`));
+}
+
+export async function setJobEnabled(client: Client, name: string, enabled: boolean) {
+  const job = await jobByName(client, name);
+  if (!job.schedule) throw new Error(`"${name}" has no schedule; it only runs on demand.`);
+  await client.patch(`/api/jobs/${job.id}`, { enabled });
+  console.log(`${enabled ? 'Resumed' : 'Paused'} the schedule of ${name}.`);
+}
+
+export async function removeJob(client: Client, name: string): Promise<void> {
+  const job = await jobByName(client, name);
+  await client.del(`/api/jobs/${job.id}`);
+  console.log(`Removed job ${name}. Its past runs stay as projects.`);
 }
 
 // ---- talk to a running task

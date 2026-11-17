@@ -13,6 +13,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { JobsPanel } from '../components/JobsPanel.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
 import { useSlackStatus } from '../components/ProjectControls.tsx';
 import { PrScanSettings } from '../components/PrScanSettings.tsx';
@@ -542,6 +543,7 @@ export function ProjectsPage() {
   );
   const agents = useAgents();
   const [creating, setCreating] = useState(false);
+  const [creatingJob, setCreatingJob] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
 
   const all = data ?? [];
@@ -565,12 +567,21 @@ export function ProjectsPage() {
             Each project is a goal your agents work on together. Open one to follow it and steer it.
           </p>
         </div>
-        {!creating && (
-          <button type="button" className="primary" onClick={() => setCreating(true)}>
-            <Icon name="plus" /> New project
-          </button>
-        )}
+        <div className="row-actions">
+          {!creating && (
+            <button type="button" className="primary" onClick={() => setCreating(true)}>
+              <Icon name="plus" /> New Project
+            </button>
+          )}
+          {!creatingJob && (
+            <button type="button" className="primary" onClick={() => setCreatingJob(true)}>
+              <Icon name="plus" /> New Job
+            </button>
+          )}
+        </div>
       </header>
+
+      <JobsPanel creating={creatingJob} onClose={() => setCreatingJob(false)} />
 
       <PrScanSettings taskId="github-pr-scan" builtIn />
 

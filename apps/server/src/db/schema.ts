@@ -68,6 +68,10 @@ export const agents = pgTable(
     connectionId: uuid('connection_id').references(() => connections.id, {
       onDelete: 'restrict',
     }),
+    // A Slack connection (bot + app token): people can chat with this agent in Slack.
+    slackConnectionId: uuid('slack_connection_id').references(() => connections.id, {
+      onDelete: 'set null',
+    }),
     maxConcurrency: integer('max_concurrency').notNull().default(1), // enforced by the supervisor
     // "preset:<id>", "initials", or a small image as a data URL; null → a preset picked by name.
     avatar: text('avatar'),
@@ -134,6 +138,8 @@ export const tasks = pgTable(
     offloadConnectionId: uuid('offload_connection_id').references(() => connections.id, {
       onDelete: 'set null',
     }),
+    // The job this project is a run of; null for a project made by hand.
+    jobId: uuid('job_id').references(() => jobs.id, { onDelete: 'set null' }),
     // Time the project was stopped, which doesn't count against its time limit.
     pausedMs: bigint('paused_ms', { mode: 'number' }).notNull().default(0),
     result: text('result'),
@@ -147,6 +153,36 @@ export const tasks = pgTable(
     index('tasks_created_at_idx').on(t.createdAt.desc()),
   ],
 );
+
+/** One step of a job: an agent does this, then the next step. */
+export interface JobStep {
+  title: string;
+  /** The agent (and so the skills) that does this step. */
+  agentId: string;
+  instructions: string;
+  /** What the judge checks; blank → "the instructions were carried out". */
+  acceptance: string;
+}
+
+/** A saved, repeatable run: ordered steps, run on demand or on a cron schedule. */
+export const jobs = pgTable('jobs', {
+  id: id(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  // The goal each run is judged against at the end.
+  goal: text('goal').notNull(),
+  steps: jsonb('steps').$type<JobStep[]>().notNull(),
+  // Cron pattern (e.g. "0 9 * * *"); null → only runs when you press Run.
+  schedule: text('schedule'),
+  timezone: text('timezone').notNull().default('UTC'),
+  enabled: boolean('enabled').notNull().default(true),
+  budget: jsonb('budget').$type<Partial<Budget>>(),
+  approveAll: boolean('approve_all'),
+  // Post each run's progress to Slack (same as the project option).
+  slack: boolean('slack').notNull().default(false),
+  createdAt: createdAt(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
 
 export const plans = pgTable(
   'plans',

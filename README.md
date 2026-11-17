@@ -482,6 +482,48 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 - LTX-2 was tried and dropped: running LTX Desktop next to ComfyUI used more RAM than a 48 GB
   Mac has.
 
+## Jobs
+
+A **project** is a goal the planner breaks into steps. A **job** is a saved, repeatable list of
+steps you write yourself: *use this agent (and its skills) to do this, then that agent to do
+that…* There is no planner, so every run is predictable.
+
+On **Projects**, press **+ New Job**:
+
+1. Name it and say what a finished run looks like (the goal the judge checks at the end).
+2. Add steps in order. Each step has a title, an agent (whose skills it uses), what to do, and
+   optionally how we know it worked. Each step starts when the one before it has passed.
+3. Pick a schedule: only when you press **Run now**, or a cron pattern such as
+   `0 9 * * 1-5` (weekdays at 09:00) in a time zone.
+
+Every run is an ordinary project, so you can follow it, steer it and approve tools as usual;
+jobs show their last run and next scheduled run. **Pause** stops the schedule and **Play** turns
+it back on. A job doesn't overlap itself: if the last run is still going when the schedule
+fires, that run is skipped. The worker (`npm run dev:worker`) must be running for schedules.
+
+Example: a *Daily pull request scan* with steps `Fetch open PRs` (agent with the GitHub skill)
+→ `Summarize discussions` → `Post to Slack`, scheduled `0 9 * * *`. The API is
+`/api/jobs` (`POST /api/jobs/:id/run` runs one now).
+
+## Talk to an agent in Slack
+
+An agent can answer people in Slack, using its own model and system prompt. It's off by
+default and **requires Slack bot credentials**:
+
+1. Create the Slack app from [`docs/slack-app-manifest.yml`](docs/slack-app-manifest.yml) (it
+   includes DMs and Socket Mode).
+2. On **Connections → Add connection → Slack**, save the app's **bot token** (`xoxb-…`), its
+   **app-level token** (`xapp-…`, so Gantrix can hear messages) and the **allowed Slack user
+   IDs**. Only those people can talk to the agents. **Test** checks all three.
+3. On **Agents**, press **Set up** next to *Slack* on an agent and pick that connection. (CLI:
+   `gantrix agents add writer --slack team-slack`.) Saving is refused until the connection has
+   a bot token, an app-level token and at least one allowed user.
+
+Then DM the bot, or mention it in a channel it's in: `@Gantrix writer: summarize what we
+shipped`. If several agents share one connection, start with the agent's name; with one, no
+name is needed. Replies stay in the thread, and the thread is the conversation. In chat an
+agent only talks; to make it do work with its tools, start a project or a job.
+
 ## Managing projects
 
 - **Name** a project in the New project form, or rename it with the pencil next to its title.
@@ -579,8 +621,9 @@ Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. To
 ## CLI
 
 ```
-gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
-gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--slack connection] [--max-concurrency n] | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code|codex|github|slack [--setting key=value…] [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix jobs [list | add <name> --goal text --step "agent|title|instructions"… [--schedule cron] [--timezone zone] [--slack] | run <name> | pause <name> | play <name> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer,engineer,devops,aws-engineer,gcp-engineer] [-m model]
 gantrix run "<goal>" [--name text] [--description text] [--slack] [--offload claude|chatgpt] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]

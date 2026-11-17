@@ -1,7 +1,7 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { agentSkills, agents, skills } from '../../db/schema.ts';
+import { agentSkills, agents, connections, skills } from '../../db/schema.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import { requireModelFor } from '../model-checks.ts';
 import type { ApiDeps } from '../server.ts';
@@ -29,6 +29,8 @@ const AgentFields = z.object({
   model: z.string().min(1).nullable(), // null → GANTRIX_DEFAULT_MODEL
   modelBaseUrl: z.url().nullable(), // null → OLLAMA_BASE_URL
   connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
+  // A Slack connection with a bot token and an app-level token; null → not in Slack.
+  slackConnectionId: z.uuid().nullable(),
   avatar: Avatar.nullable(),
   maxConcurrency: z.number().int().min(1).max(16),
   skillIds: z.array(z.uuid()).max(32),
@@ -58,6 +60,25 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
     }));
   }
 
+  /** Chatting in Slack needs a Slack app's bot token (to reply) and app token (to hear). */
+  async function requireSlackBot(connectionId: string | null | undefined) {
+    if (!connectionId) return;
+    const c = await db.query.connections.findFirst({ where: eq(connections.id, connectionId) });
+    if (c?.provider !== 'slack') throw new HttpError(400, 'That is not a Slack connection.');
+    if (!c.headers['Bot-Token'] || !c.headers['App-Token']) {
+      throw new HttpError(
+        400,
+        `Connection "${c.name}" needs a bot token and an app-level token before an agent can talk in Slack.`,
+      );
+    }
+    if (!c.settings.allowedUsers?.trim()) {
+      throw new HttpError(
+        400,
+        `Connection "${c.name}" needs allowed Slack user IDs, so only those people can talk to the agent.`,
+      );
+    }
+  }
+
   async function getAgent(id: string) {
     const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
     if (!agent) throw notFound('Agent');
@@ -74,6 +95,7 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
   app.post('/api/agents', async (request, reply) => {
     const { skillIds, ...fields } = parse(CreateAgent, request.body);
     await requireModelFor(db, fields.connectionId, fields.model);
+    await requireSlackBot(fields.slackConnectionId);
     const id = await db.transaction(async (tx) => {
       const [row] = await tx.insert(agents).values(fields).returning({ id: agents.id });
       if (!row) throw new HttpError(500, 'Agent insert returned no row.');
@@ -90,6 +112,7 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
   app.patch('/api/agents/:id', async (request) => {
     const { id } = parse(IdParams, request.params);
     const { skillIds, ...fields } = parse(UpdateAgent, request.body);
+    await requireSlackBot(fields.slackConnectionId);
     if (fields.connectionId !== undefined || fields.model !== undefined) {
       const current = await db.query.agents.findFirst({ where: eq(agents.id, id) });
       await requireModelFor(

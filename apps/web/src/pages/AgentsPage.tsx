@@ -85,6 +85,84 @@ function RunsOn({
   );
 }
 
+/** Chat with an agent in Slack: needs a Slack connection with bot and app tokens. */
+function SlackChat({
+  agent,
+  connections,
+  onSaved,
+}: {
+  agent: AgentDto;
+  connections: ConnectionDto[];
+  onSaved: () => void;
+}) {
+  const slack = connections.filter((c) => c.provider === 'slack');
+  const current = slack.find((c) => c.id === agent.slackConnectionId);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(agent.slackConnectionId ?? '');
+  const [error, setError] = useState('');
+  const save = async () => {
+    setError('');
+    try {
+      await api.patch(`/api/agents/${agent.id}`, { slackConnectionId: value || null });
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  if (!editing) {
+    return (
+      <p className="runs-on small">
+        <span className="muted">Slack</span> <b>{current ? `chat via ${current.name}` : 'off'}</b>{' '}
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() => {
+            setValue(agent.slackConnectionId ?? '');
+            setEditing(true);
+          }}
+        >
+          {current ? 'Change' : 'Set up'}
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="runs-on-edit">
+      <label>
+        Slack connection
+        <select value={value} onChange={(e) => setValue(e.target.value)}>
+          <option value="">Off: not in Slack</option>
+          {slack.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        The agent replies when an allowed person DMs the bot or mentions it:{' '}
+        <code>@Gantrix {agent.name}: …</code>. It needs a Slack connection with a bot token, an
+        app-level token and allowed user IDs.{' '}
+        {slack.length === 0 && <a href="#/connections">Add a Slack connection first.</a>}
+      </p>
+      <div className="row-actions">
+        <button type="button" className="primary small" onClick={() => void save()}>
+          Save
+        </button>
+        <button type="button" className="ghost small" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && (
+        <p className="error small" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function AgentsPage() {
   const [agents, setAgents] = useState<AgentDto[]>([]);
   const [skills, setSkills] = useState<SkillDto[]>([]);
@@ -153,6 +231,7 @@ export function AgentsPage() {
                 </button>
               </div>
               <RunsOn agent={a} connections={connections} onSaved={load} />
+              <SlackChat agent={a} connections={connections} onSaved={load} />
               <p>
                 {a.description || (
                   <span className="muted">

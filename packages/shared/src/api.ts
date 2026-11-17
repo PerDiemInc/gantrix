@@ -25,6 +25,8 @@ export interface AgentDto {
   modelBaseUrl: string | null;
   /** A saved model connection; null = the default (Ollama, or GANTRIX_DEFAULT_CONNECTION). */
   connectionId: string | null;
+  /** A Slack connection (bot and app token): people can chat with this agent in Slack. */
+  slackConnectionId: string | null;
   /** "preset:<id>", "initials", a data:image URL, or null for the default picked by name. */
   avatar: string | null;
   maxConcurrency: number;
@@ -63,6 +65,8 @@ export interface TaskDto {
   tokensUsed: number;
   replans: number;
   workspacePath: string;
+  /** The job this project is a run of; null for a project made by hand. */
+  jobId: string | null;
   /** God mode: tool calls run without asking. */
   approveAll: boolean;
   /** The agents this project may use; null = every agent. */
@@ -72,6 +76,27 @@ export interface TaskDto {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+}
+
+/** A saved job: ordered steps, run on demand or on a cron schedule. */
+export interface JobDto {
+  id: string;
+  name: string;
+  description: string | null;
+  goal: string;
+  steps: { title: string; agentId: string; instructions: string; acceptance: string }[];
+  /** Cron pattern, e.g. "0 9 * * *"; null = only runs on demand. */
+  schedule: string | null;
+  timezone: string;
+  enabled: boolean;
+  budget: Partial<Budget> | null;
+  approveAll: boolean | null;
+  slack: boolean;
+  /** When the schedule fires next; null if paused or unscheduled. */
+  nextRunAt: string | null;
+  lastRun: { id: string; status: TaskStatus; createdAt: string } | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TaskListItem extends TaskDto {

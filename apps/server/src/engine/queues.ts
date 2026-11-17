@@ -3,6 +3,12 @@ import type { Redis } from 'ioredis';
 
 export const TICKS_QUEUE = 'gantrix-ticks';
 export const WORK_QUEUE = 'gantrix-work';
+export const SCHEDULES_QUEUE = 'gantrix-schedules';
+
+/** A scheduled job firing: the worker starts a run of it. */
+export interface ScheduleJob {
+  jobId: string;
+}
 
 export interface TickJob {
   taskId: string;
@@ -17,6 +23,10 @@ export type WorkJob =
 // repeat. Custom ids can't contain ':'.
 export function createQueues(connection: Redis) {
   const ticks = new Queue<TickJob>(TICKS_QUEUE, { connection });
+  const schedules = new Queue<ScheduleJob>(SCHEDULES_QUEUE, {
+    connection,
+    defaultJobOptions: { removeOnComplete: { age: 86_400 }, removeOnFail: { age: 7 * 86_400 } },
+  });
   const work = new Queue<WorkJob>(WORK_QUEUE, {
     connection,
     defaultJobOptions: {
@@ -29,6 +39,29 @@ export function createQueues(connection: Redis) {
   return {
     ticks,
     work,
+    schedules,
+    /** Makes the cron schedule match the job: set, changed, or removed when paused. */
+    syncSchedule: async (job: {
+      id: string;
+      schedule: string | null;
+      timezone: string;
+      enabled: boolean;
+    }) => {
+      const id = `job_${job.id}`;
+      if (!job.enabled || !job.schedule) {
+        await schedules.removeJobScheduler(id);
+        return;
+      }
+      await schedules.upsertJobScheduler(
+        id,
+        { pattern: job.schedule, tz: job.timezone },
+        { name: 'run', data: { jobId: job.id } },
+      );
+    },
+    nextRun: async (jobId: string): Promise<Date | null> => {
+      const s = await schedules.getJobScheduler(`job_${jobId}`);
+      return s?.next ? new Date(s.next) : null;
+    },
     // Ticks are never deduplicated: one dropped while another runs could miss a change.
     tick: (taskId: string, delayMs = 0) =>
       ticks.add('tick', { taskId }, { delay: delayMs, removeOnComplete: true, removeOnFail: 1000 }),
@@ -49,6 +82,7 @@ export function createQueues(connection: Redis) {
     close: async () => {
       await ticks.close();
       await work.close();
+      await schedules.close();
     },
   };
 }

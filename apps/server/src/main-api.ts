@@ -7,6 +7,7 @@ import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
 import { prTasks } from './integrations/pr-tasks.ts';
 import { createPreviewServer } from './preview.ts';
+import { AgentSlack } from './slack/agent-chat.ts';
 import { SlackBridge } from './slack/bridge.ts';
 
 const config = loadConfig();
@@ -59,6 +60,10 @@ if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
   );
 }
 
+// Agents with a Slack connection (bot + app token) can be chatted with in Slack.
+const agentSlack = new AgentSlack({ db, queues, checkpointer, config });
+await agentSlack.start();
+
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -67,6 +72,7 @@ async function shutdown() {
   preview.close();
   await app.close();
   await slack?.close();
+  await agentSlack.close();
   await prScans.close();
   await hub.close();
   await queues.close();
