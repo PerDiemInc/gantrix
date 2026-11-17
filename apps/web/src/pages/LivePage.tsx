@@ -251,7 +251,7 @@ function Server({
   );
 }
 
-export function LivePage() {
+export function LivePage({ embedded = false }: { embedded?: boolean }) {
   const { data, error, now } = useLive();
   const agents = data?.agents ?? [];
   const working = agents.filter(
@@ -265,7 +265,7 @@ export function LivePage() {
     <div className="stack">
       <header className="page-head">
         <div>
-          <h1>Live</h1>
+          {embedded ? null : <h1>Running agents</h1>}
           <p className="muted">
             The agents working right now, the model each one runs on, and the models loaded in
             memory on this machine. Updates every {POLL_MS / 1000}s.

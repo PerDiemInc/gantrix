@@ -17,9 +17,11 @@ import { JobsPanel } from '../components/JobsPanel.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
 import { useSlackStatus } from '../components/ProjectControls.tsx';
 import { PrScanSettings } from '../components/PrScanSettings.tsx';
+import { SlackAgents } from '../components/SlackAgents.tsx';
 import { Avatar, nowText, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { ago, duration, label } from '../format.ts';
 import { go, useAgents, useLive } from '../hooks.ts';
+import { LivePage } from './LivePage.tsx';
 
 const TIME_PRESETS: [number, string][] = [
   [60, '1 h'],
@@ -535,7 +537,9 @@ function ProjectCard({
 
 type Filter = 'all' | 'active' | 'you' | 'done';
 
-export function ProjectsPage() {
+export type WorkView = 'projects' | 'jobs' | 'agents';
+
+export function ProjectsPage({ initialView = 'projects' }: { initialView?: WorkView }) {
   const { data, error } = useLive(
     () => api.get<TaskListItem[]>('/api/tasks?limit=100'),
     '/api/stream',
@@ -544,6 +548,7 @@ export function ProjectsPage() {
   const agents = useAgents();
   const [creating, setCreating] = useState(false);
   const [creatingJob, setCreatingJob] = useState(false);
+  const [view, setView] = useState<WorkView>(initialView);
   const [filter, setFilter] = useState<Filter>('all');
 
   const all = data ?? [];
@@ -569,71 +574,123 @@ export function ProjectsPage() {
         </div>
         <div className="row-actions">
           {!creating && (
-            <button type="button" className="primary" onClick={() => setCreating(true)}>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setView('projects');
+                setCreating(true);
+              }}
+            >
               <Icon name="plus" /> New Project
             </button>
           )}
           {!creatingJob && (
-            <button type="button" className="primary" onClick={() => setCreatingJob(true)}>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => {
+                setView('jobs');
+                setCreatingJob(true);
+              }}
+            >
               <Icon name="plus" /> New Job
             </button>
           )}
         </div>
       </header>
 
-      <JobsPanel creating={creatingJob} onClose={() => setCreatingJob(false)} />
-
-      <PrScanSettings taskId="github-pr-scan" builtIn />
-
-      {creating && <NewProject onClose={() => setCreating(false)} />}
-
-      <div className="segmented" role="tablist" aria-label="Filter projects">
-        {tabs.map(([key, text, n]) => (
+      <div className="segmented" role="tablist" aria-label="Work">
+        {(
+          [
+            ['projects', 'Projects'],
+            ['jobs', 'Jobs'],
+            ['agents', 'Running agents'],
+          ] as const
+        ).map(([key, text]) => (
           <button
             key={key}
             type="button"
             role="tab"
-            aria-selected={filter === key}
-            className={filter === key ? 'active' : ''}
-            onClick={() => setFilter(key)}
+            aria-selected={view === key}
+            className={view === key ? 'active' : ''}
+            onClick={() => setView(key)}
           >
-            {text} <span className="count num">{n}</span>
+            {text}
           </button>
         ))}
       </div>
 
-      {error && (
-        <p className="error" role="alert">
-          {error.message}
-        </p>
+      {view === 'agents' && (
+        <>
+          <LivePage embedded />
+          <SlackAgents />
+        </>
       )}
-      {!data && !error && (
-        <ul className="projects" aria-busy="true">
-          {[0, 1, 2].map((i) => (
-            <li key={i} className="project skeleton" />
-          ))}
-        </ul>
-      )}
-      {data && !all.length && (
-        <section className="card empty">
-          <img src="/gant.svg" alt="" width="96" height="78" />
-          <h2>No projects yet</h2>
-          <p className="muted">
-            Add agents with skills, or run <code>npm run gantrix -- team add</code> for a ready-made
-            team. Then start your first project.
+      {view === 'jobs' && (
+        <>
+          <JobsPanel creating={creatingJob} onClose={() => setCreatingJob(false)} />
+          <p className="muted small">
+            Each run of a job is a project: open the Projects tab to follow it.
           </p>
-          <button type="button" className="primary" onClick={() => setCreating(true)}>
-            <Icon name="plus" /> New project
-          </button>
-        </section>
+        </>
       )}
-      {data && all.length > 0 && !shown.length && <p className="muted">Nothing here right now.</p>}
-      {shown.length > 0 && (
-        <ul className="projects">
-          {shown.map((p) => (
-            <ProjectCard key={p.id} p={p} agents={agents} />
-          ))}
-        </ul>
+      {view === 'projects' && <PrScanSettings taskId="github-pr-scan" builtIn />}
+      {view === 'projects' && creating && <NewProject onClose={() => setCreating(false)} />}
+
+      {view === 'projects' && (
+        <>
+          <div className="segmented" role="tablist" aria-label="Filter projects">
+            {tabs.map(([key, text, n]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={filter === key}
+                className={filter === key ? 'active' : ''}
+                onClick={() => setFilter(key)}
+              >
+                {text} <span className="count num">{n}</span>
+              </button>
+            ))}
+          </div>
+
+          {error && (
+            <p className="error" role="alert">
+              {error.message}
+            </p>
+          )}
+          {!data && !error && (
+            <ul className="projects" aria-busy="true">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="project skeleton" />
+              ))}
+            </ul>
+          )}
+          {data && !all.length && (
+            <section className="card empty">
+              <img src="/gant.svg" alt="" width="96" height="78" />
+              <h2>No projects yet</h2>
+              <p className="muted">
+                Add agents with skills, or run <code>npm run gantrix -- team add</code> for a
+                ready-made team. Then start your first project.
+              </p>
+              <button type="button" className="primary" onClick={() => setCreating(true)}>
+                <Icon name="plus" /> New project
+              </button>
+            </section>
+          )}
+          {data && all.length > 0 && !shown.length && (
+            <p className="muted">Nothing here right now.</p>
+          )}
+          {shown.length > 0 && (
+            <ul className="projects">
+              {shown.map((p) => (
+                <ProjectCard key={p.id} p={p} agents={agents} />
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );

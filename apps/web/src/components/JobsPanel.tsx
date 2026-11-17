@@ -317,7 +317,16 @@ export function JobsPanel({ creating, onClose }: { creating: boolean; onClose: (
     }
   };
 
-  if (!creating && !editing && jobs.length === 0) return null;
+  if (!creating && !editing && jobs.length === 0) {
+    return (
+      <section className="card empty">
+        <h2>No jobs yet</h2>
+        <p className="muted">
+          A job is a saved list of steps, run on demand or on a schedule. Press <b>+ New Job</b>.
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="stack" aria-label="Jobs">
       {(creating || editing) && (
