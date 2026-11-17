@@ -5,6 +5,7 @@ import { buildServer } from './api/server.ts';
 import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
+import { prTasks } from './integrations/pr-tasks.ts';
 import { createPreviewServer } from './preview.ts';
 import { SlackBridge } from './slack/bridge.ts';
 
@@ -27,6 +28,7 @@ const hub = new EventHub(db, config.DATABASE_URL);
 await hub.start();
 
 const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRIX_TOKEN);
+const prScans = prTasks(app, db, connection, pool, config, config.GANTRIX_TOKEN);
 await app.listen({ host: config.GANTRIX_HOST, port: config.GANTRIX_PORT });
 
 // Sites published by deploy_site, on their own origin (see preview.ts).
@@ -39,7 +41,12 @@ preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 // Slack (optional): progress posts to a thread per project; Socket Mode brings replies back.
 let slack: SlackBridge | null = null;
 if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
-  slack = new SlackBridge({ db, queues, checkpointer, config }, hub);
+  slack = new SlackBridge(
+    { db, queues, checkpointer, config },
+    hub,
+    undefined,
+    prScans.handleSlack,
+  );
   await slack.start().then(
     () =>
       console.log(
@@ -60,6 +67,7 @@ async function shutdown() {
   preview.close();
   await app.close();
   await slack?.close();
+  await prScans.close();
   await hub.close();
   await queues.close();
   connection.disconnect();

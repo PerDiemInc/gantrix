@@ -777,3 +777,28 @@ Run the live model through two small business workflows and check artifacts inde
 of the judge with `npm run evaluate -- <file-only-agent-uuid>`. Reports include correctness,
 tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. See
 [the evaluation guide](docs/evaluation.md) for setup, safety limits and comparison guidance.
+
+### GitHub PR discussions
+
+Open **Projects → GitHub PR Scan** and press **Play**. The built-in project is
+available on every installation. To add a separate scan to an existing project,
+open that project and expand **GitHub PR scan**.
+Enter a fine-grained GitHub token with **Pull requests: Read** permission. Set an
+organization (for example, `PerDiemInc`), a list of repositories, or both.
+Choose **Save and play** on the first run. After setup, **Play** and **Pause**
+control the built-in project. It polls immediately and then every five minutes by
+default. The first scan includes existing discussions on open PRs. The built-in
+project shows recent summaries in the dashboard.
+
+- **Slack** — Enter a bot token and channel. Use a private channel for private
+  repositories. To answer replies in report threads, add a Socket Mode app token
+  and allowed Slack user IDs.
+- **Email** — Enter an SMTP URL with credentials, a sender, and a recipient.
+  To answer replies, enter the sender mailbox's IMAP host, username, and password.
+  Reply from the configured recipient address and keep the subject intact.
+
+Settings and delivery history are scoped to the project in Valkey. Credentials are
+encrypted using the Gantrix API token and omitted from the settings response.
+If you rotate that token, remove the saved scan and enter its settings again.
+Uncheck **Enable scheduled scan** to pause it independently of the project's
+normal plan. The local Ollama model summarizes PR discussion text with no tools.
