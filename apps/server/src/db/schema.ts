@@ -3,9 +3,9 @@ import {
   APPROVAL_STATUSES,
   type ApprovalStatus,
   type Budget,
+  CONNECTION_PROVIDERS,
+  type ConnectionProvider,
   type HttpRequestConfig,
-  MODEL_PROVIDERS,
-  type ModelProvider,
   type SkillManifest,
   STEP_STATUSES,
   type StepStatus,
@@ -41,16 +41,18 @@ export const connections = pgTable(
   {
     id: id(),
     name: text('name').notNull().unique(),
-    provider: text('provider').$type<ModelProvider>().notNull(),
+    provider: text('provider').$type<ConnectionProvider>().notNull(),
     baseUrl: text('base_url'), // null → the provider's default URL
     // Header name → literal value or "env:NAME". Literal values never leave the API.
     headers: jsonb('headers').$type<Record<string, string>>().notNull().default({}),
     // Custom HTTP only: method, content type, body template and reply path.
     request: jsonb('request').$type<HttpRequestConfig>(),
+    // GitHub and Slack only: non-secret settings (org, repos, channel, allowedUsers).
+    settings: jsonb('settings').$type<Record<string, string>>().notNull().default({}),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
-  () => [check('connections_provider_valid', oneOf('provider', MODEL_PROVIDERS))],
+  () => [check('connections_provider_valid', oneOf('provider', CONNECTION_PROVIDERS))],
 );
 
 export const agents = pgTable(

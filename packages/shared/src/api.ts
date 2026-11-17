@@ -1,5 +1,11 @@
 import type { GantrixEvent } from './events.ts';
-import type { ApprovalStatus, ModelProvider, StepStatus, TaskStatus } from './status.ts';
+import type {
+  ApprovalStatus,
+  ConnectionProvider,
+  ModelProvider,
+  StepStatus,
+  TaskStatus,
+} from './status.ts';
 import type { AgentModelChoice, Budget, HttpRequestConfig, SkillManifest } from './types.ts';
 
 /** JSON shapes of the HTTP API, shared by the CLI and the web app. Dates are ISO strings. */
@@ -165,7 +171,7 @@ export interface StepConversationDto {
 export interface ConnectionDto {
   id: string;
   name: string;
-  provider: ModelProvider;
+  provider: ConnectionProvider;
   /** null = the provider's default (local Ollama, api.openai.com or api.anthropic.com). */
   baseUrl: string | null;
   /** The URL the worker actually calls. */
@@ -176,6 +182,8 @@ export interface ConnectionDto {
   isLocal: boolean;
   /** Custom HTTP only: how to build the request and read the reply. */
   request: HttpRequestConfig | null;
+  /** GitHub and Slack: non-secret settings (org, repos, channel, allowedUsers). */
+  settings: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

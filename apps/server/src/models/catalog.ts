@@ -1,4 +1,4 @@
-import type { ModelProvider, ModelSource } from '@gantrix/shared';
+import { isServiceProvider, type ModelProvider, type ModelSource } from '@gantrix/shared';
 import type { connections } from '../db/schema.ts';
 import { codexModels } from './codex.ts';
 import { effectiveUrl, resolveHeaders } from './connections.ts';
@@ -70,7 +70,11 @@ export async function modelCatalog(
   if (!fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.sources;
   const targets: Omit<ModelSource, 'models'>[] = [
     { connectionId: null, name: 'Ollama (default)', provider: 'ollama' },
-    ...rows.map((c) => ({ connectionId: c.id, name: c.name, provider: c.provider })),
+    ...rows.flatMap((c) =>
+      isServiceProvider(c.provider)
+        ? []
+        : [{ connectionId: c.id, name: c.name, provider: c.provider }],
+    ),
   ];
   const sources = await Promise.all(
     targets.map(async (t): Promise<ModelSource> => {

@@ -1,3 +1,4 @@
+import { isServiceProvider } from '@gantrix/shared';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { connections } from '../db/schema.ts';
@@ -10,8 +11,12 @@ export async function requireModelFor(
   connectionId: string | null | undefined,
   model: string | null | undefined,
 ): Promise<void> {
-  if (!connectionId || model) return;
+  if (!connectionId) return;
   const c = await db.query.connections.findFirst({ where: eq(connections.id, connectionId) });
+  if (c && isServiceProvider(c.provider)) {
+    throw new HttpError(400, `Connection "${c.name}" is a ${c.provider} connection, not a model.`);
+  }
+  if (model) return;
   if (c && needsModel(c.provider)) {
     throw new HttpError(400, `Connection "${c.name}" needs a model: choose one.`);
   }

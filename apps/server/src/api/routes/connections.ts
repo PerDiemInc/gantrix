@@ -2,10 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CONNECTION_PROVIDERS,
+  type ConnectionProvider,
   DEFAULT_HTTP_REQUEST,
   HTTP_METHODS,
-  MODEL_PROVIDERS,
-  type ModelProvider,
+  isServiceProvider,
 } from '@gantrix/shared';
 import { HumanMessage } from '@langchain/core/messages';
 import { asc, eq } from 'drizzle-orm';
@@ -14,7 +15,13 @@ import { z } from 'zod';
 import { agents, connections } from '../../db/schema.ts';
 import { modelDefaults } from '../../engine/deps.ts';
 import { clearModelCatalog, modelCatalog } from '../../models/catalog.ts';
-import { connectionSpec, toConnectionDto } from '../../models/connections.ts';
+import {
+  connectionSpec,
+  effectiveUrl,
+  isModelConnection,
+  resolveHeaders,
+  toConnectionDto,
+} from '../../models/connections.ts';
 import { callHttp, listPaths } from '../../models/http-request.ts';
 import { detectLocalAgents } from '../../models/local-agents.ts';
 import { createChatModel } from '../../models/provider.ts';
@@ -39,7 +46,7 @@ const Fields = z.object({
   name: z
     .string()
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'name must be lowercase letters, digits and dashes'),
-  provider: z.enum(MODEL_PROVIDERS),
+  provider: z.enum(CONNECTION_PROVIDERS),
   // http(s) URL (custom HTTP may contain {{model}} or {{prompt}}); for claude-code, the
   // path of the claude binary if it isn't on PATH.
   baseUrl: z
@@ -49,6 +56,8 @@ const Fields = z.object({
     ])
     .nullable(),
   headers: Headers,
+  // GitHub and Slack: non-secret settings. Which keys are allowed is checked per provider.
+  settings: z.record(z.string().regex(/^[A-Za-z]{1,32}$/), z.string().max(2_000)),
   request: z
     .object({
       method: z.enum(HTTP_METHODS).default('POST'),
@@ -65,7 +74,7 @@ const Fields = z.object({
     })
     .nullable(),
 });
-const Create = Fields.partial({ baseUrl: true, headers: true, request: true });
+const Create = Fields.partial({ baseUrl: true, headers: true, request: true, settings: true });
 const Update = Fields.partial();
 const TestBody = z.object({
   model: z.string().min(1).max(200),
@@ -81,8 +90,124 @@ const pathsOf = (raw: string) => {
   }
 };
 
+/** What each service connection holds: secret headers (saved or env:NAME) and plain settings. */
+const SERVICES = {
+  github: { required: ['Authorization'], optional: [], settings: ['org', 'repos'] },
+  slack: {
+    required: ['Bot-Token'],
+    optional: ['App-Token'],
+    settings: ['channel', 'allowedUsers'],
+  },
+} as const;
+
+function checkService(
+  provider: ConnectionProvider,
+  headers: Record<string, string>,
+  settings: Record<string, string>,
+) {
+  if (!isServiceProvider(provider)) return;
+  const spec = SERVICES[provider];
+  for (const name of spec.required) {
+    if (!headers[name]) {
+      throw new HttpError(400, `A ${provider} connection needs the ${name} value (or env:NAME).`);
+    }
+  }
+  const allowedHeaders: readonly string[] = [...spec.required, ...spec.optional];
+  for (const name of Object.keys(headers)) {
+    if (!allowedHeaders.includes(name)) {
+      throw new HttpError(400, `A ${provider} connection has no ${name} header.`);
+    }
+  }
+  const allowedSettings: readonly string[] = spec.settings;
+  for (const name of Object.keys(settings)) {
+    if (!allowedSettings.includes(name)) {
+      throw new HttpError(400, `A ${provider} connection has no ${name} setting.`);
+    }
+  }
+  if (provider === 'slack') {
+    const bot = headers['Bot-Token'];
+    if (bot && !bot.startsWith('env:') && !bot.startsWith('xoxb-') && bot !== KEEP) {
+      throw new HttpError(400, 'The Slack bot token starts with xoxb-.');
+    }
+    const app = headers['App-Token'];
+    if (app && !app.startsWith('env:') && !app.startsWith('xapp-') && app !== KEEP) {
+      throw new HttpError(400, 'The Slack app-level token starts with xapp-.');
+    }
+    const channel = settings.channel;
+    if (channel && !/^[CGD][A-Z0-9]{8,}$/.test(channel)) {
+      throw new HttpError(400, 'The Slack channel is an ID like C0123456789, not a name.');
+    }
+  }
+}
+
+/** Calls the service with the saved credentials, so a wrong token shows up before a job runs. */
+async function testService(
+  c: typeof connections.$inferSelect,
+  ollamaUrl: string,
+): Promise<Record<string, unknown>> {
+  const started = Date.now();
+  const timeout = AbortSignal.timeout(15_000);
+  try {
+    const headers = resolveHeaders(c.headers);
+    const base = effectiveUrl(c, ollamaUrl).replace(/\/+$/, '');
+    if (c.provider === 'github') {
+      const auth = { ...headers, accept: 'application/vnd.github+json', 'user-agent': 'gantrix' };
+      const res = await fetch(`${base}/user`, { headers: auth, signal: timeout });
+      if (!res.ok) throw new Error(`GitHub answered ${res.status} ${res.statusText}.`);
+      const who = (await res.json()) as { login?: string };
+      const org = c.settings.org;
+      if (org) {
+        const o = await fetch(`${base}/orgs/${encodeURIComponent(org)}`, {
+          headers: auth,
+          signal: timeout,
+        });
+        if (!o.ok) throw new Error(`Signed in as ${who.login}, but ${org} answered ${o.status}.`);
+      }
+      return {
+        ok: true,
+        reply: `Signed in as ${who.login ?? 'unknown'}${org ? `; can see ${org}` : ''}.`,
+        ms: Date.now() - started,
+      };
+    }
+    const slack = async (method: string, token: string, body?: Record<string, string>) => {
+      const res = await fetch(`${base}/${method}`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body ?? {}),
+        signal: timeout,
+      });
+      return (await res.json()) as Record<string, string | boolean | undefined>;
+    };
+    const bot = headers['Bot-Token'] ?? '';
+    const auth = await slack('auth.test', bot);
+    if (!auth.ok) throw new Error(`Slack said: ${auth.error ?? 'auth failed'}.`);
+    let note = `Bot ${auth.user} in ${auth.team}.`;
+    if (c.settings.channel) {
+      const info = await slack('conversations.info', bot, { channel: c.settings.channel });
+      note += info.ok
+        ? ' Channel found.'
+        : ` Channel ${c.settings.channel}: ${info.error ?? 'not found'} (invite the bot to it).`;
+    }
+    const app = headers['App-Token'];
+    if (app) {
+      const sock = await slack('apps.connections.open', app);
+      note += sock.ok ? ' Socket Mode works.' : ` App token: ${sock.error ?? 'rejected'}.`;
+    }
+    return { ok: true, reply: note, ms: Date.now() - started };
+  } catch (error) {
+    return {
+      ok: false,
+      error: (error instanceof Error ? error.message : String(error)).slice(0, 500),
+      ms: Date.now() - started,
+    };
+  }
+}
+
 /** A path is only a valid base URL for claude-code, where it names the binary. */
-function checkUrl(provider: ModelProvider, baseUrl: string | null | undefined) {
+function checkUrl(provider: ConnectionProvider, baseUrl: string | null | undefined) {
   if (
     baseUrl &&
     provider !== 'claude-code' &&
@@ -128,12 +253,14 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
     if (Object.values(body.headers ?? {}).includes(KEEP)) {
       throw new HttpError(400, `"${KEEP}" isn't a header value; give the value or env:NAME.`);
     }
+    checkService(body.provider, body.headers ?? {}, body.settings ?? {});
     const [row] = await db
       .insert(connections)
       .values({
         ...body,
         baseUrl: body.baseUrl ?? null,
         headers: body.headers ?? {},
+        settings: isServiceProvider(body.provider) ? (body.settings ?? {}) : {},
         request: body.provider === 'http' ? (body.request ?? DEFAULT_HTTP_REQUEST) : null,
       })
       .returning();
@@ -160,11 +287,15 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
           }),
         )
       : undefined;
+    const provider = body.provider ?? current.provider;
+    const settings = isServiceProvider(provider) ? (body.settings ?? current.settings) : {};
+    checkService(provider, headers ?? current.headers, settings);
     const [row] = await db
       .update(connections)
       .set({
         ...body,
         ...(headers ? { headers } : {}),
+        settings,
         // Request settings only mean something for custom HTTP.
         ...((body.provider ?? current.provider) === 'http'
           ? body.request !== undefined
@@ -204,6 +335,7 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
   // Sends one short prompt, so you know the URL, key and model name work before a task runs.
   app.post('/api/connections/:id/test', async (request) => {
     const c = await get(parse(IdParams, request.params).id);
+    if (!isModelConnection(c)) return testService(c, config.OLLAMA_BASE_URL);
     const { model, prompt } = parse(TestBody, request.body);
     const started = Date.now();
     // Custom HTTP: one real call with the template, showing the request and raw response, so

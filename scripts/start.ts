@@ -34,7 +34,9 @@ try {
   if (!have) console.warn(`\n⚠ Model "${model}" is not pulled. Run: ollama pull ${model}`);
   else console.log(`\n✔ Ollama is up and has ${model}.`);
 } catch {
-  console.warn(`\n⚠ Ollama is not reachable at ${ollama}. Start it with "ollama serve" (or open the app).`);
+  console.warn(
+    `\n⚠ Ollama is not reachable at ${ollama}. Start it with "ollama serve" (or open the app).`,
+  );
 }
 
 const services = [
@@ -79,4 +81,6 @@ for (const { name, script } of services) {
 process.on('SIGINT', () => stopAll(0));
 process.on('SIGTERM', () => stopAll(0));
 
-console.log('\n→ Dashboard: http://127.0.0.1:4701  (token: npm run token)  ·  API: http://127.0.0.1:4700\n');
+console.log(
+  '\n→ Dashboard: http://127.0.0.1:4701  (token: npm run token)  ·  API: http://127.0.0.1:4700\n',
+);

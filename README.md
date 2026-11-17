@@ -631,6 +631,21 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
 | `claude-code` | `claude` on your PATH | Your local Claude Code, run as `claude -p` (agents only) |
 | `http` | the URL you give | Any HTTP server: you set the method, Content-Type, body and where the reply is (agents only) |
 
+### GitHub and Slack connections
+
+**Connections** also holds credentials for services, not just models. They never show up in
+the agent model pickers.
+
+- **GitHub:** a fine-grained token with **Pull requests: Read**, plus an optional organization
+  and repositories. **Test** signs in and checks the organization is visible.
+- **Slack (existing app):** the bot token (`xoxb-…`) of the Slack app you already installed, an
+  optional app-level token (`xapp-…`) so replies in threads reach Gantrix, a channel ID and the
+  Slack user IDs allowed to steer. Invite the bot to the channel. **Test** runs `auth.test`,
+  checks the channel and, if given, Socket Mode.
+
+Tokens can be `env:NAME` to read them from `.env` instead of saving them. Saved values are
+never returned by the API.
+
 ### Any HTTP server
 
 For an API that isn't OpenAI-, Anthropic- or Ollama-compatible, describe the request yourself.
