@@ -10,8 +10,58 @@ const empty = {
   model: '',
   connectionId: '',
   maxConcurrency: '1',
+  stepTimeoutMinutes: '',
   systemPrompt: '',
 };
+
+/** How long one run of this agent's task may take before it is stopped and retried. */
+function TimeLimit({ agent, onSaved }: { agent: AgentDto; onSaved: () => void }) {
+  const [value, setValue] = useState(agent.stepTimeoutMinutes?.toString() ?? '');
+  const [error, setError] = useState('');
+  const saved = agent.stepTimeoutMinutes?.toString() ?? '';
+  const save = async () => {
+    if (value === saved) return;
+    setError('');
+    try {
+      await api.patch(`/api/agents/${agent.id}`, {
+        stepTimeoutMinutes: value ? Number(value) : null,
+      });
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+  return (
+    <div className="agent-limit small">
+      <label className="inline">
+        Time limit per task
+        <input
+          type="number"
+          min={1}
+          max={1440}
+          placeholder="none"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => void save()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void save();
+          }}
+        />
+        min
+      </label>
+      <span className="muted">
+        {saved
+          ? 'A task that runs longer is stopped and tried again. Shell commands may run this long.'
+          : 'No limit. Shell commands stop after 2 minutes.'}
+      </span>
+      {error && (
+        <span className="error" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
 /** Which model an existing agent runs on: local Ollama by default, or any connection. */
 function RunsOn({
   agent,
@@ -108,6 +158,7 @@ export function AgentsPage() {
         description: form.description,
         systemPrompt: form.systemPrompt,
         maxConcurrency: Number(form.maxConcurrency),
+        ...(form.stepTimeoutMinutes ? { stepTimeoutMinutes: Number(form.stepTimeoutMinutes) } : {}),
         skillIds: [...picked],
         ...(form.model ? { model: form.model } : {}),
         ...(form.connectionId ? { connectionId: form.connectionId } : {}),
@@ -153,6 +204,7 @@ export function AgentsPage() {
                 </button>
               </div>
               <RunsOn agent={a} connections={connections} onSaved={load} />
+              <TimeLimit agent={a} onSaved={load} />
               <p>
                 {a.description || (
                   <span className="muted">
@@ -208,6 +260,17 @@ export function AgentsPage() {
             max={16}
             value={form.maxConcurrency}
             onChange={set('maxConcurrency')}
+          />
+        </label>
+        <label>
+          Time limit per task, in minutes (empty = none)
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            value={form.stepTimeoutMinutes}
+            onChange={set('stepTimeoutMinutes')}
+            placeholder="e.g. 30 for an agent that runs terraform apply"
           />
         </label>
         <fieldset>

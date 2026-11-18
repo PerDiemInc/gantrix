@@ -59,8 +59,16 @@ ${clip(input.output) || '(empty)'}`,
 
 export function judgeGoal(
   model: BaseChatModel,
-  input: { goal: string; results: readonly { title: string; output: string }[] },
+  input: {
+    goal: string;
+    results: readonly { title: string; output: string }[];
+    /** What Gantrix itself got from the deployed URLs just now. */
+    live?: readonly string[];
+  },
 ): Promise<Verdict> {
   const results = input.results.map((r) => `### ${r.title}\n${clip(r.output)}`).join('\n\n');
-  return verdict(model, GOAL_JUDGE, `Goal: ${input.goal}\n\nStep results:\n${results}`);
+  const live = input.live?.length
+    ? `\n\nThe deployed site, fetched just now (trust this over what the steps say):\n${input.live.join('\n\n')}`
+    : '';
+  return verdict(model, GOAL_JUDGE, `Goal: ${input.goal}\n\nStep results:\n${results}${live}`);
 }

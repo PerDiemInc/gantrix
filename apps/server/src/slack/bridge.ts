@@ -4,6 +4,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ALL, type EventHub } from '../api/event-hub.ts';
 import { agents, approvals, steps, tasks } from '../db/schema.ts';
 import {
+  createTask,
   decideApproval,
   extendTask,
   resumeTask,
@@ -124,7 +125,7 @@ export class SlackBridge {
       thread_ts: thread.ts,
       text: post.text,
       unfurl_links: false,
-      ...(post.broadcast ? { reply_broadcast: true } : {}),
+      ...(post.broadcast && !thread.channel.startsWith('D') ? { reply_broadcast: true } : {}),
     });
   }
 
@@ -283,14 +284,18 @@ export class SlackBridge {
   async handle(ev: SlackEvent): Promise<void> {
     if (ev.type !== 'app_mention' && ev.type !== 'message') return;
     if (ev.bot_id || ev.subtype || !ev.user || !ev.ts || !ev.text) return;
-    if (ev.channel !== this.#channel) return;
+    // Reject unlisted users before queries, model calls or replies.
+    if (!this.#deps.config.SLACK_ALLOWED_USERS.includes(ev.user)) return;
+    const direct = ev.channel_type === 'im' && ev.channel?.startsWith('D');
+    if (!direct && ev.channel !== this.#channel) return;
+    if (!ev.channel) return;
     // Slack can deliver an event twice; and a mention also arrives as a plain message.
     const key = `${ev.type === 'app_mention' ? 'm' : 'p'}:${ev.ts}`;
     if (this.#seen.includes(key)) return;
     this.#seen.push(key);
     if (this.#seen.length > 500) this.#seen.shift();
     const mention = ev.type === 'app_mention';
-    if (!mention && (!ev.thread_ts || ev.text.includes(`<@${this.#botUserId}>`))) return;
+    if (!mention && !direct && (!ev.thread_ts || ev.text.includes(`<@${this.#botUserId}>`))) return;
 
     const threadTs = ev.thread_ts ?? ev.ts;
     const reply = (text: string) =>
@@ -307,7 +312,24 @@ export class SlackBridge {
         })
       : undefined;
     if (!task) {
-      if (mention) await reply(await this.#overview());
+      if (!mention && !direct) return;
+      if (!text || /^(help|status)$/i.test(text)) {
+        await reply(
+          `${await this.#overview()}\nSend a new goal by DM or mention me with your goal. Reply in its thread to continue.`,
+        );
+        return;
+      }
+      // Persist the destination before scheduling, so even immediate progress stays in
+      // the originating DM/channel thread instead of leaking into the default channel.
+      const created = await createTask(this.#deps, {
+        goal: text.replace(/^run\s+/i, ''),
+        slack: true,
+        slackSource: { channel: ev.channel, threadTs },
+        approveAll: false,
+      });
+      await reply(
+        `Started *${esc(projectTitle(created))}*. Reply in this thread to steer it. Risky tools require approval in Gantrix.`,
+      );
       return;
     }
     const allowed = this.#deps.config.SLACK_ALLOWED_USERS.includes(ev.user);

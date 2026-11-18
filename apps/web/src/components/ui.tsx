@@ -157,5 +157,9 @@ export function nowText(e: StreamEvent | null, agentName: (stepId: string) => st
       return `You changed the project's ${e.fields.join(' and ')}`;
     case 'user.message_delivered':
       return `${agentName(e.stepId)} read your note`;
+    case 'site.checked':
+      return e.ok ? `The site is live: ${e.url}` : `The site isn't live yet: ${e.url}`;
+    case 'step.timed_out':
+      return `${agentName(e.stepId)} hit its ${e.minutes} min time limit on ${e.key}`;
   }
 }

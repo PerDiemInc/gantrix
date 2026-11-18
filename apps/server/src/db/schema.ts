@@ -22,6 +22,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   unique,
@@ -67,12 +68,21 @@ export const agents = pgTable(
       onDelete: 'restrict',
     }),
     maxConcurrency: integer('max_concurrency').notNull().default(1), // enforced by the supervisor
+    // Longest one run of a step may take; then the attempt fails and is retried. Shell commands
+    // may run this long too. null → no step limit, and shell commands get two minutes.
+    stepTimeoutMinutes: real('step_timeout_minutes'),
     // "preset:<id>", "initials", or a small image as a data URL; null → a preset picked by name.
     avatar: text('avatar'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
-  (t) => [check('agents_max_concurrency_positive', sql`${t.maxConcurrency} > 0`)],
+  (t) => [
+    check('agents_max_concurrency_positive', sql`${t.maxConcurrency} > 0`),
+    check(
+      'agents_step_timeout_positive',
+      sql`${t.stepTimeoutMinutes} is null or ${t.stepTimeoutMinutes} > 0`,
+    ),
+  ],
 );
 
 export const skills = pgTable(
@@ -132,6 +142,10 @@ export const tasks = pgTable(
     offloadConnectionId: uuid('offload_connection_id').references(() => connections.id, {
       onDelete: 'set null',
     }),
+    // Done only when a deployed public URL answers: the engine fetches it before the goal judge.
+    liveCheck: boolean('live_check').notNull().default(false),
+    // Names of the variables shell commands get on this project; the values are in task_env.
+    shellEnvNames: text('shell_env_names').array(),
     // Time the project was stopped, which doesn't count against its time limit.
     pausedMs: bigint('paused_ms', { mode: 'number' }).notNull().default(0),
     result: text('result'),
@@ -145,6 +159,17 @@ export const tasks = pgTable(
     index('tasks_created_at_idx').on(t.createdAt.desc()),
   ],
 );
+
+/**
+ * Variables a project's shell commands get, e.g. AWS_PROFILE. Kept out of the tasks row so no
+ * route that returns a project can return a value. "env:NAME" reads the worker's environment.
+ */
+export const taskEnv = pgTable('task_env', {
+  taskId: uuid('task_id')
+    .primaryKey()
+    .references(() => tasks.id, { onDelete: 'cascade' }),
+  vars: jsonb('vars').$type<Record<string, string>>().notNull(),
+});
 
 export const plans = pgTable(
   'plans',

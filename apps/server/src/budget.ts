@@ -32,6 +32,7 @@ export function budgetBreach(
   budget: Budget,
   now = new Date(),
 ): BudgetBreach | null {
+  if (budget.keepGoing) return null;
   if (task.tokensUsed >= budget.maxTokens) {
     return { limit: 'tokens', detail: `Used ${task.tokensUsed} of ${budget.maxTokens} tokens.` };
   }
@@ -48,7 +49,7 @@ export function budgetBreach(
 }
 
 export const canReplan = (task: TaskUsage, budget: Budget): boolean =>
-  task.replans < budget.maxReplans;
+  budget.keepGoing === true || task.replans < budget.maxReplans;
 
 export const canRetry = (step: { attempt: number }, budget: Budget): boolean =>
   step.attempt < budget.maxStepAttempts;

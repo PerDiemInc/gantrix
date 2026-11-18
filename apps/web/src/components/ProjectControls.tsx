@@ -123,6 +123,34 @@ export function SlackSwitch({ task, onChange }: { task: TaskDto; onChange: () =>
   );
 }
 
+/** Keep going until the goal is met: no time, token or replan limit. */
+export function KeepGoingSwitch({ task, onChange }: { task: TaskDto; onChange: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const on = task.budget.keepGoing === true;
+  const toggle = async () => {
+    setBusy(true);
+    await api.patch(`/api/tasks/${task.id}`, { keepGoing: !on }).catch(() => {});
+    setBusy(false);
+    onChange();
+  };
+  return (
+    <label
+      className="inline switch small"
+      title="No time, token or replan limit: it ends when the goal is met or you press Stop"
+    >
+      <input
+        type="checkbox"
+        role="switch"
+        aria-checked={on}
+        checked={on}
+        disabled={busy}
+        onChange={() => void toggle()}
+      />
+      <Icon name="play" size={14} /> Keep going
+    </label>
+  );
+}
+
 /** Delete, with a confirmation dialog that says exactly what goes. */
 export function DeleteProject({ task }: { task: TaskDto }) {
   const dialog = useRef<HTMLDialogElement>(null);

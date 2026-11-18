@@ -705,4 +705,138 @@ describe('engine', () => {
     });
     expect(plan?.planVersion).toBe(1);
   });
+
+  it('keeps going past the replan and token limits until the goal is met', async () => {
+    await e.addAgent('writer');
+    let plans = 0;
+    e.fake.script.plan = () => ({ steps: [step(`try${++plans}`, 'writer')] });
+    // The goal judge says no three times, then yes.
+    let goals = 0;
+    e.fake.script.judge = (prompt) =>
+      prompt.startsWith('Goal:') && ++goals < 4
+        ? { passed: false, reason: 'Not there yet.' }
+        : { passed: true, reason: 'Fine.' };
+    const limits = { maxReplans: 1, maxTokens: 60 };
+
+    const capped = await createTask(e.deps, { goal: 'Stops early', budget: limits });
+    expect((await e.waitFor(capped.id)).status).toBe('needs_attention');
+
+    plans = 0;
+    goals = 0;
+    const task = await createTask(e.deps, {
+      goal: 'Never give up',
+      budget: { ...limits, keepGoing: true },
+    });
+    const done = await e.waitFor(task.id);
+    expect(done.status).toBe('succeeded');
+    expect(done.replans).toBe(3);
+    expect(done.tokensUsed).toBeGreaterThan(limits.maxTokens);
+    expect(await eventTypes(task.id)).not.toContain('budget.exceeded');
+  });
+
+  it("stops a step at its agent's time limit, kills its command and tries again", async () => {
+    const slow = await e.addAgent('slow', ['shell']);
+    await e.db.update(agents).set({ stepTimeoutMinutes: 0.02 }).where(eq(agents.id, slow.id));
+    e.fake.script.plan = () => ({ steps: [step('deploy', 'slow')] });
+    // The first attempt hangs on a command; the next one answers.
+    let hung = false;
+    e.fake.script.worker = ({ toolResults }) => {
+      if (toolResults.length || hung) return 'Deployed.';
+      hung = true;
+      return { name: 'shell', args: { command: 'sleep 30' } };
+    };
+    const started = Date.now();
+    const task = await createTask(e.deps, { goal: 'Deploy', approveAll: true });
+    const done = await e.waitFor(task.id);
+
+    expect(done.status).toBe('succeeded');
+    expect(Date.now() - started).toBeLessThan(15_000); // not the 30 s the command wanted
+    const [deploy] = await stepsOf(task.id);
+    expect(deploy).toMatchObject({ key: 'deploy', attempt: 2, status: 'succeeded' });
+    expect(await eventTypes(task.id)).toContain('step.timed_out');
+  });
+
+  it("gives shell commands the project's variables and never returns their values", async () => {
+    await e.addAgent('ops', ['shell']);
+    e.fake.script.plan = () => ({ steps: [step('whoami', 'ops')] });
+    let seen = '';
+    e.fake.script.worker = ({ toolResults }) => {
+      if (!toolResults.length) {
+        return {
+          name: 'shell',
+          args: { command: 'echo "$AWS_PROFILE|$FROM_ENV|$AWS_CONFIG_FILE"' },
+        };
+      }
+      seen = toolResults[0] ?? '';
+      return 'Checked.';
+    };
+    process.env.GANTRIX_TEST_SECRET = 'from-the-worker';
+    const task = await createTask(e.deps, {
+      goal: 'Who am I',
+      approveAll: true,
+      shellEnv: { AWS_PROFILE: 'deploy', FROM_ENV: 'env:GANTRIX_TEST_SECRET' },
+    });
+    const done = await e.waitFor(task.id);
+    delete process.env.GANTRIX_TEST_SECRET;
+
+    expect(done.status).toBe('succeeded');
+    expect(seen).toMatch(/deploy\|from-the-worker\|.*\.aws\/config/);
+    expect(task.shellEnvNames).toEqual(['AWS_PROFILE', 'FROM_ENV']);
+    expect(JSON.stringify(done)).not.toContain('GANTRIX_TEST_SECRET');
+  });
+
+  it('with the live check on, accepts the goal only once the deployed URL answers', async () => {
+    await e.addAgent('ops', ['verify_url']);
+    const prompts: string[] = [];
+    e.fake.script.plan = (prompt) => {
+      prompts.push(prompt);
+      return { steps: [step(`ship${prompts.length}`, 'ops')] };
+    };
+    e.fake.script.worker = ({ toolResults }) =>
+      toolResults.length
+        ? `Checked: ${toolResults[0]}`
+        : { name: 'verify_url', args: { url: 'https://site.example/' } };
+    const judged: string[] = [];
+    e.fake.script.judge = (prompt) => {
+      if (prompt.startsWith('Goal:')) judged.push(prompt);
+      return { passed: true, reason: 'Fine.' };
+    };
+    // Down for the agent's first check and the engine's re-check, up from then on.
+    let fetches = 0;
+    e.deps.checkUrl = async (url) => {
+      const ok = ++fetches > 2;
+      return { url, status: ok ? 200 : 503, ok, title: ok ? 'Bakery' : '', detail: '' };
+    };
+    try {
+      const task = await createTask(e.deps, {
+        goal: 'Ship the site',
+        approveAll: true,
+        liveCheck: true,
+      });
+      const done = await e.waitFor(task.id);
+
+      expect(done.status).toBe('succeeded');
+      expect(done.replans).toBe(1);
+      expect(prompts[0]).toContain('verify_url');
+      expect(prompts[1]).toContain('The deployed site does not answer');
+      // The judge was asked once, with what the engine itself fetched.
+      expect(judged).toHaveLength(1);
+      expect(judged[0]).toContain('HTTP 200 https://site.example/');
+    } finally {
+      delete e.deps.checkUrl;
+    }
+  });
+
+  it('with the live check on, a project that never checked a URL is not done', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+    const task = await createTask(e.deps, {
+      goal: 'Ship the site',
+      liveCheck: true,
+      budget: { maxReplans: 0 },
+    });
+    const done = await e.waitFor(task.id);
+    expect(done.status).toBe('needs_attention');
+    expect(done.error).toContain('no agent has checked a public URL');
+  });
 });

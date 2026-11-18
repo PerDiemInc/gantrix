@@ -93,6 +93,41 @@ beforeEach(async () => {
 });
 
 describe('slack', () => {
+  it.each(['dm', 'mention'])(
+    'starts a new job from an allowed %s and keeps its thread',
+    async (mode) => {
+      await e.addAgent('writer');
+      e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
+      const event = {
+        type: mode === 'dm' ? 'message' : 'app_mention',
+        channel: mode === 'dm' ? 'DTEST123' : 'C0TEST123',
+        channel_type: mode === 'dm' ? 'im' : 'channel',
+        user: 'UBOSS',
+        text: 'Write release notes',
+        ts: mode === 'dm' ? '9001' : '9002',
+      };
+      await bridge.handle({ ...event, user: 'USTRANGER' });
+      expect(await e.db.select().from(tasks)).toHaveLength(0);
+      expect(posts()).toHaveLength(0);
+      await bridge.handle(event);
+      await bridge.handle(event);
+      const rows = await e.db.select().from(tasks);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        goal: 'Write release notes',
+        slackChannel: event.channel,
+        slackThreadTs: event.ts,
+        approveAll: false,
+      });
+      await e.waitFor(rows[0]!.id);
+      await bridge.idle();
+      expect(
+        posts().every((p) => p.body.channel === event.channel && p.body.thread_ts === event.ts),
+      ).toBe(true);
+      if (mode === 'dm') expect(posts().some((p) => p.body.reply_broadcast)).toBe(false);
+    },
+  );
+
   it('posts a project into its own thread: intro, plan, finished tasks, done', async () => {
     await e.addAgent('writer');
     e.fake.script.plan = () => ({ steps: [step('notes', 'writer')] });
@@ -145,7 +180,7 @@ describe('slack', () => {
         thread_ts: thread_ts ?? '',
       });
     await msg('USTRANGER', '1', '2001');
-    expect(said(/Only people listed in SLACK_ALLOWED_USERS/)).toBe(true);
+    expect(said(/Only people listed in SLACK_ALLOWED_USERS/)).toBe(false);
     expect(
       (await e.db.select().from(approvals).where(eq(approvals.taskId, task.id)))[0]?.status,
     ).toBe('pending');
@@ -198,21 +233,16 @@ describe('slack', () => {
       (await e.db.query.tasks.findFirst({ where: eq(tasks.id, task.id) }))?.agentIds,
     ).toHaveLength(2);
     expect(await mention('add nobody')).toContain("I don't know nobody");
-    expect(await mention('rename Launch notes', 'USTRANGER')).toContain('SLACK_ALLOWED_USERS');
+    expect(await mention('rename Launch notes', 'USTRANGER')).toBe('');
     expect(await mention('rename Launch notes')).toContain('Renamed to *Launch notes*');
     expect((await e.db.query.tasks.findFirst({ where: eq(tasks.id, task.id) }))?.name).toBe(
       'Launch notes',
     );
 
     e.fake.script.worker = () => 'Everything is done: notes.md was written.';
-    expect(await mention('what is left?', 'USTRANGER')).toContain('Everything is done');
-    // The model saw the project's overview, but not step outputs or tool calls: USTRANGER
-    // can't steer, and those never appear in the thread.
-    const asked = e.fake.bodies.at(-1)?.messages.at(-1)?.content ?? '';
-    expect(asked).toContain('Project: Launch notes');
-    expect(asked).toContain('Question: what is left?');
-    expect(asked).not.toContain('Recent activity');
-    expect(asked).not.toContain('Result:');
+    const before = e.fake.bodies.length;
+    expect(await mention('what is left?', 'USTRANGER')).toBe('');
+    expect(e.fake.bodies.length).toBe(before);
     await mention('what is left?');
     expect(e.fake.bodies.at(-1)?.messages.at(-1)?.content ?? '').toContain('Recent activity');
   });

@@ -21,6 +21,7 @@ import { createChatModel } from '../models/provider.ts';
 import { changedFiles, snapshotFiles } from '../skills/file-changes.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
+import { loadShellEnv } from '../skills/shell-env.ts';
 import {
   snapshotProjectInput,
   snapshotStepInput,
@@ -30,6 +31,8 @@ import { ASK_USER } from '../skills/tools/ask.ts';
 import { DELEGATE, delegateTool } from '../skills/tools/delegate.ts';
 import { fileTools } from '../skills/tools/files.ts';
 import { builtinTools } from '../skills/tools/index.ts';
+import { SHELL_TIMEOUT_MS } from '../skills/tools/shell.ts';
+import { checkUrl } from '../skills/tools/verify.ts';
 import { resolveInWorkspace } from '../skills/workspace.ts';
 import { startDelegations, stillWaiting } from './delegation.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
@@ -60,6 +63,17 @@ const STALE_CHECK_MS = 3_000;
 /** Thrown before a model turn when the task has ended, so the step stops quietly. */
 export class StepStopped extends Error {}
 
+/** One run of a step took longer than its agent's time limit. */
+export class StepTimedOut extends Error {
+  readonly minutes: number;
+  constructor(minutes: number) {
+    super(
+      `Stopped after ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}: the agent's time limit.`,
+    );
+    this.minutes = minutes;
+  }
+}
+
 const clip = (text: string | null, max: number) =>
   !text ? '' : text.length > max ? `${text.slice(0, max)}\n[truncated]` : text;
 
@@ -83,6 +97,28 @@ export async function runStepJob(
     if (error instanceof StepStopped) {
       await closeStoppedStep(deps, step);
       return; // the supervisor tidies up the task
+    }
+    if (error instanceof StepTimedOut) {
+      await emit(
+        db,
+        task.id,
+        {
+          type: 'step.timed_out',
+          stepId: step.id,
+          key: step.key,
+          attempt: step.attempt,
+          minutes: error.minutes,
+        },
+        step.id,
+      );
+      // Like a rejected attempt: it runs again with this as feedback, or fails and replans.
+      const reason = `${error.message} Take a shorter path: smaller commands, or split the work.`;
+      await recordVerdict(deps, task, step, { passed: false, reason, tokens: 0 }, '').catch(
+        (e: unknown) => {
+          if (!(e instanceof StepStopped)) throw e;
+        },
+      );
+      return;
     }
     if (error instanceof GraphRecursionError) {
       const reason = `Stopped after ${MAX_MODEL_TURNS} model turns without finishing.`;
@@ -205,9 +241,11 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
   // The project's own choice (or offload) wins over the agent's setting.
   const spec = await resolveModelSpec(db, config, agentForProject(task, agent));
   const localCli = spec.provider === 'claude-code' || spec.provider === 'codex';
+  const shellEnv = toolkit.builtinTools.has('shell') ? await loadShellEnv(db, task.id) : {};
   const mcp = await openMcpTools(localCli ? {} : toolkit.mcpServers, workspace);
   // A model turn can last 30 minutes on a CLI: Stop has to reach it during the turn.
   const abort = new AbortController();
+  const limitMs = agent.stepTimeoutMinutes ? agent.stepTimeoutMinutes * 60_000 : null;
   const watch = setInterval(() => {
     void isStale(db, task, step).then(
       (stale) => stale && abort.abort(),
@@ -227,10 +265,28 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
         modelDefaults(config),
       ),
       tools: [
-        ...builtinTools(toolkit.builtinTools, workspace, {
-          sitesDir: config.GANTRIX_SITES_DIR,
-          previewUrl: `http://${config.GANTRIX_HOST}:${config.GANTRIX_PREVIEW_PORT}`,
-        }),
+        ...builtinTools(
+          toolkit.builtinTools,
+          workspace,
+          {
+            sitesDir: config.GANTRIX_SITES_DIR,
+            previewUrl: `http://${config.GANTRIX_HOST}:${config.GANTRIX_PREVIEW_PORT}`,
+          },
+          {
+            shell: { env: shellEnv, timeoutMs: limitMs ?? SHELL_TIMEOUT_MS, signal: abort.signal },
+            verify: {
+              check: deps.checkUrl ?? checkUrl,
+              onChecked: async (c) => {
+                await emit(
+                  db,
+                  task.id,
+                  { type: 'site.checked', url: c.url, status: c.status, ok: c.ok, stepId: step.id },
+                  step.id,
+                );
+              },
+            },
+          },
+        ),
         ...delegates,
         ...mcp.tools,
       ],
@@ -314,11 +370,28 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     // The judge can't see inside a CLI run, so note which files it changed.
     const filesBefore = localCli && input !== 'finished' ? await snapshotFiles(workspace) : null;
     if (input !== 'finished') {
+      // A tool that never returns (a hung command, an MCP server) would hold the step and its
+      // model slot for good, so the limit doesn't wait for the graph to notice the abort.
+      let timer: NodeJS.Timeout | undefined;
+      let timedOut = false;
+      const limit = new Promise<never>((_, reject) => {
+        if (!limitMs) return;
+        timer = setTimeout(() => {
+          timedOut = true;
+          abort.abort();
+          reject(new StepTimedOut(agent.stepTimeoutMinutes ?? 0));
+        }, limitMs);
+      });
+      const work = graph.invoke(input, run);
+      work.catch(() => {}); // after a timeout nobody awaits it
       try {
-        await graph.invoke(input, run);
+        await Promise.race([work, limit]);
       } catch (error) {
+        if (timedOut) throw new StepTimedOut(agent.stepTimeoutMinutes ?? 0);
         if (abort.signal.aborted) throw new StepStopped();
         throw error;
+      } finally {
+        clearTimeout(timer);
       }
     }
     const changed = filesBefore ? await changedFiles(workspace, filesBefore) : [];

@@ -6,6 +6,7 @@ import {
   type LocalAgentDto,
   type LocalAgentId,
   OKR_EXAMPLE,
+  parseEnvText,
   projectTitle,
   type TaskDto,
   type TaskListItem,
@@ -45,6 +46,10 @@ function NewProject({ onClose }: { onClose: () => void }) {
       () => {},
     );
   }, []);
+  const [keepGoing, setKeepGoing] = useState(false);
+  const [liveCheck, setLiveCheck] = useState(false);
+  const [envText, setEnvText] = useState('');
+  const env = parseEnvText(envText);
   const [busy, setBusy] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState('');
@@ -104,7 +109,12 @@ function NewProject({ onClose }: { onClose: () => void }) {
         ...(name.trim() ? { name } : {}),
         ...(description.trim() ? { description } : {}),
         ...(slackStatus?.posts ? { slack } : {}),
-        budget: minutes ? { maxMinutes: Number(minutes) } : {},
+        budget: {
+          ...(minutes ? { maxMinutes: Number(minutes) } : {}),
+          ...(keepGoing ? { keepGoing: true } : {}),
+        },
+        ...(liveCheck ? { liveCheck: true } : {}),
+        ...(Object.keys(env.vars).length ? { shellEnv: env.vars } : {}),
         ...(askChoice === null ? {} : { approveAll: !askChoice }),
         ...(team.size ? { agentIds: [...team] } : {}),
         ...(Object.keys(chosenModels).length ? { agentModels: chosenModels } : {}),
@@ -391,8 +401,64 @@ function NewProject({ onClose }: { onClose: () => void }) {
             />
             min
           </label>
-          <span className="muted small">You can add more time while it runs.</span>
+          <span className="muted small">
+            {keepGoing
+              ? 'Shown on the meter only: this project keeps going past it.'
+              : 'You can add more time while it runs.'}
+          </span>
         </div>
+      </section>
+
+      <section className="np-section">
+        <h3>
+          <span className="np-step">6</span> Deploy and finish
+        </h3>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={keepGoing}
+            onChange={(e) => setKeepGoing(e.target.checked)}
+          />
+          Keep going until the goal is met
+          <span className="muted small">
+            No time, token or replan limit. It ends when the goal is met or you press Stop.
+          </span>
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={liveCheck}
+            onChange={(e) => setLiveCheck(e.target.checked)}
+          />
+          Done only when the site is live
+          <span className="muted small">
+            Gantrix fetches the deployed public URL itself before it accepts the goal.
+          </span>
+        </label>
+        <label>
+          Variables for shell commands
+          <textarea
+            rows={3}
+            className="mono"
+            spellCheck={false}
+            autoComplete="off"
+            value={envText}
+            onChange={(e) => setEnvText(e.target.value)}
+            placeholder={'AWS_PROFILE=gantrix-deploy\nAWS_REGION=us-east-1'}
+            aria-describedby="np-env-help"
+          />
+        </label>
+        <p className="muted small" id="np-env-help">
+          One NAME=value per line. Agents' shell commands get them, so <code>aws</code> and{' '}
+          <code>terraform</code> can sign in. Use a profile with only the access this project needs.
+          Values are kept on this machine and never shown again; write <code>NAME=env:OTHER</code>{' '}
+          to read one from the worker's <code>.env</code> instead.
+        </p>
+        {env.errors.map((message) => (
+          <p key={message} className="error small" role="alert">
+            {message}
+          </p>
+        ))}
       </section>
 
       <div className="row-actions np-foot">
@@ -427,7 +493,11 @@ function NewProject({ onClose }: { onClose: () => void }) {
             Post to Slack
           </label>
         )}
-        <button type="submit" className="primary push" disabled={busy || !goal.trim()}>
+        <button
+          type="submit"
+          className="primary push"
+          disabled={busy || !goal.trim() || env.errors.length > 0}
+        >
           {busy ? 'Starting…' : 'Start project'}
         </button>
       </div>

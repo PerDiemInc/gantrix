@@ -6,7 +6,12 @@ import { Gallery } from '../components/Gallery.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
-import { DeleteProject, ProjectName, SlackSwitch } from '../components/ProjectControls.tsx';
+import {
+  DeleteProject,
+  KeepGoingSwitch,
+  ProjectName,
+  SlackSwitch,
+} from '../components/ProjectControls.tsx';
 import { TaskBoard, TaskDialog, TeamPanel } from '../components/ProjectTeam.tsx';
 import { QuestionCard } from '../components/QuestionCard.tsx';
 import { type AgentState, StatusPill, TaskProgress } from '../components/ui.tsx';
@@ -21,30 +26,33 @@ function Meter({
 }: {
   name: string;
   used: number;
-  max: number;
+  /** null = no limit (the project keeps going). */
+  max: number | null;
   unit?: string;
 }) {
-  const pct = Math.min(100, (used / max) * 100);
+  const pct = max === null ? 0 : Math.min(100, (used / max) * 100);
   return (
     <div className="meter">
       <div className="meter-head">
         <span>{name}</span>
         <span className="num">
           {used.toLocaleString()}
-          {unit} / {max.toLocaleString()}
           {unit}
+          {max === null ? ' · no limit' : ` / ${max.toLocaleString()}${unit}`}
         </span>
       </div>
-      <div
-        className="meter-track"
-        role="progressbar"
-        aria-label={name}
-        aria-valuemin={0}
-        aria-valuemax={max}
-        aria-valuenow={used}
-      >
-        <div className={`meter-fill ${pct > 85 ? 'hot' : ''}`} style={{ width: `${pct}%` }} />
-      </div>
+      {max !== null && (
+        <div
+          className="meter-track"
+          role="progressbar"
+          aria-label={name}
+          aria-valuemin={0}
+          aria-valuemax={max}
+          aria-valuenow={used}
+        >
+          <div className={`meter-fill ${pct > 85 ? 'hot' : ''}`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -93,6 +101,10 @@ export function eventText(e: StreamEvent, keys: Map<string, string>): string {
       return `You changed the project's ${e.fields.join(' and ')}`;
     case 'user.message_delivered':
       return `${keys.get(e.stepId) ?? 'A step'} read your note`;
+    case 'site.checked':
+      return `${e.ok ? 'Live' : 'Not live'}: ${e.url}${e.status ? ` (HTTP ${e.status})` : ''}`;
+    case 'step.timed_out':
+      return `${e.key} stopped after ${e.minutes} min: its agent's time limit`;
   }
 }
 
@@ -235,6 +247,9 @@ export function TaskPage({ id }: { id: string }) {
               <Icon name="list" size={14} /> Logs
             </a>
             <SlackSwitch task={task} onChange={reload} />
+            {(!isTerminal(task.status) || task.status === 'needs_attention') && (
+              <KeepGoingSwitch task={task} onChange={reload} />
+            )}
             {!isTerminal(task.status) && (
               <>
                 <button
@@ -261,25 +276,47 @@ export function TaskPage({ id }: { id: string }) {
         <div className="project-summary">
           <TaskProgress counts={counts} stopped={isTerminal(task.status)} />
           <div className="meters">
-            <Meter name="Tokens" used={task.tokensUsed} max={task.budget.maxTokens} />
-            <Meter name="Time" used={elapsedMin} max={task.budget.maxMinutes} unit=" min" />
-            <Meter name="Replans" used={task.replans} max={task.budget.maxReplans} />
+            <Meter
+              name="Tokens"
+              used={task.tokensUsed}
+              max={task.budget.keepGoing ? null : task.budget.maxTokens}
+            />
+            <Meter
+              name="Time"
+              used={elapsedMin}
+              max={task.budget.keepGoing ? null : task.budget.maxMinutes}
+              unit=" min"
+            />
+            <Meter
+              name="Replans"
+              used={task.replans}
+              max={task.budget.keepGoing ? null : task.budget.maxReplans}
+            />
           </div>
-          {(!isTerminal(task.status) || task.status === 'needs_attention') && (
-            <fieldset className="extend">
-              <legend className="muted small">Add time</legend>
-              {[15, 30, 60].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  className="ghost small"
-                  onClick={() => void extend({ minutes: m })}
-                >
-                  +{m < 60 ? `${m} min` : '1 h'}
-                </button>
-              ))}
-            </fieldset>
+          {(task.liveCheck || task.shellEnvNames?.length) && (
+            <p className="muted small project-deploy">
+              {task.liveCheck && 'Done only when the deployed site answers. '}
+              {task.shellEnvNames?.length
+                ? `Shell commands get ${task.shellEnvNames.join(', ')}.`
+                : ''}
+            </p>
           )}
+          {(!isTerminal(task.status) || task.status === 'needs_attention') &&
+            !task.budget.keepGoing && (
+              <fieldset className="extend">
+                <legend className="muted small">Add time</legend>
+                {[15, 30, 60].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className="ghost small"
+                    onClick={() => void extend({ minutes: m })}
+                  >
+                    +{m < 60 ? `${m} min` : '1 h'}
+                  </button>
+                ))}
+              </fieldset>
+            )}
         </div>
         {task.status === 'needs_attention' && !stoppedByYou && (
           <section className="resume" aria-label="Continue the project">

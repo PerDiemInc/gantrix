@@ -5,13 +5,18 @@ display_information:
   description: Posts project progress from your Gantrix agents; reply in the thread to steer them.
   background_color: "#1d1a33"
 features:
+  app_home:
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
   bot_user:
     display_name: Gantrix
     always_online: true
 oauth_config:
   scopes:
     bot:
+      - im:history # direct messages to the app
       - chat:write # post progress in the channel
+      - message.im
       - app_mentions:read # "@Gantrix status", questions, commands
       - channels:history # replies in a project's thread (public channel)
       - groups:history # the same in a private channel
@@ -19,6 +24,7 @@ oauth_config:
 settings:
   event_subscriptions:
     bot_events:
+      - message.im
       - app_mention
       - message.channels
       - message.groups

@@ -6,6 +6,7 @@ export interface SlackEvent {
   bot_id?: string;
   text?: string;
   channel?: string;
+  channel_type?: string;
   ts?: string;
   thread_ts?: string;
 }

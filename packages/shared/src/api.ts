@@ -22,6 +22,8 @@ export interface AgentDto {
   /** "preset:<id>", "initials", a data:image URL, or null for the default picked by name. */
   avatar: string | null;
   maxConcurrency: number;
+  /** Longest one run of a step may take, in minutes; null = no limit. */
+  stepTimeoutMinutes: number | null;
   createdAt: string;
   updatedAt: string;
   skills: SkillRef[];
@@ -50,6 +52,10 @@ export interface TaskDto {
   agentModels: Record<string, AgentModelChoice> | null;
   /** Offload: agents without their own choice run on this connection. */
   offloadConnectionId: string | null;
+  /** Finished only when a deployed public URL answers. */
+  liveCheck: boolean;
+  /** Names of the variables this project's shell commands get; values are never returned. */
+  shellEnvNames: string[] | null;
   /** Time stopped; it doesn't count against the time limit. */
   pausedMs: number;
   status: TaskStatus;

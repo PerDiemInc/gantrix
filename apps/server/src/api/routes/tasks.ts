@@ -1,6 +1,13 @@
 import { readFile, stat } from 'node:fs/promises';
 import { extname } from 'node:path';
-import type { Budget, StepConversationDto, StreamEvent, TaskListItem } from '@gantrix/shared';
+import {
+  type Budget,
+  MAX_ENV_VALUE_CHARS,
+  MAX_ENV_VARS,
+  type StepConversationDto,
+  type StreamEvent,
+  type TaskListItem,
+} from '@gantrix/shared';
 import type { BaseMessage } from '@langchain/core/messages';
 import { and, asc, desc, eq, gt, inArray, ne, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -40,6 +47,15 @@ const IMAGE_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
+// Variables for the project's shell commands. A value is used as typed, or "env:NAME" reads
+// the worker's environment. The API returns the names only.
+const ShellEnv = z
+  .record(
+    z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'a variable name like AWS_PROFILE'),
+    z.string().max(MAX_ENV_VALUE_CHARS),
+  )
+  .refine((v) => Object.keys(v).length <= MAX_ENV_VARS, `At most ${MAX_ENV_VARS} variables.`);
+
 const CreateTask = z.object({
   goal: z.string().trim().min(1).max(4_000),
   budget: z
@@ -52,9 +68,14 @@ const CreateTask = z.object({
         .int()
         .min(1)
         .max(24 * 60),
+      // Run until the goal is met or the user stops it; the limits above only fill the meters.
+      keepGoing: z.boolean(),
     })
     .partial()
     .optional(),
+  // Finished only when a deployed public URL answers.
+  liveCheck: z.boolean().optional(),
+  shellEnv: ShellEnv.optional(),
   approveAll: z.boolean().optional(),
   agentIds: z.array(z.uuid()).max(32).optional(),
   description: z.string().trim().max(8_000).optional(),
@@ -72,6 +93,9 @@ const CreateTask = z.object({
 const UpdateTask = z.object({
   name: z.string().trim().max(120).nullable().optional(),
   slack: z.boolean().optional(),
+  liveCheck: z.boolean().optional(),
+  keepGoing: z.boolean().optional(),
+  shellEnv: ShellEnv.optional(),
 });
 const SuggestGoal = z.object({ description: z.string().trim().min(10).max(8_000) });
 const ListTasks = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
@@ -236,6 +260,8 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       ...(input.slack !== undefined ? { slack: input.slack } : {}),
       ...(input.agentModels ? { agentModels: input.agentModels } : {}),
       ...(offloadConnectionId ? { offloadConnectionId } : {}),
+      ...(input.liveCheck !== undefined ? { liveCheck: input.liveCheck } : {}),
+      ...(input.shellEnv ? { shellEnv: input.shellEnv } : {}),
     });
     return reply.code(201).send(task);
   });

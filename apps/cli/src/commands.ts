@@ -7,6 +7,7 @@ import {
   type ConnectionDto,
   EXAMPLES,
   isTerminal,
+  parseEnvText,
   type SkillDto,
   type StepConversationDto,
   type TaskDetailDto,
@@ -64,6 +65,7 @@ export async function addAgent(
     model?: string;
     baseUrl?: string;
     maxConcurrency?: string;
+    timeout?: string;
     skills?: string;
     prompt?: string;
     connection?: string;
@@ -78,6 +80,7 @@ export async function addAgent(
     ...(o.model ? { model: o.model } : {}),
     ...(o.baseUrl ? { modelBaseUrl: o.baseUrl } : {}),
     ...(o.maxConcurrency ? { maxConcurrency: Number(o.maxConcurrency) } : {}),
+    ...(o.timeout ? { stepTimeoutMinutes: Number(o.timeout) } : {}),
     ...(o.prompt ? { systemPrompt: o.prompt } : {}),
     ...(connectionId ? { connectionId } : {}),
   });
@@ -177,6 +180,9 @@ export async function runTask(
     maxMinutes?: string;
     maxTokens?: string;
     maxReplans?: string;
+    keepGoing?: boolean;
+    liveCheck?: boolean;
+    env?: string[];
     approveAll?: boolean;
     ask?: boolean;
     agents?: string;
@@ -191,7 +197,10 @@ export async function runTask(
     ...(o.maxMinutes ? { maxMinutes: Number(o.maxMinutes) } : {}),
     ...(o.maxTokens ? { maxTokens: Number(o.maxTokens) } : {}),
     ...(o.maxReplans ? { maxReplans: Number(o.maxReplans) } : {}),
+    ...(o.keepGoing ? { keepGoing: true } : {}),
   };
+  const env = parseEnvText((o.env ?? []).join('\n'));
+  if (env.errors.length) throw new Error(`--env: ${env.errors.join(' ')}`);
   if (o.ask && o.approveAll) throw new Error('Use --ask or --approve-all, not both.');
   let agentIds: string[] | undefined;
   if (o.agents) {
@@ -212,6 +221,8 @@ export async function runTask(
     ...(o.slack ? { slack: true } : {}),
     ...(o.offload ? { offload: o.offload } : {}),
     ...(o.description ? { description: o.description } : {}),
+    ...(o.liveCheck ? { liveCheck: true } : {}),
+    ...(Object.keys(env.vars).length ? { shellEnv: env.vars } : {}),
     ...(o.ask ? { approveAll: false } : o.approveAll ? { approveAll: true } : {}),
   });
   console.log(`Task ${paint('bold', short(task.id))} created. Workspace: ${task.workspacePath}`);

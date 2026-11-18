@@ -3,6 +3,46 @@ export interface Budget {
   maxReplans: number;
   maxTokens: number;
   maxMinutes: number;
+  /**
+   * Never stop on the token, time or replan limits: the project runs until its goal is met or
+   * the user stops it. The limits above stay as what the meters show.
+   */
+  keepGoing?: boolean;
+}
+
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const MAX_ENV_VARS = 32;
+export const MAX_ENV_VALUE_CHARS = 4_000;
+
+/**
+ * "NAME=value" lines, as typed into the project form, into variables for shell commands.
+ * Blank lines and lines starting with # are skipped; "export " and matching quotes are dropped.
+ */
+export function parseEnvText(text: string): { vars: Record<string, string>; errors: string[] } {
+  const vars: Record<string, string> = {};
+  const errors: string[] = [];
+  for (const [i, raw] of text.split('\n').entries()) {
+    const line = raw.trim().replace(/^export\s+/, '');
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    const name = eq < 0 ? line : line.slice(0, eq).trim();
+    if (eq < 0 || !ENV_NAME.test(name)) {
+      errors.push(`Line ${i + 1}: write NAME=value (letters, digits and _ in the name).`);
+      continue;
+    }
+    let value = line.slice(eq + 1).trim();
+    const quote = value[0];
+    if (value.length > 1 && (quote === '"' || quote === "'") && value.endsWith(quote)) {
+      value = value.slice(1, -1);
+    }
+    if (value.length > MAX_ENV_VALUE_CHARS) {
+      errors.push(`Line ${i + 1}: the value of ${name} is too long.`);
+      continue;
+    }
+    vars[name] = value;
+  }
+  if (Object.keys(vars).length > MAX_ENV_VARS) errors.push(`At most ${MAX_ENV_VARS} variables.`);
+  return { vars, errors };
 }
 
 export interface McpServerConfig {

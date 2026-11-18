@@ -77,6 +77,9 @@ export async function runPlanJob(
     const prompt = [
       task.description ? `Project: ${task.description}` : '',
       `Goal: ${task.goal}`,
+      task.liveCheck
+        ? 'This project is finished only when the site answers at a public URL. The plan must deploy it and end with a step whose agent has the verify_url tool and checks that URL; its acceptance criterion is that verify_url reported LIVE.'
+        : '',
       `Agents:\n${team.map((a) => `- ${a.name}: ${a.description || '(no description)'} Tools: ${a.tools.join(', ') || 'none'}`).join('\n')}`,
       done.length
         ? `Finished steps (depend on their keys; don't redo them):\n${done.map((s) => `- ${s.key}: ${s.title}. Result: ${clip(s.output, 600)}`).join('\n')}`

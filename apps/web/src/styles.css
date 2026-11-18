@@ -2386,3 +2386,18 @@ table.live-models {
 .live-link:hover {
   text-decoration: underline;
 }
+
+/* ---------- deploy and finish, agent time limit ---------- */
+label.check {
+  flex-wrap: wrap;
+}
+.agent-limit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.project-deploy {
+  margin: 0;
+}

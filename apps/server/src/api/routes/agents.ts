@@ -31,6 +31,13 @@ const AgentFields = z.object({
   connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
   avatar: Avatar.nullable(),
   maxConcurrency: z.number().int().min(1).max(16),
+  // One run of a step may take this long; null = no limit. Shell commands may run as long.
+  stepTimeoutMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .nullable(),
   skillIds: z.array(z.uuid()).max(32),
 });
 // Omitted fields get the database defaults.

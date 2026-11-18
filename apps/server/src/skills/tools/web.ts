@@ -119,7 +119,7 @@ function get(url: URL): Promise<Fetched> {
   });
 }
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
@@ -133,30 +133,51 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+export interface PublicResponse {
+  status: number;
+  /** The address that answered, after redirects. */
+  url: string;
+  type: string;
+  body: string;
+}
+
+/** GET a public http(s) URL, following redirects; private and local addresses are refused. */
+export async function fetchPublic(url: string): Promise<PublicResponse> {
+  let current: URL;
+  try {
+    current = new URL(url);
+  } catch {
+    throw new ToolError(`"${url}" isn't a URL.`);
+  }
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    assertAllowedUrl(current);
+    const response = await get(current);
+    const location = response.headers.location;
+    if (response.status >= 300 && response.status < 400 && location) {
+      current = new URL(location, current); // each hop is checked again
+      continue;
+    }
+    return {
+      status: response.status,
+      url: current.href,
+      type: response.headers['content-type'] ?? '',
+      body: response.body,
+    };
+  }
+  throw new ToolError(`More than ${MAX_REDIRECTS} redirects.`);
+}
+
 export function webFetchTool() {
   return tool(
     ({ url }) =>
       asToolResult(async () => {
-        let current = new URL(url);
-        for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-          assertAllowedUrl(current);
-          const response = await get(current);
-          const location = response.headers.location;
-          if (response.status >= 300 && response.status < 400 && location) {
-            current = new URL(location, current); // each hop is checked again
-            continue;
-          }
-          const type = response.headers['content-type'] ?? '';
-          if (!/^(text\/|application\/(json|xml|xhtml))/.test(type)) {
-            throw new ToolError(`Unsupported content type "${type || 'unknown'}".`);
-          }
-          const body = response.body;
-          const text = type.includes('html') ? htmlToText(body) : body;
-          const clipped =
-            text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n[truncated]` : text;
-          return `HTTP ${response.status} ${current.href}\n\n${clipped}`;
+        const response = await fetchPublic(url);
+        if (!/^(text\/|application\/(json|xml|xhtml))/.test(response.type)) {
+          throw new ToolError(`Unsupported content type "${response.type || 'unknown'}".`);
         }
-        throw new ToolError(`More than ${MAX_REDIRECTS} redirects.`);
+        const text = response.type.includes('html') ? htmlToText(response.body) : response.body;
+        const clipped = text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n[truncated]` : text;
+        return `HTTP ${response.status} ${response.url}\n\n${clipped}`;
       }),
     {
       name: 'web_fetch',

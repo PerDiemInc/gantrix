@@ -51,6 +51,10 @@ export type GantrixEvent =
   /** The user changed project settings, e.g. ["name"] or ["slack"]. */
   | { type: 'task.updated'; fields: string[] }
   | { type: 'goal.judged'; planVersion: number; passed: boolean; reason: string }
+  /** An agent (verify_url) or the engine (before the goal judge) fetched a deployed URL. */
+  | { type: 'site.checked'; url: string; status: number; ok: boolean; stepId?: string }
+  /** A step's run hit its agent's time limit and was stopped. */
+  | { type: 'step.timed_out'; stepId: string; key: string; attempt: number; minutes: number }
   | { type: 'budget.exceeded'; limit: 'tokens' | 'time' | 'replans'; detail: string };
 
 export type GantrixEventType = GantrixEvent['type'];

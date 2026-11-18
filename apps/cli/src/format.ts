@@ -123,5 +123,9 @@ export function describeEvent(e: StreamEvent, stepKeys: Map<string, string>): st
       return `${at} ${paint('cyan', `you changed ${e.fields.join(', ')}`)}`;
     case 'user.message_delivered':
       return `${at}   ${paint('gray', `↳ ${stepKeys.get(e.stepId) ?? 'a step'} read your note`)}`;
+    case 'site.checked':
+      return `${at} ${paint(e.ok ? 'green' : 'yellow', `${e.ok ? 'live' : 'not live'}: ${e.url}${e.status ? ` (HTTP ${e.status})` : ''}`)}`;
+    case 'step.timed_out':
+      return `${at} ${paint('yellow', `${e.key} stopped after ${e.minutes} min: its agent's time limit`)}`;
   }
 }

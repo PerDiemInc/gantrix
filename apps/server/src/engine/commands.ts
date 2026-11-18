@@ -10,7 +10,15 @@ import {
 } from '@gantrix/shared';
 import { and, eq, inArray, isNotNull, ne, notInArray, sql } from 'drizzle-orm';
 import { resolveBudget } from '../budget.ts';
-import { agents, approvals, delegations, steps, taskMessages, tasks } from '../db/schema.ts';
+import {
+  agents,
+  approvals,
+  delegations,
+  steps,
+  taskEnv,
+  taskMessages,
+  tasks,
+} from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { createWorkspace } from '../skills/workspace.ts';
 import { resumeIfReady } from './delegation.ts';
@@ -29,11 +37,15 @@ export async function createTask(
     description?: string;
     name?: string;
     slack?: boolean;
+    slackSource?: { channel: string; threadTs: string };
     budget?: Partial<Budget>;
     approveAll?: boolean;
     agentIds?: string[];
     agentModels?: Record<string, AgentModelChoice>;
     offloadConnectionId?: string;
+    liveCheck?: boolean;
+    /** Variables for this project's shell commands, e.g. { AWS_PROFILE: 'gantrix' }. */
+    shellEnv?: Record<string, string>;
   },
 ) {
   const id = randomUUIDv7();
@@ -43,6 +55,7 @@ export async function createTask(
     deps.config.GANTRIX_ISOLATED_STEPS,
   );
   const budget = resolveBudget(input.budget, deps.config);
+  const envNames = Object.keys(input.shellEnv ?? {});
   const task = await deps.db.transaction(async (tx) => {
     const [row] = await tx
       .insert(tasks)
@@ -56,11 +69,17 @@ export async function createTask(
         description: input.description?.trim() || null,
         name: input.name?.trim() || null,
         slack: input.slack ?? false,
+        slackChannel: input.slackSource?.channel ?? null,
+        slackThreadTs: input.slackSource?.threadTs ?? null,
         agentModels:
           input.agentModels && Object.keys(input.agentModels).length ? input.agentModels : null,
         offloadConnectionId: input.offloadConnectionId ?? null,
+        liveCheck: input.liveCheck ?? false,
+        shellEnvNames: envNames.length ? envNames : null,
       })
       .returning();
+    if (envNames.length)
+      await tx.insert(taskEnv).values({ taskId: id, vars: input.shellEnv ?? {} });
     await emit(tx, id, { type: 'task.status', status: 'planning' });
     return row;
   });
@@ -536,7 +555,14 @@ export async function deleteTask(deps: EngineDeps, taskId: string): Promise<Dele
 export async function updateTask(
   deps: EngineDeps,
   taskId: string,
-  input: { name?: string | null | undefined; slack?: boolean | undefined },
+  input: {
+    name?: string | null | undefined;
+    slack?: boolean | undefined;
+    liveCheck?: boolean | undefined;
+    keepGoing?: boolean | undefined;
+    /** Replaces every variable; {} removes them. */
+    shellEnv?: Record<string, string> | undefined;
+  },
 ): Promise<boolean> {
   const fields = Object.keys(input).filter((k) => input[k as keyof typeof input] !== undefined);
   if (!fields.length) return true;
@@ -546,9 +572,28 @@ export async function updateTask(
       .set({
         ...(input.name !== undefined ? { name: input.name?.trim() || null } : {}),
         ...(input.slack !== undefined ? { slack: input.slack } : {}),
+        ...(input.liveCheck !== undefined ? { liveCheck: input.liveCheck } : {}),
+        ...(input.keepGoing !== undefined
+          ? {
+              budget: sql`jsonb_set(${tasks.budget}, '{keepGoing}', ${input.keepGoing ? 'true' : 'false'}::jsonb)`,
+            }
+          : {}),
+        ...(input.shellEnv !== undefined
+          ? {
+              shellEnvNames: Object.keys(input.shellEnv).length
+                ? Object.keys(input.shellEnv)
+                : null,
+            }
+          : {}),
       })
       .where(eq(tasks.id, taskId))
       .returning({ id: tasks.id });
+    if (row && input.shellEnv !== undefined) {
+      await tx.delete(taskEnv).where(eq(taskEnv.taskId, taskId));
+      if (Object.keys(input.shellEnv).length) {
+        await tx.insert(taskEnv).values({ taskId, vars: input.shellEnv });
+      }
+    }
     if (row) await emit(tx, taskId, { type: 'task.updated', fields });
     return Boolean(row);
   });

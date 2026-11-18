@@ -46,6 +46,10 @@ agents
   .option('-m, --model <model>', 'e.g. qwen3:8b or openai/<model> (default: GANTRIX_DEFAULT_MODEL)')
   .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
+  .option(
+    '--timeout <minutes>',
+    'longest one run of a task may take; shell commands may run this long too',
+  )
   .option('--prompt <text>', 'extra system prompt')
   .option('-c, --connection <name>', 'a saved model connection (see gantrix connections)')
   .action(run((name: string, o) => cmd.addAgent(client, name, o)));
@@ -124,6 +128,14 @@ program
   .option('--max-minutes <n>', 'time budget')
   .option('--max-tokens <n>', 'token budget')
   .option('--max-replans <n>', 'replan budget')
+  .option('--keep-going', 'no time, token or replan limit: run until the goal is met')
+  .option('--live-check', 'done only when the deployed public URL answers')
+  .option(
+    '--env <NAME=value>',
+    'a variable for shell commands, e.g. AWS_PROFILE=deploy (repeat for more)',
+    (value: string, all: string[]) => [...all, value],
+    [] as string[],
+  )
   .option('--description <text>', 'what the project is; the goal says what done means')
   .option('--name <name>', 'a short name for the project')
   .option(
