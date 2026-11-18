@@ -10,7 +10,13 @@ import { and, asc, count, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Config } from './config.ts';
 import type { Db } from './db/client.ts';
 import { agents, connections, steps, tasks } from './db/schema.ts';
-import { agentForProject, effectiveUrl, isLocalUrl, resolveHeaders } from './models/connections.ts';
+import {
+  agentForProject,
+  effectiveUrl,
+  isLocalUrl,
+  isModelConnection,
+  resolveHeaders,
+} from './models/connections.ts';
 
 type Connection = typeof connections.$inferSelect;
 type AgentModel = Pick<
@@ -35,7 +41,10 @@ export function describeModel(
   rows: Connection[],
   agent: Omit<AgentModel, 'id'> | null,
 ): ModelUse {
-  const viaConnection = (c: Connection, model: string | null): ModelUse => {
+  const viaConnection = (
+    c: Connection & { provider: ModelProvider },
+    model: string | null,
+  ): ModelUse => {
     const cli = c.provider === 'claude-code' || c.provider === 'codex';
     return {
       model:
@@ -50,7 +59,7 @@ export function describeModel(
     };
   };
   const own = agent?.connectionId ? rows.find((c) => c.id === agent.connectionId) : undefined;
-  if (own) return viaConnection(own, agent?.model ?? null);
+  if (own && isModelConnection(own)) return viaConnection(own, agent?.model ?? null);
   if (agent?.model || agent?.modelBaseUrl) {
     const name = agent.model ?? config.GANTRIX_DEFAULT_MODEL;
     const provider: ModelProvider = name.startsWith('openai/') ? 'openai' : 'ollama';
@@ -65,7 +74,7 @@ export function describeModel(
   const fallback = config.GANTRIX_DEFAULT_CONNECTION
     ? rows.find((c) => c.name === config.GANTRIX_DEFAULT_CONNECTION)
     : undefined;
-  if (fallback) return viaConnection(fallback, null);
+  if (fallback && isModelConnection(fallback)) return viaConnection(fallback, null);
   return {
     model: config.GANTRIX_DEFAULT_MODEL,
     provider: 'ollama',

@@ -6,6 +6,7 @@ display_information:
   background_color: "#1d1a33"
 features:
   app_home:
+    home_tab_enabled: false
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
@@ -21,6 +22,8 @@ oauth_config:
       - channels:history # replies in a project's thread (public channel)
       - groups:history # the same in a private channel
       - reactions:write # 👀 / ✅ on replies it handled
+      - im:history # direct messages to an agent
+      - im:read
 settings:
   event_subscriptions:
     bot_events:
@@ -28,6 +31,7 @@ settings:
       - app_mention
       - message.channels
       - message.groups
+      - message.im # chat with an agent in a direct message
   interactivity:
     is_enabled: false
   # Socket Mode: Slack sends events over a connection Gantrix opens, so no public URL is needed.

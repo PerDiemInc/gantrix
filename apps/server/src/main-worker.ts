@@ -7,9 +7,12 @@ import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { tasks } from './db/schema.ts';
 import type { EngineDeps } from './engine/deps.ts';
+import { startJobRun } from './engine/job-runs.ts';
 import { onWorkJobFailed, runWorkJob } from './engine/jobs.ts';
 import {
   createQueues,
+  SCHEDULES_QUEUE,
+  type ScheduleJob,
   TICKS_QUEUE,
   type TickJob,
   WORK_QUEUE,
@@ -36,12 +39,22 @@ const workWorker = new Worker<WorkJob>(WORK_QUEUE, (job) => runWorkJob(deps, job
   connection,
   concurrency: config.GANTRIX_LLM_CONCURRENCY,
 });
+// A job's cron schedule fired: start a run (skipped while the last run is still going).
+const scheduleWorker = new Worker<ScheduleJob>(
+  SCHEDULES_QUEUE,
+  async (job) => {
+    const result = await startJobRun(deps, job.data.jobId);
+    if (!result.started) console.log(`Job ${job.data.jobId} not run: ${result.detail}`);
+  },
+  { connection, concurrency: 1 },
+);
 workWorker.on('failed', (job, error) => {
   if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
     onWorkJobFailed(deps, job.data, error).catch((e) => console.error('onWorkJobFailed:', e));
   }
 });
-for (const w of [tickWorker, workWorker]) w.on('error', (e) => console.error(`${w.name}:`, e));
+for (const w of [tickWorker, workWorker, scheduleWorker])
+  w.on('error', (e) => console.error(`${w.name}:`, e));
 
 // Catch up on tasks that changed while no worker was running.
 const open = await db
@@ -71,7 +84,7 @@ async function shutdown(signal: string) {
     console.log('Jobs still running; stopping anyway. They will resume on the next start.');
     process.exit(0);
   }, SHUTDOWN_GRACE_MS).unref();
-  await Promise.all([tickWorker.close(), workWorker.close()]);
+  await Promise.all([tickWorker.close(), workWorker.close(), scheduleWorker.close()]);
   await queues.close();
   connection.disconnect();
   await pool.end();

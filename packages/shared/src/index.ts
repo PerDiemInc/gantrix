@@ -4,4 +4,5 @@ export * from './examples.ts';
 export * from './mentions.ts';
 export * from './projects.ts';
 export * from './status.ts';
+export * from './team.ts';
 export * from './types.ts';

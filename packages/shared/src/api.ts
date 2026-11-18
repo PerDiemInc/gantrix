@@ -1,5 +1,11 @@
 import type { GantrixEvent } from './events.ts';
-import type { ApprovalStatus, ModelProvider, StepStatus, TaskStatus } from './status.ts';
+import type {
+  ApprovalStatus,
+  ConnectionProvider,
+  ModelProvider,
+  StepStatus,
+  TaskStatus,
+} from './status.ts';
 import type { AgentModelChoice, Budget, HttpRequestConfig, SkillManifest } from './types.ts';
 
 /** JSON shapes of the HTTP API, shared by the CLI and the web app. Dates are ISO strings. */
@@ -19,6 +25,8 @@ export interface AgentDto {
   modelBaseUrl: string | null;
   /** A saved model connection; null = the default (Ollama, or GANTRIX_DEFAULT_CONNECTION). */
   connectionId: string | null;
+  /** A Slack connection (bot and app token): people can chat with this agent in Slack. */
+  slackConnectionId: string | null;
   /** "preset:<id>", "initials", a data:image URL, or null for the default picked by name. */
   avatar: string | null;
   maxConcurrency: number;
@@ -63,6 +71,8 @@ export interface TaskDto {
   tokensUsed: number;
   replans: number;
   workspacePath: string;
+  /** The job this project is a run of; null for a project made by hand. */
+  jobId: string | null;
   /** God mode: tool calls run without asking. */
   approveAll: boolean;
   /** The agents this project may use; null = every agent. */
@@ -72,6 +82,27 @@ export interface TaskDto {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+}
+
+/** A saved job: ordered steps, run on demand or on a cron schedule. */
+export interface JobDto {
+  id: string;
+  name: string;
+  description: string | null;
+  goal: string;
+  steps: { title: string; agentId: string; instructions: string; acceptance: string }[];
+  /** Cron pattern, e.g. "0 9 * * *"; null = only runs on demand. */
+  schedule: string | null;
+  timezone: string;
+  enabled: boolean;
+  budget: Partial<Budget> | null;
+  approveAll: boolean | null;
+  slack: boolean;
+  /** When the schedule fires next; null if paused or unscheduled. */
+  nextRunAt: string | null;
+  lastRun: { id: string; status: TaskStatus; createdAt: string } | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TaskListItem extends TaskDto {
@@ -171,7 +202,7 @@ export interface StepConversationDto {
 export interface ConnectionDto {
   id: string;
   name: string;
-  provider: ModelProvider;
+  provider: ConnectionProvider;
   /** null = the provider's default (local Ollama, api.openai.com or api.anthropic.com). */
   baseUrl: string | null;
   /** The URL the worker actually calls. */
@@ -182,6 +213,8 @@ export interface ConnectionDto {
   isLocal: boolean;
   /** Custom HTTP only: how to build the request and read the reply. */
   request: HttpRequestConfig | null;
+  /** GitHub and Slack: non-secret settings (org, repos, channel, allowedUsers). */
+  settings: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

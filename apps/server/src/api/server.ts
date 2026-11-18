@@ -6,6 +6,7 @@ import { HttpError } from './http.ts';
 import { agentRoutes } from './routes/agents.ts';
 import { approvalRoutes } from './routes/approvals.ts';
 import { connectionRoutes } from './routes/connections.ts';
+import { jobRoutes } from './routes/jobs.ts';
 import { skillRoutes } from './routes/skills.ts';
 import { streamRoutes } from './routes/stream.ts';
 import { systemRoutes } from './routes/system.ts';
@@ -59,6 +60,7 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
   connectionRoutes(app, deps);
   skillRoutes(app, deps);
   taskRoutes(app, deps);
+  jobRoutes(app, deps);
   approvalRoutes(app, deps);
   streamRoutes(app, deps);
   systemRoutes(app, deps);

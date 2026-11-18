@@ -74,6 +74,18 @@ On a Mac, run Ollama natively, not in Docker: Docker on a Mac can't use the GPU.
 
 ### 2. Install and configure
 
+**Fastest:** `./init.sh` installs nvm if missing, installs the Node version from `.nvmrc`, runs
+`npm install`, starts Postgres and Valkey with Docker, applies migrations and starts the API,
+worker and dashboard. Docker must be running. Then pull the model in another terminal
+(`ollama pull qwen3:8b`) and skip to step 4.
+
+```bash
+git clone git@github.com:PerDiemInc/gantrix.git && cd gantrix
+./init.sh
+```
+
+Or do it by hand:
+
 ```bash
 git clone git@github.com:PerDiemInc/gantrix.git && cd gantrix
 nvm use
@@ -86,7 +98,14 @@ ollama pull qwen3:8b   # the default model, about 5 GB
 
 ### 3. Start Gantrix
 
-Open three terminals in the repo and run one command in each:
+If you didn't use `./init.sh`, one command does setup, infra, migrations and starts the API, worker and dashboard
+(agents run on your local Ollama):
+
+```bash
+npm start
+```
+
+Or run each piece yourself. Open three terminals in the repo and run one command in each:
 
 ```bash
 npm run dev:api        # the API on http://127.0.0.1:4700
@@ -97,6 +116,13 @@ npm run dev:web        # the dashboard on http://127.0.0.1:4701
 Open http://127.0.0.1:4701. It asks for your token once; print it with `npm run token`.
 
 ### 4. Add a skill and two agents
+
+A first start already adds a **starter team** (CTO, CMO, CRO, CISO, designer, engineer, CPO,
+DevOps and the AWS and GCP engineers, each with its skills), so the Agents page isn't empty.
+Press **Edit** on any agent to change its name, description, instructions and skills, or
+**Remove** the ones you don't want; they don't come back. Skip this step if the starter team is
+enough. To add your own:
+
 
 ```bash
 npm run gantrix -- skills add examples/skills/workspace-files
@@ -463,6 +489,48 @@ npm run gantrix -- agents add artist -d "Creates images and short video clips" -
 - LTX-2 was tried and dropped: running LTX Desktop next to ComfyUI used more RAM than a 48 GB
   Mac has.
 
+## Jobs
+
+A **project** is a goal the planner breaks into steps. A **job** is a saved, repeatable list of
+steps you write yourself: *use this agent (and its skills) to do this, then that agent to do
+that…* There is no planner, so every run is predictable.
+
+On **Projects**, press **+ New Job**:
+
+1. Name it and say what a finished run looks like (the goal the judge checks at the end).
+2. Add steps in order. Each step has a title, an agent (whose skills it uses), what to do, and
+   optionally how we know it worked. Each step starts when the one before it has passed.
+3. Pick a schedule: only when you press **Run now**, or a cron pattern such as
+   `0 9 * * 1-5` (weekdays at 09:00) in a time zone.
+
+Every run is an ordinary project, so you can follow it, steer it and approve tools as usual;
+jobs show their last run and next scheduled run. **Pause** stops the schedule and **Play** turns
+it back on. A job doesn't overlap itself: if the last run is still going when the schedule
+fires, that run is skipped. The worker (`npm run dev:worker`) must be running for schedules.
+
+Example: a *Daily pull request scan* with steps `Fetch open PRs` (agent with the GitHub skill)
+→ `Summarize discussions` → `Post to Slack`, scheduled `0 9 * * *`. The API is
+`/api/jobs` (`POST /api/jobs/:id/run` runs one now).
+
+## Talk to an agent in Slack
+
+An agent can answer people in Slack, using its own model and system prompt. It's off by
+default and **requires Slack bot credentials**:
+
+1. Create the Slack app from [`docs/slack-app-manifest.yml`](docs/slack-app-manifest.yml) (it
+   includes DMs and Socket Mode).
+2. On **Connections → Add connection → Slack**, save the app's **bot token** (`xoxb-…`), its
+   **app-level token** (`xapp-…`, so Gantrix can hear messages) and the **allowed Slack user
+   IDs**. Only those people can talk to the agents. **Test** checks all three.
+3. On **Agents**, press **Set up** next to *Slack* on an agent and pick that connection. (CLI:
+   `gantrix agents add writer --slack team-slack`.) Saving is refused until the connection has
+   a bot token, an app-level token and at least one allowed user.
+
+Then DM the bot, or mention it in a channel it's in: `@Gantrix writer: summarize what we
+shipped`. If several agents share one connection, start with the agent's name; with one, no
+name is needed. Replies stay in the thread, and the thread is the conversation. In chat an
+agent only talks; to make it do work with its tools, start a project or a job.
+
 ## Managing projects
 
 - **Name** a project in the New project form, or rename it with the pencil next to its title.
@@ -600,8 +668,9 @@ Gantrix uses Socket Mode, so it needs no public URL and works on your laptop. To
 ## CLI
 
 ```
-gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--max-concurrency n] | rm <name>]
-gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix agents [list | add <name> [-d text] [-s skills] [-m model] [-c connection] [--slack connection] [--max-concurrency n] | rm <name>]
+gantrix connections [list | add <name> -p ollama|openai|anthropic|http|claude-code|codex|github|slack [--setting key=value…] [-u url] [--method m] [--content-type t] [--body template] [--reply-path p] [-H "Name: value"…] [--api-key-env NAME] | test <name> <model> | rm <name>]
+gantrix jobs [list | add <name> --goal text --step "agent|title|instructions"… [--schedule cron] [--timezone zone] [--slack] | run <name> | pause <name> | play <name> | rm <name>]
 gantrix skills [list | add <folder> | rm <name[@version]>]
 gantrix team add [--only cto,cmo,cro,ciso,cpo,designer,engineer,devops,aws-engineer,gcp-engineer] [-m model]
 gantrix run "<goal>" [--name text] [--description text] [--slack] [--offload claude|chatgpt] [--agents a,b] [--max-minutes n] [--max-tokens n] [--max-replans n] [--ask | --approve-all] [--detach]
@@ -651,6 +720,21 @@ npm run gantrix -- agents add writer -s workspace-files -c claude -m claude-sonn
 | `anthropic` | `https://api.anthropic.com` | Anthropic, and Anthropic-compatible gateways |
 | `claude-code` | `claude` on your PATH | Your local Claude Code, run as `claude -p` (agents only) |
 | `http` | the URL you give | Any HTTP server: you set the method, Content-Type, body and where the reply is (agents only) |
+
+### GitHub and Slack connections
+
+**Connections** also holds credentials for services, not just models. They never show up in
+the agent model pickers.
+
+- **GitHub:** a fine-grained token with **Pull requests: Read**, plus an optional organization
+  and repositories. **Test** signs in and checks the organization is visible.
+- **Slack (existing app):** the bot token (`xoxb-…`) of the Slack app you already installed, an
+  optional app-level token (`xapp-…`) so replies in threads reach Gantrix, a channel ID and the
+  Slack user IDs allowed to steer. Invite the bot to the channel. **Test** runs `auth.test`,
+  checks the channel and, if given, Socket Mode.
+
+Tokens can be `env:NAME` to read them from `.env` instead of saving them. Saved values are
+never returned by the API.
 
 ### Any HTTP server
 
@@ -817,3 +901,28 @@ Run the live model through two small business workflows and check artifacts inde
 of the judge with `npm run evaluate -- <file-only-agent-uuid>`. Reports include correctness,
 tokens, elapsed time, retries and judge feedback; dollar cost remains unknown. See
 [the evaluation guide](docs/evaluation.md) for setup, safety limits and comparison guidance.
+
+### GitHub PR discussions
+
+Open **Projects → GitHub PR Scan** and press **Play**. The built-in project is
+available on every installation. To add a separate scan to an existing project,
+open that project and expand **GitHub PR scan**.
+Enter a fine-grained GitHub token with **Pull requests: Read** permission. Set an
+organization (for example, `PerDiemInc`), a list of repositories, or both.
+Choose **Save and play** on the first run. After setup, **Play** and **Pause**
+control the built-in project. It polls immediately and then every five minutes by
+default. The first scan includes existing discussions on open PRs. The built-in
+project shows recent summaries in the dashboard.
+
+- **Slack** — Enter a bot token and channel. Use a private channel for private
+  repositories. To answer replies in report threads, add a Socket Mode app token
+  and allowed Slack user IDs.
+- **Email** — Enter an SMTP URL with credentials, a sender, and a recipient.
+  To answer replies, enter the sender mailbox's IMAP host, username, and password.
+  Reply from the configured recipient address and keep the subject intact.
+
+Settings and delivery history are scoped to the project in Valkey. Credentials are
+encrypted using the Gantrix API token and omitted from the settings response.
+If you rotate that token, remove the saved scan and enter its settings again.
+Uncheck **Enable scheduled scan** to pause it independently of the project's
+normal plan. The local Ollama model summarizes PR discussion text with no tools.

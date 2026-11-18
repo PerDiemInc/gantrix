@@ -58,13 +58,21 @@ export class SlackBridge {
   #botUserId = '';
   #unsubscribe: (() => void) | null = null;
 
-  constructor(deps: EngineDeps, hub: EventHub, api?: SlackApi) {
+  readonly #handlePrReply: ((event: SlackEvent) => Promise<boolean>) | undefined;
+
+  constructor(
+    deps: EngineDeps,
+    hub: EventHub,
+    api?: SlackApi,
+    handlePrReply?: (event: SlackEvent) => Promise<boolean>,
+  ) {
     const { config } = deps;
     if (!config.SLACK_BOT_TOKEN || !config.SLACK_CHANNEL_ID) {
       throw new Error('SlackBridge needs SLACK_BOT_TOKEN and SLACK_CHANNEL_ID');
     }
     this.#deps = deps;
     this.#hub = hub;
+    this.#handlePrReply = handlePrReply;
     this.#api = api ?? new SlackApi(config.SLACK_BOT_TOKEN, config.SLACK_API_URL);
     this.#channel = config.SLACK_CHANNEL_ID;
     this.#socket = config.SLACK_APP_TOKEN
@@ -284,6 +292,7 @@ export class SlackBridge {
   async handle(ev: SlackEvent): Promise<void> {
     if (ev.type !== 'app_mention' && ev.type !== 'message') return;
     if (ev.bot_id || ev.subtype || !ev.user || !ev.ts || !ev.text) return;
+    if (await this.#handlePrReply?.(ev)) return;
     // Reject unlisted users before queries, model calls or replies.
     if (!this.#deps.config.SLACK_ALLOWED_USERS.includes(ev.user)) return;
     const direct = ev.channel_type === 'im' && ev.channel?.startsWith('D');

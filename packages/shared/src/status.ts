@@ -49,3 +49,17 @@ export const MODEL_PROVIDERS = [
   'http',
 ] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
+
+/**
+ * Service connections: saved credentials for an outside service, not a model. "github" holds
+ * a token (Authorization header) and optional org/repos; "slack" holds the bot token (and an
+ * app token for Socket Mode) of an existing Slack app, plus a channel.
+ */
+export const SERVICE_PROVIDERS = ['github', 'slack'] as const;
+export type ServiceProvider = (typeof SERVICE_PROVIDERS)[number];
+
+export const CONNECTION_PROVIDERS = [...MODEL_PROVIDERS, ...SERVICE_PROVIDERS] as const;
+export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
+
+export const isServiceProvider = (p: string): p is ServiceProvider =>
+  (SERVICE_PROVIDERS as readonly string[]).includes(p);

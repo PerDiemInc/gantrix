@@ -65,8 +65,9 @@
       <ol class="steps">
         <li><span class="n">1</span><div class="body">
           <h3>Install Gantrix and pull a model</h3>
-          <p>Setup writes a <code>.env</code> with a random API token. The model download is most of the wait.</p>
+          <p><code>./init.sh</code> installs nvm and Node, installs dependencies, starts Docker infra and the server. The model download is most of the wait. Or by hand:</p>
           <div class="code"><pre>git clone git@github.com:PerDiemInc/gantrix.git &amp;&amp; cd gantrix
+./init.sh   # all-in-one; skip the next lines
 nvm use &amp;&amp; npm install
 npm run setup
 npm run infra:up
@@ -75,8 +76,9 @@ ollama pull qwen3:8b</pre></div>
         </div></li>
         <li><span class="n">2</span><div class="body">
           <h3>Start the API, the worker and the dashboard</h3>
-          <p>Three terminals, one command each.</p>
-          <div class="code"><pre>npm run dev:api
+          <p><code>npm start</code> runs all three, or use three terminals, one command each.</p>
+          <div class="code"><pre>npm start
+npm run dev:api
 npm run dev:worker
 npm run dev:web</pre></div>
         </div></li>

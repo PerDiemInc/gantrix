@@ -117,8 +117,29 @@
     {
       "idx": 16,
       "version": "7",
-      "when": 1794845877239,
-      "tag": "0016_deploy_until_done",
+      "when": 1794920058389,
+      "tag": "0016_service_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794920354690,
+      "tag": "0017_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794920884787,
+      "tag": "0018_agent_slack",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795015328542,
+      "tag": "0019_deploy_until_done",
       "breakpoints": true
     }
   ]

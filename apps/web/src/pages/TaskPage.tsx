@@ -13,6 +13,7 @@ import {
   SlackSwitch,
 } from '../components/ProjectControls.tsx';
 import { TaskBoard, TaskDialog, TeamPanel } from '../components/ProjectTeam.tsx';
+import { PrScanSettings } from '../components/PrScanSettings.tsx';
 import { QuestionCard } from '../components/QuestionCard.tsx';
 import { type AgentState, StatusPill, TaskProgress } from '../components/ui.tsx';
 import { duration, label, short } from '../format.ts';
@@ -361,6 +362,7 @@ export function TaskPage({ id }: { id: string }) {
           </details>
         )}
       </header>
+      <PrScanSettings key={task.id} taskId={task.id} />
 
       <div className="segmented tabs-mobile" role="tablist" aria-label="Project views">
         {(

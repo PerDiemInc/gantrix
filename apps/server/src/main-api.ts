@@ -5,8 +5,11 @@ import { buildServer } from './api/server.ts';
 import { loadConfig } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
+import { prTasks } from './integrations/pr-tasks.ts';
 import { createPreviewServer } from './preview.ts';
+import { AgentSlack } from './slack/agent-chat.ts';
 import { SlackBridge } from './slack/bridge.ts';
+import { seedDefaultTeam } from './team-seed.ts';
 
 const config = loadConfig();
 if (!config.GANTRIX_TOKEN) {
@@ -26,7 +29,17 @@ const checkpointer = new PostgresSaver(pool, undefined, { schema: 'langgraph' })
 const hub = new EventHub(db, config.DATABASE_URL);
 await hub.start();
 
+// A first run starts with the built-in team instead of an empty Agents page.
+const seeded = await seedDefaultTeam(db, connection, config).catch((error: unknown) => {
+  console.error(
+    `Starter team not added: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  return 0;
+});
+if (seeded) console.log(`Added ${seeded} starter agents. Edit them on the Agents page.`);
+
 const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRIX_TOKEN);
+const prScans = prTasks(app, db, connection, pool, config, config.GANTRIX_TOKEN);
 await app.listen({ host: config.GANTRIX_HOST, port: config.GANTRIX_PORT });
 
 // Sites published by deploy_site, on their own origin (see preview.ts).
@@ -39,7 +52,12 @@ preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 // Slack (optional): progress posts to a thread per project; Socket Mode brings replies back.
 let slack: SlackBridge | null = null;
 if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
-  slack = new SlackBridge({ db, queues, checkpointer, config }, hub);
+  slack = new SlackBridge(
+    { db, queues, checkpointer, config },
+    hub,
+    undefined,
+    prScans.handleSlack,
+  );
   await slack.start().then(
     () =>
       console.log(
@@ -52,6 +70,10 @@ if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
   );
 }
 
+// Agents with a Slack connection (bot + app token) can be chatted with in Slack.
+const agentSlack = new AgentSlack({ db, queues, checkpointer, config });
+await agentSlack.start();
+
 let stopping = false;
 async function shutdown() {
   if (stopping) return;
@@ -60,6 +82,8 @@ async function shutdown() {
   preview.close();
   await app.close();
   await slack?.close();
+  await agentSlack.close();
+  await prScans.close();
   await hub.close();
   await queues.close();
   connection.disconnect();

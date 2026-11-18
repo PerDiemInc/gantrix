@@ -1,5 +1,5 @@
 {
-  "id": "6d81a0d5-499c-4111-81bf-84364ed016f3",
+  "id": "8939f6f1-5de4-47c4-a4af-6cf0b99cbe44",
   "prevId": "4fcfdb49-5c98-4701-931a-2c36ce37d635",
   "version": "7",
   "dialect": "postgresql",
@@ -120,12 +120,6 @@
           "notNull": true,
           "default": 1
         },
-        "step_timeout_minutes": {
-          "name": "step_timeout_minutes",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
         "avatar": {
           "name": "avatar",
           "type": "text",
@@ -178,10 +172,6 @@
         "agents_max_concurrency_positive": {
           "name": "agents_max_concurrency_positive",
           "value": "\"agents\".\"max_concurrency\" > 0"
-        },
-        "agents_step_timeout_positive": {
-          "name": "agents_step_timeout_positive",
-          "value": "\"agents\".\"step_timeout_minutes\" is null or \"agents\".\"step_timeout_minutes\" > 0"
         }
       },
       "isRLSEnabled": false
@@ -362,6 +352,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "settings": {
+          "name": "settings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -393,7 +390,7 @@
       "checkConstraints": {
         "connections_provider_valid": {
           "name": "connections_provider_valid",
-          "value": "provider in ('ollama', 'openai', 'anthropic', 'claude-code', 'codex', 'http')"
+          "value": "provider in ('ollama', 'openai', 'anthropic', 'claude-code', 'codex', 'http', 'github', 'slack')"
         }
       },
       "isRLSEnabled": false
@@ -1004,45 +1001,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.task_env": {
-      "name": "task_env",
-      "schema": "",
-      "columns": {
-        "task_id": {
-          "name": "task_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "vars": {
-          "name": "vars",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "task_env_task_id_tasks_id_fk": {
-          "name": "task_env_task_id_tasks_id_fk",
-          "tableFrom": "task_env",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.task_messages": {
       "name": "task_messages",
       "schema": "",
@@ -1252,19 +1210,6 @@
         "offload_connection_id": {
           "name": "offload_connection_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "live_check": {
-          "name": "live_check",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "shell_env_names": {
-          "name": "shell_env_names",
-          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },

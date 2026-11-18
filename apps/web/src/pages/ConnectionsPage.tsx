@@ -1,22 +1,84 @@
 import {
   type ConnectionDto,
+  type ConnectionProvider,
   DEFAULT_HTTP_REQUEST,
   HTTP_METHODS,
   type HttpMethod,
-  type ModelProvider,
+  isServiceProvider,
+  type ServiceProvider,
 } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 
-const PROVIDERS: { value: ModelProvider; label: string; url: string }[] = [
+const PROVIDERS: { value: ConnectionProvider; label: string; url: string }[] = [
   { value: 'ollama', label: 'Ollama', url: 'http://127.0.0.1:11434' },
   { value: 'openai', label: 'OpenAI or compatible', url: 'https://api.openai.com/v1' },
   { value: 'anthropic', label: 'Anthropic or compatible', url: 'https://api.anthropic.com' },
   { value: 'http', label: 'Custom HTTP server', url: 'https://your-server/v1/generate' },
   { value: 'claude-code', label: 'Claude Code on this machine (claude -p)', url: 'claude' },
   { value: 'codex', label: 'ChatGPT on this machine (Codex CLI)', url: 'codex' },
+  { value: 'github', label: 'GitHub (token)', url: 'https://api.github.com' },
+  { value: 'slack', label: 'Slack (existing app)', url: 'https://slack.com/api' },
 ];
+
+/** GitHub and Slack connections: secrets go in headers, the rest in plain settings. */
+const SERVICE_FIELDS: Record<
+  ServiceProvider,
+  {
+    secrets: {
+      header: string;
+      label: string;
+      prefix?: string;
+      placeholder: string;
+      required: boolean;
+    }[];
+    settings: { key: string; label: string; placeholder: string }[];
+    help: string;
+  }
+> = {
+  github: {
+    secrets: [
+      {
+        header: 'Authorization',
+        label: 'Token',
+        prefix: 'Bearer ',
+        placeholder: 'ghp_… or env:GITHUB_TOKEN',
+        required: true,
+      },
+    ],
+    settings: [
+      { key: 'org', label: 'Organization', placeholder: 'PerDiemInc' },
+      { key: 'repos', label: 'Repositories (comma-separated)', placeholder: 'api, dashboard' },
+    ],
+    help: 'A fine-grained token with Pull requests: Read. Set an organization, repositories, or both.',
+  },
+  slack: {
+    secrets: [
+      {
+        header: 'Bot-Token',
+        label: 'Bot token',
+        placeholder: 'xoxb-… or env:SLACK_BOT_TOKEN',
+        required: true,
+      },
+      {
+        header: 'App-Token',
+        label: 'App-level token (optional, for replies in threads)',
+        placeholder: 'xapp-… or env:SLACK_APP_TOKEN',
+        required: false,
+      },
+    ],
+    settings: [
+      { key: 'channel', label: 'Channel ID', placeholder: 'C0123456789' },
+      {
+        key: 'allowedUsers',
+        label: 'Allowed Slack user IDs (comma-separated)',
+        placeholder: 'U01ABC…',
+      },
+    ],
+    help: 'Use the bot token of the Slack app you already installed. Invite the bot to the channel.',
+  },
+};
 const CONTENT_TYPES = ['application/json', 'text/plain', 'application/x-www-form-urlencoded'];
 
 /** One header. A saved value is never sent back by the API, so "keep" means: leave it as is. */
@@ -29,9 +91,10 @@ interface HeaderRow {
 
 interface Form {
   name: string;
-  provider: ModelProvider;
+  provider: ConnectionProvider;
   baseUrl: string;
   headers: HeaderRow[];
+  settings: Record<string, string>;
   method: HttpMethod;
   contentType: string;
   bodyTemplate: string;
@@ -50,6 +113,7 @@ const emptyForm = (): Form => ({
   name: '',
   provider: 'http',
   baseUrl: '',
+  settings: {},
   headers: [row('Authorization', 'Bearer ')],
   method: DEFAULT_HTTP_REQUEST.method,
   contentType: DEFAULT_HTTP_REQUEST.contentType,
@@ -62,6 +126,7 @@ function formFrom(c: ConnectionDto): Form {
     name: c.name,
     provider: c.provider,
     baseUrl: c.baseUrl ?? '',
+    settings: c.settings,
     // "hidden" = a saved value; env:NAME references are shown as they are and can be edited.
     headers: Object.entries(c.headers).map(([k, v]) =>
       v === 'hidden' ? row(k, '', true) : row(k, v, false),
@@ -164,6 +229,7 @@ function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: stri
   const [prompt, setPrompt] = useState('Reply with the single word: OK');
   const [result, setResult] = useState<TestResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const service = isServiceProvider(c.provider);
   const run = async () => {
     setBusy(true);
     setResult(null);
@@ -180,12 +246,14 @@ function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: stri
   return (
     <div className="test-panel">
       <div className="row-actions">
-        <input
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          placeholder="model to test"
-          aria-label="Model to test"
-        />
+        {!service && (
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="model to test"
+            aria-label="Model to test"
+          />
+        )}
         {c.provider === 'http' && (
           <input
             value={prompt}
@@ -196,7 +264,7 @@ function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: stri
         <button
           type="button"
           className="ghost small"
-          disabled={!model || busy}
+          disabled={(!service && !model) || busy}
           onClick={() => void run()}
         >
           {busy ? 'Testing…' : 'Test'}
@@ -204,7 +272,11 @@ function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: stri
       </div>
       {result && (
         <p className={result.ok ? 'small' : 'error small'} role="status">
-          {result.ok ? `OK in ${result.ms} ms: "${result.reply}"` : `Failed: ${result.error}`}
+          {result.ok
+            ? service
+              ? `OK in ${result.ms} ms. ${result.reply}`
+              : `OK in ${result.ms} ms: "${result.reply}"`
+            : `Failed: ${result.error}`}
         </p>
       )}
       {result?.http && (
@@ -275,19 +347,36 @@ export function ConnectionsPage() {
     setError('');
     setSaved('');
     const headers: Record<string, string> = {};
+    const service = isServiceProvider(form.provider) ? SERVICE_FIELDS[form.provider] : null;
     for (const r of form.headers) {
+      const field = service?.secrets.find((f) => f.header === r.name);
+      if (field && !r.keep && !r.value.trim() && !field.required) continue;
       if (!r.name.trim()) continue;
       if (!r.keep && !r.value.trim()) {
         setError(`Header ${r.name} has no value. Remove it or fill it in.`);
         return;
       }
-      headers[r.name.trim()] = r.keep ? 'hidden' : r.value.trim();
+      const value = r.value.trim();
+      const prefixed =
+        field?.prefix && !value.toLowerCase().startsWith(field.prefix.toLowerCase())
+          ? `${field.prefix}${value}`
+          : value;
+      headers[r.name.trim()] = r.keep ? 'hidden' : prefixed;
     }
     const body = {
       name: form.name,
       provider: form.provider,
       headers,
-      baseUrl: form.baseUrl.trim() || null,
+      baseUrl: form.provider === 'slack' ? null : form.baseUrl.trim() || null,
+      ...(service
+        ? {
+            settings: Object.fromEntries(
+              Object.entries(form.settings)
+                .filter(([k, v]) => v.trim() && service.settings.some((f) => f.key === k))
+                .map(([k, v]) => [k, v.trim()]),
+            ),
+          }
+        : {}),
       ...(isHttp
         ? {
             request: {
@@ -327,6 +416,18 @@ export function ConnectionsPage() {
     }
   };
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm({ ...form, [key]: value });
+  // GitHub and Slack have fixed secret fields; switching to one lays them out.
+  const pickProvider = (value: ConnectionProvider) => {
+    if (!isServiceProvider(value)) return setForm({ ...form, provider: value });
+    setForm({
+      ...form,
+      provider: value,
+      baseUrl: '',
+      settings: {},
+      headers: SERVICE_FIELDS[value].secrets.map((f) => row(f.header, f.prefix ?? '')),
+    });
+  };
+  const serviceForm = isServiceProvider(form.provider) ? SERVICE_FIELDS[form.provider] : null;
 
   return (
     <div className="columns wide-left">
@@ -334,7 +435,7 @@ export function ConnectionsPage() {
         <h2>Connections</h2>
         <p className="muted small">
           Agents use the local Ollama unless you give them a connection. Pick one when you add an
-          agent.
+          agent. GitHub and Slack connections hold the credentials jobs and scans use.
         </p>
         <ul className="cards">
           {list.map((c) => (
@@ -362,12 +463,19 @@ export function ConnectionsPage() {
                     .join(' · ')}
                 </p>
               )}
+              {Object.keys(c.settings).length > 0 && (
+                <p className="mono small muted">
+                  {Object.entries(c.settings)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(' · ')}
+                </p>
+              )}
               {c.provider === 'http' && c.request && (
                 <p className="mono small muted">
                   {c.request.contentType} · reply {c.request.replyPath || 'auto-detected'}
                 </p>
               )}
-              {!c.isLocal && (
+              {!c.isLocal && !isServiceProvider(c.provider) && (
                 <p className="muted small">
                   Prompts and task content go to this service, and its prices apply.
                 </p>
@@ -404,7 +512,7 @@ export function ConnectionsPage() {
           Provider
           <select
             value={form.provider}
-            onChange={(e) => set('provider', e.target.value as ModelProvider)}
+            onChange={(e) => pickProvider(e.target.value as ConnectionProvider)}
           >
             {PROVIDERS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -413,27 +521,29 @@ export function ConnectionsPage() {
             ))}
           </select>
         </label>
-        <label>
-          {form.provider === 'claude-code'
-            ? 'Path to claude'
-            : form.provider === 'codex'
-              ? 'Path to codex'
-              : 'URL'}{' '}
-          {!isHttp && <span className="muted small">(blank = {provider?.url})</span>}
-          <input
-            value={form.baseUrl}
-            onChange={(e) => set('baseUrl', e.target.value)}
-            placeholder={provider?.url}
-            required={isHttp}
-            spellCheck={false}
-          />
-          {isHttp && (
-            <span className="muted small">
-              http:// or https://. It can contain <code>{'{{model}}'}</code> or{' '}
-              <code>{'{{prompt}}'}</code>.
-            </span>
-          )}
-        </label>
+        {form.provider !== 'slack' && (
+          <label>
+            {form.provider === 'claude-code'
+              ? 'Path to claude'
+              : form.provider === 'codex'
+                ? 'Path to codex'
+                : 'URL'}{' '}
+            {!isHttp && <span className="muted small">(blank = {provider?.url})</span>}
+            <input
+              value={form.baseUrl}
+              onChange={(e) => set('baseUrl', e.target.value)}
+              placeholder={provider?.url}
+              required={isHttp}
+              spellCheck={false}
+            />
+            {isHttp && (
+              <span className="muted small">
+                http:// or https://. It can contain <code>{'{{model}}'}</code> or{' '}
+                <code>{'{{prompt}}'}</code>.
+              </span>
+            )}
+          </label>
+        )}
 
         {isHttp && (
           <>
@@ -498,7 +608,63 @@ export function ConnectionsPage() {
           </>
         )}
 
-        {form.provider !== 'claude-code' && form.provider !== 'codex' && (
+        {serviceForm && (
+          <>
+            <p className="muted small">{serviceForm.help}</p>
+            {serviceForm.secrets.map((f) => {
+              const r = form.headers.find((h) => h.name === f.header);
+              const update = (patch: Partial<HeaderRow>) =>
+                set(
+                  'headers',
+                  r
+                    ? form.headers.map((h) => (h === r ? { ...h, ...patch } : h))
+                    : [...form.headers, { ...row(f.header, f.prefix ?? ''), ...patch }],
+                );
+              if (r?.keep) {
+                return (
+                  <div key={f.header}>
+                    {f.label}
+                    <div className="kept">
+                      <span className="muted small">saved value (hidden)</span>
+                      <button
+                        type="button"
+                        className="ghost small"
+                        onClick={() => update({ keep: false, value: '' })}
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <label key={f.header}>
+                  {f.label}
+                  <input
+                    value={(r?.value ?? '').replace(f.prefix ?? '\0', '')}
+                    onChange={(e) => update({ value: e.target.value })}
+                    placeholder={f.placeholder}
+                    required={f.required}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </label>
+              );
+            })}
+            {serviceForm.settings.map((f) => (
+              <label key={f.key}>
+                {f.label}
+                <input
+                  value={form.settings[f.key] ?? ''}
+                  onChange={(e) => set('settings', { ...form.settings, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  spellCheck={false}
+                />
+              </label>
+            ))}
+          </>
+        )}
+        {!serviceForm && form.provider !== 'claude-code' && form.provider !== 'codex' && (
           <HeaderRows rows={form.headers} onChange={(rows) => set('headers', rows)} />
         )}
         {form.provider === 'claude-code' && (

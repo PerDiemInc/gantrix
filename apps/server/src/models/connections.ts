@@ -1,4 +1,4 @@
-import type { ConnectionDto } from '@gantrix/shared';
+import { type ConnectionDto, isServiceProvider, type ModelProvider } from '@gantrix/shared';
 import { eq } from 'drizzle-orm';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
@@ -43,8 +43,15 @@ export function maskHeaders(headers: Record<string, string>): Record<string, str
   );
 }
 
+/** A connection to a model, as opposed to a GitHub or Slack one. */
+export const isModelConnection = (c: Connection): c is Connection & { provider: ModelProvider } =>
+  !isServiceProvider(c.provider);
+
+export const SERVICE_URLS = { github: 'https://api.github.com', slack: 'https://slack.com/api' };
+
 export function effectiveUrl(c: Pick<Connection, 'provider' | 'baseUrl'>, ollamaUrl: string) {
   if (c.baseUrl) return c.baseUrl;
+  if (c.provider === 'github' || c.provider === 'slack') return SERVICE_URLS[c.provider];
   if (c.provider === 'claude-code') return 'claude';
   if (c.provider === 'codex') return 'codex';
   if (c.provider === 'http') return c.baseUrl ?? '';
@@ -82,14 +89,23 @@ export function toConnectionDto(c: Connection, ollamaUrl: string): ConnectionDto
     baseUrl: c.baseUrl,
     effectiveUrl: url,
     headers: maskHeaders(c.headers),
-    isLocal: c.provider !== 'claude-code' && c.provider !== 'codex' && isLocalUrl(url),
+    // GitHub and Slack are always cloud services.
+    isLocal:
+      c.provider !== 'claude-code' &&
+      c.provider !== 'codex' &&
+      !isServiceProvider(c.provider) &&
+      isLocalUrl(url),
     request: c.request ?? null,
+    settings: c.settings,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
 }
 
-export const connectionSpec = (c: Connection, model: string | null): ModelSpec => ({
+export const connectionSpec = (
+  c: Connection & { provider: ModelProvider },
+  model: string | null,
+): ModelSpec => ({
   model,
   baseUrl: c.baseUrl,
   provider: c.provider,
@@ -127,6 +143,7 @@ export async function resolveModelSpec(
       where: eq(connections.id, agent.connectionId),
     });
     if (!c) throw new Error("The agent's connection was deleted.");
+    if (!isModelConnection(c)) throw new Error(`Connection "${c.name}" is not a model connection.`);
     // GANTRIX_DEFAULT_MODEL names a model on the default connection, not on this one.
     if (needsModel(c.provider) && !agent.model && c.name !== config.GANTRIX_DEFAULT_CONNECTION) {
       throw new Error(`Connection "${c.name}" needs a model: choose one for this agent.`);
@@ -144,6 +161,9 @@ export async function resolveModelSpec(
       throw new Error(
         `GANTRIX_DEFAULT_CONNECTION is "${config.GANTRIX_DEFAULT_CONNECTION}", but no connection has that name.`,
       );
+    }
+    if (!isModelConnection(c)) {
+      throw new Error(`GANTRIX_DEFAULT_CONNECTION "${c.name}" is not a model connection.`);
     }
     if (c.provider === 'claude-code' || c.provider === 'codex' || c.provider === 'http') {
       throw new Error(
