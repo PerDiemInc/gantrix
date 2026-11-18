@@ -80,6 +80,26 @@ export function App() {
       : route.page;
   return (
     <>
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
+        Skip to content
+      </a>
       <nav className="top">
         <a href="#/projects" className="brand">
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
@@ -106,7 +126,7 @@ export function App() {
           Forget token
         </button>
       </nav>
-      <main>
+      <main id="main" tabIndex={-1}>
         <ErrorBoundary resetKey={location.hash}>
           {route.page === 'projects' && <ProjectsPage />}
           {route.page === 'project' && <ProjectPage id={route.id} />}

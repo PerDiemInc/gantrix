@@ -21,10 +21,10 @@ It retries and replans until the goal is met or a budget runs out.
 
 ### See it
 
-<p align="center"><img src="site/assets/screenshots/projects.webp" alt="The Projects page: four project cards with progress bars, agent avatars and a Now line; one card is highlighted because an agent is waiting for the user" width="900"></p>
+<p align="center"><img src="site/assets/screenshots/projects.webp" alt="The Projects page with Projects, Jobs and Running agents tabs, New Project and New Job buttons and project cards with progress bars and agent avatars" width="900"></p>
 
 <details>
-<summary><b>More screenshots</b>: a project page, the task board with sub-agents, New project, offloading, Agents</summary>
+<summary><b>More screenshots</b>: a project page, the task board with sub-agents, New project, offloading, New Job, Agents</summary>
 
 **A project, its team and its questions.** Name, description and OKR goal, budgets you can extend, Stop and Cancel, and a question an agent asked you with options to pick.
 
@@ -42,13 +42,17 @@ It retries and replans until the goal is met or a budget runs out.
 
 <img src="site/assets/screenshots/offload.webp" alt="The Models section of the New project form: Run the work on set to ChatGPT, with cpo, designer and engineer each showing ChatGPT for this project, then a 3 hour time limit" width="800">
 
+<img src="site/assets/screenshots/new-job.webp" alt="The New Job form: a name, description and goal, then ordered steps that each pick an agent, with a schedule" width="800">
+
+**Save a repeatable job.** Ordered steps, each done by one agent, run on demand or on a cron schedule.
+
 **Each agent on its own model.** Local Ollama by default; switch any agent to Claude Code, OpenAI, Anthropic or your own server.
 
-<img src="site/assets/screenshots/agents.webp" alt="The Agents page: agent cards showing Runs on the default model with a Change button, and the Add agent form with Runs on and Model pickers" width="800">
+<img src="site/assets/screenshots/agents.webp" alt="The Agents page: agent cards with Runs on, a time limit and Slack chat set up per agent, and the Add agent form" width="800">
 
 </details>
 
-The screenshots come from a demo with a made-up bakery.
+Most screenshots come from a demo with a made-up bakery; Projects, New Job and Agents are from a local instance.
 
 **Site:** https://perdieminc.github.io/gantrix/ has an overview and the same getting-started steps.
 Compare: [Gantrix vs CrewAI](https://perdieminc.github.io/gantrix/vs/crewai/) ·
@@ -514,7 +518,8 @@ Example: a *Daily pull request scan* with steps `Fetch open PRs` (agent with the
 
 ## Talk to an agent in Slack
 
-An agent can answer people in Slack, using its own model and system prompt. It's off by
+Give an agent a Slack connection and it is a live teammate: always online, answering DMs and
+mentions as itself. It can answer people in Slack, using its own model and system prompt. It's off by
 default and **requires Slack bot credentials**:
 
 1. Create the Slack app from [`docs/slack-app-manifest.yml`](docs/slack-app-manifest.yml) (it

@@ -2401,3 +2401,38 @@ label.check {
 .project-deploy {
   margin: 0;
 }
+
+/* UX pass: skip link, touch targets, stable numerals, press feedback. */
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 600;
+  transition: top 0.15s var(--ease);
+}
+.skip-link:focus {
+  top: 8px;
+}
+main:focus {
+  outline: none;
+}
+@media (pointer: coarse) {
+  button.small,
+  .tabs button,
+  .nav a {
+    min-height: 44px;
+  }
+}
+.muted,
+time,
+.progress-label {
+  font-variant-numeric: tabular-nums;
+}
+button:active:not(:disabled) {
+  opacity: 0.85;
+}
