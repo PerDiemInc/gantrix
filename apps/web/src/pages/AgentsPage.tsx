@@ -308,9 +308,9 @@ function SlackChat({
       </label>
       <p className="muted small">
         The agent replies when an allowed person DMs the bot or mentions it:{' '}
-        <code>@Gantrix {agent.name}: …</code>. It needs a Slack connection with a bot token, an
-        app-level token and allowed user IDs.{' '}
-        {slack.length === 0 && <a href="#/connections">Add a Slack connection first.</a>}
+        <code>@Gantrix {agent.name}: …</code>. Ask it for its status and it summarizes what it is
+        working on. It needs a Slack connection with a bot token, an app-level token and allowed
+        user IDs. {slack.length === 0 && <a href="#/connect/slack">Connect Slack first.</a>}
       </p>
       <div className="row-actions">
         <button type="button" className="primary small" onClick={() => void save()}>

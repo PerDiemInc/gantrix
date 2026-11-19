@@ -9,6 +9,7 @@ export type NewKind = (typeof NEW_KINDS)[number];
 export type Route =
   | { page: 'projects' }
   | { page: 'jobs' }
+  | { page: 'connect'; kind: 'slack' }
   | { page: 'new'; kind: NewKind }
   | { page: 'project'; id: string }
   | { page: 'logs'; id: string; stepId?: string }
@@ -26,6 +27,7 @@ export function parseHash(hash: string): Route {
     return { page: 'new', kind: NEW_KINDS.find((k) => k === id) ?? 'project' };
   }
   if (page === 'jobs') return { page: 'jobs' };
+  if (page === 'connect' && id === 'slack') return { page: 'connect', kind: 'slack' };
   // "tasks" is the old name; links from before the projects view keep working.
   const isProject = page === 'projects' || page === 'tasks';
   if (isProject && id && sub === 'logs') {

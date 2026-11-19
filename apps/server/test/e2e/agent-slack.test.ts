@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
 import { agents, connections } from '../../src/db/schema.ts';
+import { createTask } from '../../src/engine/commands.ts';
 import { AgentSlack } from '../../src/slack/agent-chat.ts';
 import { type Engine, startEngine } from './harness.ts';
 
@@ -186,5 +187,102 @@ describe('talking to an agent in Slack', () => {
     });
     expect(slack.calls.some((x) => x.method === 'conversations.replies')).toBe(true);
     expect(posts()[0]?.body).toMatchObject({ thread_ts: '1' });
+  });
+
+  describe('status', () => {
+    /** A project whose only task is the agent's, paused until a person approves a tool. */
+    async function busyAgent() {
+      const fetcher = await e.addAgent('fetcher', ['web_fetch']);
+      const c = await slackConnection(full);
+      await e.db.update(agents).set({ slackConnectionId: c.id }).where(eq(agents.id, fetcher.id));
+      e.fake.script.plan = () => ({
+        steps: [
+          {
+            key: 'fetch',
+            title: 'Fetch the pricing page',
+            agent: 'fetcher',
+            instructions: 'Fetch it',
+            acceptance: 'fetched',
+            dependsOn: [],
+          },
+        ],
+      });
+      // The step's own turns ("Your step: …") call a tool; Slack chat has no step, so it chats.
+      e.fake.script.worker = ({ title, toolResults }) =>
+        title !== 'step'
+          ? toolResults.length
+            ? 'Fetched.'
+            : { name: 'web_fetch', args: { url: 'http://127.0.0.1:9/' } }
+          : 'I am on one task and it needs an approval.';
+      await createTask(e.deps, { goal: 'Check pricing', name: 'Pricing check', approveAll: false });
+      await e.waitFor(
+        (await e.db.query.tasks.findFirst())?.id ?? '',
+        (t) => t.status === 'awaiting_approval',
+      );
+      await chat.sync();
+      return { fetcher, c };
+    }
+    const ask = (connectionId: string, text: string, ts: string) =>
+      chat.handle(connectionId, {
+        type: 'app_mention',
+        user: 'UBOSS',
+        channel: 'C1',
+        ts,
+        text: `<@UBOT> fetcher: ${text}`,
+      });
+
+    it('gives the agent its current work, so it can summarize where things stand', async () => {
+      const { c } = await busyAgent();
+      await ask(c.id, "what's your status?", '20.1');
+
+      expect(posts()[0]?.body.text).toBe('I am on one task and it needs an approval.');
+      const system = e.fake.bodies.at(-1)?.messages[0]?.content ?? '';
+      expect(system).toContain('summarize');
+      expect(system).toContain(
+        '"Fetch the pricing page" in project "Pricing check": awaiting approval',
+      );
+      expect(system).toContain('needs someone to approve running web_fetch');
+    });
+
+    it('sees only its own work, and nothing once its projects are over', async () => {
+      const { c } = await busyAgent();
+      await e.addAgent('writer');
+      const writer = await e.db.query.agents.findFirst({ where: eq(agents.name, 'writer') });
+      await e.db
+        .update(agents)
+        .set({ slackConnectionId: c.id })
+        .where(eq(agents.id, writer?.id ?? ''));
+      await chat.sync();
+      await chat.handle(c.id, {
+        type: 'app_mention',
+        user: 'UBOSS',
+        channel: 'C1',
+        ts: '21.1',
+        text: '<@UBOT> writer: status?',
+      });
+      const system = e.fake.bodies.at(-1)?.messages[0]?.content ?? '';
+      expect(system).toContain('You have no tasks in any running project');
+      expect(system).not.toContain('Fetch the pricing page');
+    });
+
+    it('still answers a status question from the facts when the model is down', async () => {
+      const { fetcher, c } = await busyAgent();
+      // Nothing listens on port 9, so every model call is refused.
+      await e.db
+        .update(agents)
+        .set({ modelBaseUrl: 'http://127.0.0.1:9', model: 'gone' })
+        .where(eq(agents.id, fetcher.id));
+      await ask(c.id, 'what are you working on?', '22.1');
+
+      const text = String(posts()[0]?.body.text);
+      expect(text).toContain('*fetcher* is on 1 task');
+      expect(text).toContain('Fetch the pricing page');
+      expect(text).toContain('approve running web_fetch');
+      expect(text).not.toMatch(/couldn't answer/);
+
+      // Anything else still says it could not answer.
+      await ask(c.id, 'write me a poem', '22.2');
+      expect(String(posts()[1]?.body.text)).toMatch(/couldn't answer/);
+    });
   });
 });

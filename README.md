@@ -520,21 +520,63 @@ Example: a *Daily pull request scan* with steps `Fetch open PRs` (agent with the
 
 Give an agent a Slack connection and it is a live teammate: always online, answering DMs and
 mentions as itself. It can answer people in Slack, using its own model and system prompt. It's off by
-default and **requires Slack bot credentials**:
+default and **requires Slack bot credentials**.
+
+### The easy way: the Connect Slack guide
+
+In the dashboard open **Connections → Connect Slack** (or `#/connect/slack`). It is about five
+minutes, in six steps, and each step says exactly where to click in Slack:
+
+<p align="center"><img src="site/assets/screenshots/slack-connect-1.webp" alt="The Connect Slack page: step 1, Open Slack with the manifest filled in, and step 2, install the app and paste the bot token" width="800"></p>
+
+1. **Create the app.** One button opens Slack's *create app* page with Gantrix's manifest
+   already filled in (name, bot user, permissions, Socket Mode). Or copy the manifest and paste it
+   at [api.slack.com/apps](https://api.slack.com/apps) → *Create New App → From a manifest*.
+2. **Install it, copy the bot token.** *Install App → Install to Workspace → Allow*, then
+   *OAuth & Permissions → Bot User OAuth Token*. It starts with `xoxb-`.
+3. **Make the app-level token.** *Basic Information → App-Level Tokens → Generate Token and
+   Scopes*, name it, add the scope `connections:write`. It starts with `xapp-`.
+4. **Add your member ID.** In Slack: your profile → *⋮ More → Copy member ID* (like
+   `U01ABCDE2F`). Only the people listed can talk to your agents.
+5. **Save and test.** Gantrix checks each field as you paste (it tells you if you pasted the
+   wrong kind of token), then connects to Slack and reports who the bot is, which workspace it
+   is in, and whether Socket Mode works. Slack's errors come back with the fix.
+6. **Choose the agents.** The project manager (`cpo`) is suggested first.
+
+<p align="center"><img src="site/assets/screenshots/slack-connect-2.webp" alt="Steps 3 and 4 of the Connect Slack page with the app-level token and a member ID filled in and checked" width="800"></p>
+
+The same walkthrough, with the Slack links, is on the site:
+[Connect Gantrix to Slack](https://perdieminc.github.io/gantrix/connect-slack/). Slack's own docs:
+[app manifests](https://docs.slack.dev/app-manifests/configuring-apps-with-app-manifests/),
+[Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode),
+[finding a member ID](https://slack.com/help/articles/360003827751-Create-a-link-to-a-members-profile).
+
+### By hand
 
 1. Create the Slack app from [`docs/slack-app-manifest.yml`](docs/slack-app-manifest.yml) (it
    includes DMs and Socket Mode).
 2. On **Connections → Add connection → Slack**, save the app's **bot token** (`xoxb-…`), its
    **app-level token** (`xapp-…`, so Gantrix can hear messages) and the **allowed Slack user
    IDs**. Only those people can talk to the agents. **Test** checks all three.
-3. On **Agents**, press **Set up** next to *Slack* on an agent and pick that connection. (CLI:
-   `gantrix agents add writer --slack team-slack`.) Saving is refused until the connection has
-   a bot token, an app-level token and at least one allowed user.
+3. On **Agents**, press **Set up** next to *Slack* on an agent and pick that connection (or pick
+   it in the **Talk to it in Slack** menu when you add the agent). Saving is refused until the
+   connection has a bot token, an app-level token and at least one allowed user.
+
+Both tokens are secrets: Gantrix keeps them in your local database and never returns them, and a
+value written as `env:NAME` is read from the worker's environment instead.
 
 Then DM the bot, or mention it in a channel it's in: `@Gantrix writer: summarize what we
 shipped`. If several agents share one connection, start with the agent's name; with one, no
 name is needed. Replies stay in the thread, and the thread is the conversation. In chat an
 agent only talks; to make it do work with its tools, start a project or a job.
+
+**Ask it for its status.** On every message the agent is given its own current work, fresh from
+the database: its tasks in running projects (and how long each has run, and on which attempt),
+what is waiting for a person (a question to answer, a tool to approve), and what it finished or
+failed in the last 24 hours. Ask `@Gantrix writer: what's your status?` (or "what are you
+working on?", "anything blocked?") and it summarizes that in its own voice. It sees only its own
+tasks, never invents any, and if its model is down a status question is still answered, as a
+plain list of the same facts.
 
 ## Managing projects
 

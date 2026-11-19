@@ -1,4 +1,4 @@
-import type { DiscussionDto, DiscussionMessageDto } from '@gantrix/shared';
+import { type DiscussionDto, type DiscussionMessageDto, OWNER_AGENT_NAMES } from '@gantrix/shared';
 import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
@@ -18,16 +18,13 @@ const HISTORY_TURNS = 12;
 const ANSWER_TIMEOUT_MS = 120_000;
 const GENERIC_OWNER = 'Project owner';
 
-/** Names that mean "the one who keeps the project on track", best first. */
-const OWNER_NAMES = ['cpo', 'pm', 'project-manager', 'product-manager', 'owner'];
-
 /**
  * Who answers for the project: the lead agent among the ones that may work on it, or no one in
  * particular (the default model speaks as "Project owner"). The lead is the first agent named
  * like a product or project manager.
  */
 export function pickOwner<A extends { name: string }>(team: readonly A[]): A | null {
-  for (const wanted of OWNER_NAMES) {
+  for (const wanted of OWNER_AGENT_NAMES) {
     const found = team.find((a) => a.name.toLowerCase() === wanted);
     if (found) return found;
   }

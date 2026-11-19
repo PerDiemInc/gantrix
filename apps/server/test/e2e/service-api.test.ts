@@ -1,3 +1,6 @@
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { interpretSlackTest } from '@gantrix/shared';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
@@ -165,5 +168,79 @@ describe('job api', () => {
     ).toBe(400);
     expect((await post('/api/jobs', body({}))).statusCode).toBe(201);
     expect((await post('/api/jobs', body({}))).statusCode).toBe(409);
+  });
+});
+
+/** A Slack Web API that answers auth.test and apps.connections.open the way a chosen token would. */
+function fakeSlack(answers: { bot: Record<string, unknown>; app: Record<string, unknown> }) {
+  const server: Server = createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      const bot = req.url === '/auth.test';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(bot ? answers.bot : answers.app));
+    });
+  });
+  return server;
+}
+
+describe('testing a Slack connection, as the Connect Slack page reads it', () => {
+  const run = async (answers: { bot: Record<string, unknown>; app: Record<string, unknown> }) => {
+    const slack = fakeSlack(answers);
+    await new Promise<void>((r) => slack.listen(0, '127.0.0.1', r));
+    try {
+      const baseUrl = `http://127.0.0.1:${(slack.address() as AddressInfo).port}`;
+      const made = await app.inject({
+        method: 'POST',
+        url: '/api/connections',
+        headers: auth,
+        payload: {
+          name: `slack-${Math.random().toString(36).slice(2, 8)}`,
+          provider: 'slack',
+          baseUrl,
+          headers: {
+            'Bot-Token': `xoxb-${'1'.repeat(30)}`,
+            'App-Token': `xapp-1-${'A'.repeat(30)}`,
+          },
+          settings: { allowedUsers: 'U01ABCDE2F' },
+        },
+      });
+      expect(made.statusCode).toBe(201);
+      const tested = await app.inject({
+        method: 'POST',
+        url: `/api/connections/${made.json().id}/test`,
+        headers: auth,
+      });
+      expect(tested.statusCode).toBe(200);
+      return interpretSlackTest(tested.json());
+    } finally {
+      slack.close();
+    }
+  };
+
+  it('reads a working connection: who the bot is, which workspace, and Socket Mode', async () => {
+    expect(
+      await run({ bot: { ok: true, user: 'gantrix', team: 'Acme Co' }, app: { ok: true } }),
+    ).toMatchObject({ ok: true, bot: 'gantrix', team: 'Acme Co', socketMode: true, problems: [] });
+  });
+
+  it('blames the bot token when Slack rejects it', async () => {
+    const r = await run({ bot: { ok: false, error: 'invalid_auth' }, app: { ok: true } });
+    expect(r.ok).toBe(false);
+    expect(r.problems).toEqual([
+      { field: 'bot', message: expect.stringContaining('Bot User OAuth Token') },
+    ]);
+  });
+
+  it('blames the app-level token when only that one is rejected', async () => {
+    const r = await run({
+      bot: { ok: true, user: 'gantrix', team: 'Acme Co' },
+      app: { ok: false, error: 'invalid_auth' },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.bot).toBe('gantrix');
+    expect(r.problems).toEqual([
+      { field: 'app', message: expect.stringContaining('connections:write') },
+    ]);
   });
 });

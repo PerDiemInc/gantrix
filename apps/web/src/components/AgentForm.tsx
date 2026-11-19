@@ -1,4 +1,4 @@
-import type { AgentDto, SkillDto } from '@gantrix/shared';
+import type { AgentDto, ConnectionDto, SkillDto } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { ModelPicker } from './ModelPicker.tsx';
@@ -10,6 +10,7 @@ const empty = {
   connectionId: '',
   maxConcurrency: '1',
   stepTimeoutMinutes: '',
+  slackConnectionId: '',
   systemPrompt: '',
 };
 
@@ -22,12 +23,17 @@ export function AgentForm({
   onCancel?: () => void;
 }) {
   const [skills, setSkills] = useState<SkillDto[]>([]);
+  const [slack, setSlack] = useState<ConnectionDto[]>([]);
   const [form, setForm] = useState(empty);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     api.get<SkillDto[]>('/api/skills').then(setSkills, () => setSkills([]));
+    api.get<ConnectionDto[]>('/api/connections').then(
+      (list) => setSlack(list.filter((c) => c.provider === 'slack')),
+      () => setSlack([]),
+    );
   }, []);
 
   const create = async (e: FormEvent) => {
@@ -44,6 +50,7 @@ export function AgentForm({
         skillIds: [...picked],
         ...(form.model ? { model: form.model } : {}),
         ...(form.connectionId ? { connectionId: form.connectionId } : {}),
+        ...(form.slackConnectionId ? { slackConnectionId: form.slackConnectionId } : {}),
       });
       onCreated(agent);
     } catch (err) {
@@ -128,6 +135,23 @@ export function AgentForm({
           </label>
         ))}
       </fieldset>
+      <label>
+        Talk to it in Slack
+        <select value={form.slackConnectionId} onChange={set('slackConnectionId')}>
+          <option value="">Off: not in Slack</option>
+          {slack.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted small">
+        Allowed people can DM the Slack bot or write <code>@Gantrix {form.name || 'agent'}: …</code>{' '}
+        and the agent answers in the thread. Ask it for its status and it summarizes its current
+        work. The connection needs a bot token, an app-level token and allowed user IDs.{' '}
+        {slack.length === 0 && <a href="#/connect/slack">Connect Slack first.</a>}
+      </p>
       <label>
         Extra instructions <span className="muted small">(optional)</span>
         <textarea rows={3} value={form.systemPrompt} onChange={set('systemPrompt')} />
