@@ -15,6 +15,7 @@
     "infra:up": "docker compose up -d --wait",
     "infra:down": "docker compose down",
     "db:migrate": "npm run db:migrate -w @gantrix/server",
+    "db:rebaseline": "node scripts/rebaseline-migrations.ts",
     "dev:api": "npm run dev:api -w @gantrix/server",
     "dev:worker": "npm run dev:worker -w @gantrix/server",
     "dev:web": "npm run dev -w @gantrix/web",

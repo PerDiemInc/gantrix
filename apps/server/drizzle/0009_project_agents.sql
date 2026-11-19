@@ -1,1 +1,0 @@
-ALTER TABLE "tasks" ADD COLUMN "agent_ids" uuid[];
