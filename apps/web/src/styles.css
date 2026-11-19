@@ -2436,3 +2436,73 @@ time,
 button:active:not(:disabled) {
   opacity: 0.85;
 }
+
+/* ---------- the New menu ---------- */
+.nav-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.new-menu {
+  position: relative;
+}
+.new-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.new-list {
+  position: fixed;
+  z-index: 50;
+  min-width: 260px;
+  max-width: calc(100vw - 16px);
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+nav.top a.new-item {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--text);
+}
+nav.top a.new-item:hover,
+nav.top a.new-item:focus-visible {
+  background: var(--surface-2);
+}
+
+/* ---------- discussion with the project owner ---------- */
+.owner-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+.owner-intro > span {
+  min-width: 0;
+}
+.owner-starters {
+  display: grid;
+  gap: 6px;
+}
+.line-owner .bubble {
+  background: var(--surface-2);
+}
+
+.model-typed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.model-typed input {
+  flex: 1 1 160px;
+  min-width: 0;
+}

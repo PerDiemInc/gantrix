@@ -2,11 +2,13 @@ import type { ApprovalListItem } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { ApiError, api, getToken, setToken, subscribe } from './api.ts';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { NewMenu } from './components/NewMenu.tsx';
 import { useRoute } from './hooks.ts';
 import { AgentsPage } from './pages/AgentsPage.tsx';
 import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
 import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
+import { NewPage } from './pages/NewPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
@@ -75,31 +77,25 @@ export function App() {
     ['system', 'System'],
   ] as const;
   const current =
-    route.page === 'project' || route.page === 'logs' || route.page === 'live'
+    route.page === 'project' ||
+    route.page === 'logs' ||
+    route.page === 'live' ||
+    route.page === 'jobs'
       ? 'projects'
-      : route.page;
+      : route.page === 'new'
+        ? route.kind === 'agent'
+          ? 'agents'
+          : 'projects'
+        : route.page;
   return (
     <>
-      <a
+      <button
+        type="button"
         className="skip-link"
-        href="#main"
-        onClick={(e) => {
-          e.preventDefault();
-          document.getElementById('main')?.focus();
-        }}
+        onClick={() => document.getElementById('main')?.focus()}
       >
         Skip to content
-      </a>
-      <a
-        className="skip-link"
-        href="#main"
-        onClick={(e) => {
-          e.preventDefault();
-          document.getElementById('main')?.focus();
-        }}
-      >
-        Skip to content
-      </a>
+      </button>
       <nav className="top">
         <a href="#/projects" className="brand">
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
@@ -115,20 +111,25 @@ export function App() {
             {page === 'approvals' && pending > 0 && <span className="badge">{pending}</span>}
           </a>
         ))}
-        <button
-          type="button"
-          className="ghost small signout"
-          onClick={() => {
-            setToken('');
-            setState('need');
-          }}
-        >
-          Forget token
-        </button>
+        <div className="nav-actions">
+          <NewMenu />
+          <button
+            type="button"
+            className="ghost small"
+            onClick={() => {
+              setToken('');
+              setState('need');
+            }}
+          >
+            Forget token
+          </button>
+        </div>
       </nav>
       <main id="main" tabIndex={-1}>
         <ErrorBoundary resetKey={location.hash}>
           {route.page === 'projects' && <ProjectsPage />}
+          {route.page === 'jobs' && <ProjectsPage initialView="jobs" />}
+          {route.page === 'new' && <NewPage kind={route.kind} />}
           {route.page === 'project' && <ProjectPage id={route.id} />}
           {route.page === 'logs' && (
             <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />

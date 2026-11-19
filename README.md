@@ -584,6 +584,25 @@ npm run gantrix -- run "Build a one-page site for Crumb & Co and deploy it to AW
   project waits for your answer however long it takes. A project also still ends as `failed`
   if the planner can't produce a valid plan in three tries or the model server stays down.
 
+### Start anything from one button
+
+The **New** button in the top bar opens a menu: **Project**, **Job** or **Agent**. Each opens its
+form on its own page (`#/new/project`, `#/new/job`, `#/new/agent`), and a switch at the top moves
+between them. The Projects, Jobs and Agents pages are lists.
+
+Wherever you pick a model, it is a dropdown of what the chosen place offers (for Ollama, the
+models you have pulled). A model that isn't in the list stays selectable, and **Other…** lets you
+type a name; **Back to the list** undoes it. Press **refresh** after pulling a model.
+
+### Talk to the project owner
+
+Open a project and switch its chat panel from **Team** to **Owner** to ask where the project
+stands: what is done, what is blocked, what happens next. The owner is the project's `cpo` (or
+`pm`) agent when the team has one, otherwise a generic "Project owner". It answers from the
+project's live state each time, on the default model, and remembers the conversation. It never
+changes anything: to steer the team, use **Team**, or Stop and Add time. `GET` and `POST
+/api/tasks/:id/discussion` are the same conversation over the API.
+
 ### What's running right now
 
 The dashboard's **Live** page lists every agent working at this moment: its task and project,

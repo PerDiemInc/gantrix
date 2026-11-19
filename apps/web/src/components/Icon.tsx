@@ -14,6 +14,7 @@ const PATHS = {
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
   list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
   plus: 'M12 5v14M5 12h14',
+  chevronDown: 'M6 9l6 6 6-6',
   bolt: 'M13 3L5 13.5h6L10 21l8-10.5h-6z',
   stop: 'M7 7h10v10H7z',
   gavel: 'M14 4l6 6M11 7l6 6M8 10l5-5 6 6-5 5zM10 14l-6 6',

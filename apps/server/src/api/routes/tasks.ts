@@ -25,6 +25,7 @@ import {
   stopTask,
   updateTask,
 } from '../../engine/commands.ts';
+import { discuss, loadDiscussion, MAX_DISCUSSION_CHARS } from '../../engine/discussion.ts';
 import { suggestGoal } from '../../engine/goal.ts';
 import { stepThreadId } from '../../engine/threads.ts';
 import { detectLocalAgents, ensureLocalConnection } from '../../models/local-agents.ts';
@@ -130,6 +131,7 @@ const Extend = z
     replans: z.number().int().min(1).max(20).optional(),
   })
   .refine((e) => e.minutes || e.tokens || e.replans, 'Give minutes, tokens or replans to add.');
+const DiscussionBody = z.object({ text: z.string().trim().min(1).max(MAX_DISCUSSION_CHARS) });
 const MessageBody = z.object({
   text: z.string().trim().min(1).max(4_000),
   stepId: z.uuid().optional(),
@@ -451,6 +453,29 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
       throw new HttpError(409, 'That step has finished; send the note to the whole team instead.');
     }
     return reply.code(201).send({ id: r.id });
+  });
+
+  // Talk with the project's owner about where it stands. Works on finished projects too, and
+  // changes nothing: notes to the team go through /messages.
+  app.get('/api/tasks/:id/discussion', async (request) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    return loadDiscussion(db, task);
+  });
+
+  app.post('/api/tasks/:id/discussion', async (request, reply) => {
+    const task = await getTask(parse(IdParams, request.params).id);
+    const body = parse(DiscussionBody, request.body);
+    try {
+      return reply.code(201).send(await discuss(deps, task, body.text));
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error);
+      // A model server that is down says only "fetch failed"; say what to check.
+      const why = /fetch failed|ECONNREFUSED|ENOTFOUND/i.test(raw)
+        ? "the model server isn't reachable. Is Ollama running?"
+        : raw;
+      request.log.warn({ err: error }, 'project owner could not answer');
+      throw new HttpError(502, `The project owner couldn't answer: ${why.slice(0, 300)}`);
+    }
   });
 
   app.get('/api/tasks/:id/events', async (request) => {

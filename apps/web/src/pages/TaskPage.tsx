@@ -6,6 +6,7 @@ import { Gallery } from '../components/Gallery.tsx';
 import { Gantt } from '../components/Gantt.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { Meeting } from '../components/Meeting.tsx';
+import { OwnerChat } from '../components/OwnerChat.tsx';
 import {
   DeleteProject,
   KeepGoingSwitch,
@@ -151,6 +152,8 @@ export function TaskPage({ id }: { id: string }) {
   const [raw, setRaw] = useState(false);
   const [tab, setTab] = useState<'progress' | 'chat' | 'files'>('progress');
   const [chatTarget, setChatTarget] = useState('');
+  // Who the chat panel is with: the team (notes that steer it) or the owner (status questions).
+  const [chatWith, setChatWith] = useState<'team' | 'owner'>('team');
   const [extendError, setExtendError] = useState('');
   const now = useNow(1000, Boolean(task && !isTerminal(task.status)));
 
@@ -204,6 +207,7 @@ export function TaskPage({ id }: { id: string }) {
   };
   const message = (stepId: string) => {
     setChatTarget(stepId);
+    setChatWith('team');
     setTab('chat');
     document.getElementById('chat')?.scrollIntoView({ block: 'nearest' });
   };
@@ -516,15 +520,36 @@ export function TaskPage({ id }: { id: string }) {
 
         <aside className="card chat-panel panel-chat" id="chat" aria-label="Project chat">
           <div className="card-head">
-            <h2>
-              <Icon name="chat" /> {raw ? 'Events' : 'Chat'}
-            </h2>
-            <label className="toggle">
-              <input type="checkbox" checked={raw} onChange={(e) => setRaw(e.target.checked)} /> raw
-              events
-            </label>
+            <h2 className="sr-only">Chat</h2>
+            <div className="segmented small-seg" role="tablist" aria-label="Who to talk to">
+              {(
+                [
+                  ['team', 'Team'],
+                  ['owner', 'Owner'],
+                ] as const
+              ).map(([key, text]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={chatWith === key}
+                  className={chatWith === key ? 'active' : ''}
+                  onClick={() => setChatWith(key)}
+                >
+                  <Icon name="chat" size={14} /> {text}
+                </button>
+              ))}
+            </div>
+            {chatWith === 'team' && (
+              <label className="toggle">
+                <input type="checkbox" checked={raw} onChange={(e) => setRaw(e.target.checked)} />{' '}
+                raw events
+              </label>
+            )}
           </div>
-          {raw ? (
+          {chatWith === 'owner' ? (
+            <OwnerChat taskId={task.id} />
+          ) : raw ? (
             <ol className="activity">
               {[...events].reverse().map((e) => (
                 <li key={e.id} className={`ev ev-${e.type.replace('.', '-')}`}>

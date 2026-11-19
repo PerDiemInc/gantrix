@@ -238,6 +238,106 @@ describe('api', () => {
     expect((await live()).agents).toEqual([]);
   });
 
+  it('lets you discuss the status with the project owner, who answers from the live facts', async () => {
+    await e.addAgent('cpo');
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({
+      steps: [
+        {
+          key: 'notes',
+          title: 'Write the launch notes',
+          agent: 'writer',
+          instructions: 'Write notes.md',
+          acceptance: 'notes.md exists',
+          dependsOn: [],
+        },
+      ],
+    });
+    const task = await createTask(e.deps, { goal: 'Launch the product', name: 'Launch' });
+    await e.waitFor(task.id);
+    const url = `/api/tasks/${task.id}/discussion`;
+    const talk = (text: string) =>
+      app.inject({ method: 'POST', url, headers: auth, payload: { text } });
+
+    // Nothing said yet; the owner is the cpo, since the team has one.
+    const empty = (await app.inject({ url, headers: auth })).json();
+    expect(empty).toMatchObject({ owner: { name: 'cpo' }, messages: [] });
+    expect(empty.owner.agentId).toBeTruthy();
+
+    // The model sees the project's facts and then the question. Its thinking is dropped.
+    e.fake.script.worker = () => '<think>checking</think>The notes are written; we are done.';
+    const first = await talk("  How's it going?  ");
+    expect(first.statusCode).toBe(201);
+    expect(first.json().messages).toMatchObject([
+      { role: 'user', text: "How's it going?" },
+      { role: 'owner', text: 'The notes are written; we are done.' },
+    ]);
+    const sent = e.fake.bodies.at(-1)?.messages ?? [];
+    expect(sent[0]?.content).toContain('You are cpo, the owner of a project');
+    expect(sent[0]?.content).toContain('Project: Launch');
+    expect(sent[0]?.content).toContain('Write the launch notes [succeeded]');
+    expect(sent.at(-1)).toMatchObject({ role: 'user', content: "How's it going?" });
+
+    // A follow-up carries the conversation so far.
+    e.fake.script.worker = () => 'Nothing is blocking us.';
+    await talk('Anything blocking?');
+    const turns = (e.fake.bodies.at(-1)?.messages ?? []).filter((m) => m.role !== 'system');
+    expect(turns.map((m) => m.content)).toEqual([
+      "How's it going?",
+      'The notes are written; we are done.',
+      'Anything blocking?',
+    ]);
+    const all = (await app.inject({ url, headers: auth })).json();
+    expect(all.messages.map((m: { role: string }) => m.role)).toEqual([
+      'user',
+      'owner',
+      'user',
+      'owner',
+    ]);
+
+    // It changes nothing: no note reached the team, and the project is as it was.
+    const detail = (await app.inject({ url: `/api/tasks/${task.id}`, headers: auth })).json();
+    expect(detail.status).toBe('succeeded');
+  });
+
+  it('saves nothing when the owner cannot answer, so the question can be sent again', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [] });
+    const task = await createTask(e.deps, { goal: 'Anything' });
+    await e.waitFor(task.id);
+    const url = `/api/tasks/${task.id}/discussion`;
+    e.fake.script.worker = () => '<think>only thoughts</think>';
+    const failed = await app.inject({
+      method: 'POST',
+      url,
+      headers: auth,
+      payload: { text: 'Hi' },
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json().error).toMatch(/couldn't answer/);
+    expect((await app.inject({ url, headers: auth })).json().messages).toEqual([]);
+
+    // Without an agent for the role, the default model speaks as the generic owner.
+    expect((await app.inject({ url, headers: auth })).json().owner).toMatchObject({
+      name: 'Project owner',
+      agentId: null,
+    });
+    // Empty and oversized questions are refused, and an unknown project is not found.
+    for (const text of ['   ', 'x'.repeat(4001)]) {
+      expect(
+        (await app.inject({ method: 'POST', url, headers: auth, payload: { text } })).statusCode,
+      ).toBe(400);
+    }
+    expect(
+      (
+        await app.inject({
+          url: '/api/tasks/01a1ad93-969e-770a-ac86-c319f1b264f3/discussion',
+          headers: auth,
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+
   it('lists projects with their team, active tasks, approvals and latest event', async () => {
     const writer = await e.addAgent('writer');
     e.fake.script.plan = () => ({

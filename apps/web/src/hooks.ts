@@ -2,8 +2,14 @@ import type { AgentDto, StreamEvent, TaskDetailDto } from '@gantrix/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribe } from './api.ts';
 
+/** What the New menu can create. */
+export const NEW_KINDS = ['project', 'job', 'agent'] as const;
+export type NewKind = (typeof NEW_KINDS)[number];
+
 export type Route =
   | { page: 'projects' }
+  | { page: 'jobs' }
+  | { page: 'new'; kind: NewKind }
   | { page: 'project'; id: string }
   | { page: 'logs'; id: string; stepId?: string }
   | { page: 'agents' }
@@ -13,8 +19,13 @@ export type Route =
   | { page: 'system' }
   | { page: 'live' };
 
-function parseHash(hash: string): Route {
+export function parseHash(hash: string): Route {
   const [, page, id, sub, stepId] = hash.replace(/^#/, '').split('/');
+  // "#/new" alone opens the form most people want; an unknown kind does too.
+  if (page === 'new') {
+    return { page: 'new', kind: NEW_KINDS.find((k) => k === id) ?? 'project' };
+  }
+  if (page === 'jobs') return { page: 'jobs' };
   // "tasks" is the old name; links from before the projects view keep working.
   const isProject = page === 'projects' || page === 'tasks';
   if (isProject && id && sub === 'logs') {
