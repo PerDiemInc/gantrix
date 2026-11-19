@@ -6,6 +6,7 @@ import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
 import { loadVerifiedSkill } from '../../src/skills/loader.ts';
 import { fakeGithub, SHA, skillMd } from '../fixtures/fake-github.ts';
+import { type Call, fakeWeb, json, site } from '../fixtures/fake-web.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 let e: Engine;
@@ -15,6 +16,8 @@ const token = 't'.repeat(32);
 const auth = { authorization: `Bearer ${token}` };
 const PDF = 'https://github.com/acme/skills/tree/main/skills/pdf';
 let github = fakeGithub('acme', 'skills', { files: {} });
+// Everything the server fetches goes through here: GitHub, skills.sh and GitHub's search.
+let web = fakeWeb(github.fetch);
 
 const repo = {
   files: {
@@ -29,7 +32,12 @@ beforeAll(async () => {
   hub = new EventHub(e.db, e.config.DATABASE_URL);
   await hub.start();
   github = fakeGithub('acme', 'skills', repo);
-  app = buildServer({ ...e.deps, hub, skillFetch: (url) => github.fetch(url) }, token, false);
+  web = fakeWeb(github.fetch);
+  app = buildServer(
+    { ...e.deps, hub, skillFetch: (url, headers) => web.fetch(url, headers) },
+    token,
+    false,
+  );
 });
 afterAll(async () => {
   await app?.close();
@@ -39,6 +47,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await e.reset();
   github = fakeGithub('acme', 'skills', repo);
+  web = fakeWeb(github.fetch);
 });
 
 const post = (url: string, payload: object) =>
@@ -156,9 +165,146 @@ describe('installing a skill from the web', () => {
       ...repo,
       fail: { status: 403, body: 'API rate limit exceeded' },
     });
+    web = fakeWeb(github.fetch);
     const limited = await lookup('https://github.com/acme/skills');
     expect(limited.statusCode).toBe(400);
     expect(limited.json().error).toMatch(/rate limit/);
     expect((await lookup('')).statusCode).toBe(400);
+  });
+});
+
+describe('searching for skills online', () => {
+  const search = (query: string) =>
+    app.inject({ url: `/api/skills/search?${query}`, headers: auth });
+  const onlineWorld = () => {
+    web = fakeWeb(
+      site({
+        'https://skills.sh/api/search': () =>
+          json({
+            skills: [
+              {
+                id: 'acme/skills/xlsx',
+                source: 'acme/skills',
+                skillId: 'xlsx',
+                name: 'xlsx',
+                installs: 900,
+              },
+              {
+                id: 'smithery.ai/xlsx',
+                source: 'smithery.ai',
+                skillId: 'xlsx',
+                name: 'xlsx',
+                installs: 5,
+              },
+            ],
+          }),
+        'https://api.github.com/search/code': () =>
+          json({
+            items: [
+              {
+                path: 'skills/pdf/SKILL.md',
+                html_url: `https://github.com/acme/skills/blob/${SHA}/skills/pdf/SKILL.md`,
+                repository: { full_name: 'acme/skills', description: 'Acme skills' },
+              },
+            ],
+          }),
+      }),
+      github.fetch,
+    );
+  };
+  const connect = (headers: Record<string, string>) =>
+    post('/api/connections', { name: 'gh', provider: 'github', headers, settings: {} });
+  const calls = (host: string): Call[] => web.calls.filter((c) => new URL(c.url).hostname === host);
+
+  it('finds skills on skills.sh and says what it could not offer', async () => {
+    onlineWorld();
+    const res = await search('q=xlsx&sources=skills-sh');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      query: 'xlsx',
+      githubConnection: null,
+      hits: [
+        {
+          id: 'skills-sh:acme/skills/xlsx',
+          url: 'https://skills.sh/acme/skills/xlsx',
+          installs: 900,
+        },
+      ],
+      notes: [{ source: 'skills-sh', level: 'info', text: expect.stringContaining('smithery.ai') }],
+    });
+  });
+
+  it('reviews and installs a skill straight from a skills.sh link', async () => {
+    onlineWorld();
+    const hit = (await search('q=xlsx&sources=skills-sh')).json().hits[0];
+    const preview = (await lookup(hit.url)).json();
+    expect(preview).toMatchObject({
+      kind: 'skill',
+      name: 'xlsx',
+      commit: SHA,
+      source: 'github.com/acme/skills/skills/xlsx',
+    });
+    const done = await post('/api/skills/install-online', {
+      previewId: preview.id,
+      checksum: preview.checksum,
+    });
+    expect(done.statusCode).toBe(201);
+    expect(done.json()).toMatchObject({
+      name: 'xlsx',
+      sourceUrl: `https://github.com/acme/skills/tree/${SHA}/skills/xlsx`,
+    });
+  });
+
+  it('lists the featured collections, searchable by words', async () => {
+    web = fakeWeb(
+      fakeGithub('anthropics', 'skills', {
+        files: {
+          'skills/frontend-design/SKILL.md': skillMd('frontend-design'),
+          'skills/pdf/SKILL.md': skillMd('pdf'),
+        },
+      }).fetch,
+    );
+    const res = await search('q=frontend&sources=featured');
+    expect(res.json().hits).toMatchObject([
+      { name: 'frontend-design', repo: 'anthropics/skills', source: 'featured' },
+    ]);
+    // The other collection could not be reached: said, not hidden.
+    expect(res.json().notes[0]).toMatchObject({ source: 'featured', level: 'problem' });
+  });
+
+  it('searches inside repositories with the token of a GitHub connection, sent only to api.github.com', async () => {
+    onlineWorld();
+    const none = (await search('q=pdf&sources=github-code')).json();
+    expect(none.hits).toEqual([]);
+    expect(none.notes[0].text).toMatch(/GitHub connection/);
+    expect(calls('api.github.com')).toHaveLength(0);
+
+    expect((await connect({ Authorization: 'Bearer ghp_test_token' })).statusCode).toBe(201);
+    const found = (await search('q=pdf&sources=github-code')).json();
+    expect(found.githubConnection).toBe('gh');
+    expect(found.hits).toMatchObject([
+      { name: 'pdf', repo: 'acme/skills', path: 'skills/pdf', source: 'github-code' },
+    ]);
+    expect(calls('api.github.com')[0]?.headers?.authorization).toBe('Bearer ghp_test_token');
+
+    // Looking a skill up uses it too, for GitHub's API, but raw files and skills.sh never see it.
+    await lookup('https://skills.sh/acme/skills/xlsx');
+    for (const c of calls('api.github.com'))
+      expect(c.headers?.authorization, c.url).toBe('Bearer ghp_test_token');
+    for (const host of ['raw.githubusercontent.com', 'skills.sh']) {
+      for (const c of calls(host)) expect(c.headers?.authorization, c.url).toBeUndefined();
+    }
+  });
+
+  it('works anonymously when the connection token cannot be read, and ignores unknown sources', async () => {
+    onlineWorld();
+    expect((await connect({ Authorization: 'Bearer env:GANTRIX_NO_SUCH_TOKEN' })).statusCode).toBe(
+      201,
+    );
+    const res = await search('q=xlsx&sources=skills-sh,nonsense');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().githubConnection).toBeNull();
+    expect(res.json().hits).toHaveLength(1);
+    expect((await search('q=xlsx&sources=nonsense')).json().hits).toEqual([]);
   });
 });

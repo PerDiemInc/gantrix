@@ -12,6 +12,7 @@ import {
   type SkillDto,
   type SkillLookupDto,
   type SkillPreviewDto,
+  type SkillSearchDto,
   type StepConversationDto,
   type TaskDetailDto,
   type TaskDto,
@@ -145,6 +146,31 @@ export async function addSkill(
   console.log(
     `Installed ${paint('bold', skill.name)} ${skill.version} (${skill.manifest.tools.length} tools).`,
   );
+}
+
+export async function searchSkills(
+  client: Client,
+  query: string,
+  o: { sources?: string } = {},
+): Promise<void> {
+  const params = new URLSearchParams({ q: query, ...(o.sources ? { sources: o.sources } : {}) });
+  const r = await client.get<SkillSearchDto>(`/api/skills/search?${params}`);
+  for (const n of r.notes) {
+    console.log(paint(n.level === 'problem' ? 'yellow' : 'gray', `  ${n.text}`));
+  }
+  if (!r.hits.length) return console.log('No skills found.');
+  for (const h of r.hits) {
+    const meta = [
+      h.sourceLabel,
+      h.installs !== null ? `${h.installs} installs` : '',
+      h.stars !== null ? `★ ${h.stars}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    console.log(`${paint('bold', h.name)}  ${paint('gray', meta)}`);
+    if (h.description && h.description !== h.repo) console.log(`  ${h.description}`);
+    console.log(paint('cyan', `  gantrix skills add ${h.url}`));
+  }
 }
 
 /** What a skill from the web would do, for a person to read before saying yes. */

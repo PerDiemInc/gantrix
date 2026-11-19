@@ -2640,3 +2640,34 @@ a.button.primary {
   display: grid;
   gap: 2px;
 }
+
+.skill-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  border: 0;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.skill-sources label.check {
+  margin: 0;
+}
+.skill-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.skill-results h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.skill-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.skill-hit p {
+  margin: 4px 0 0;
+}

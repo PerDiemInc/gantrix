@@ -1,16 +1,20 @@
 import { rm, stat } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
+import { SKILL_SEARCH_SOURCES, type SkillSearchSource } from '@gantrix/shared';
 import { asc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { agentSkills, skills } from '../../db/schema.ts';
+import { agentSkills, connections, skills } from '../../db/schema.ts';
+import { resolveHeaders } from '../../models/connections.ts';
 import { checksumDir, installSkill } from '../../skills/loader.ts';
 import {
   defaultSkillFetch,
   lookupSkill,
   PreviewStore,
   SkillSourceError,
+  withGithubAuth,
 } from '../../skills/remote.ts';
+import { SkillSearcher } from '../../skills/search.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
@@ -19,6 +23,23 @@ const InstallSkill = z.object({
 });
 
 const LookupSkill = z.object({ url: z.string().trim().min(1).max(2_000) });
+const SearchQuery = z.object({
+  q: z.string().trim().max(200).default(''),
+  // Comma separated; default is every source.
+  sources: z
+    .string()
+    .optional()
+    .transform((s) =>
+      s
+        ? s
+            .split(',')
+            .map((x) => x.trim())
+            .filter((x): x is SkillSearchSource =>
+              (SKILL_SEARCH_SOURCES as readonly string[]).includes(x),
+            )
+        : [...SKILL_SEARCH_SOURCES],
+    ),
+});
 const InstallOnline = z.object({
   previewId: z.string().min(1).max(64),
   // The checksum of what was shown, so the answer is for exactly those files.
@@ -28,6 +49,38 @@ const InstallOnline = z.object({
 export function skillRoutes(app: FastifyInstance, deps: ApiDeps): void {
   const { db, config } = deps;
   const store = new PreviewStore(config.GANTRIX_SKILLS_DIR);
+  const searcher = new SkillSearcher();
+
+  /**
+   * The token of a saved GitHub connection (the first by name), for GitHub's search and its
+   * higher rate limit. Only ever sent to api.github.com. None, or one that can't be read,
+   * means searching anonymously.
+   */
+  async function githubAuth(): Promise<{
+    authorization: string | null;
+    connection: string | null;
+  }> {
+    const [c] = await db
+      .select()
+      .from(connections)
+      .where(eq(connections.provider, 'github'))
+      .orderBy(asc(connections.name))
+      .limit(1);
+    if (!c) return { authorization: null, connection: null };
+    try {
+      const authorization = resolveHeaders(c.headers).Authorization ?? null;
+      return { authorization, connection: authorization ? c.name : null };
+    } catch {
+      return { authorization: null, connection: null };
+    }
+  }
+  const fetcher = async () => {
+    const auth = await githubAuth();
+    return {
+      ...auth,
+      fetch: withGithubAuth(deps.skillFetch ?? defaultSkillFetch, auth.authorization),
+    };
+  };
   // What a previous run left in the holding area is not something anyone was shown.
   app.addHook('onReady', () => store.startFresh());
 
@@ -40,7 +93,7 @@ export function skillRoutes(app: FastifyInstance, deps: ApiDeps): void {
   app.post('/api/skills/lookup', async (request) => {
     const { url } = parse(LookupSkill, request.body);
     try {
-      return await lookupSkill(store, url, deps.skillFetch ?? defaultSkillFetch);
+      return await lookupSkill(store, url, (await fetcher()).fetch);
     } catch (error) {
       if (error instanceof SkillSourceError) throw new HttpError(400, error.message);
       request.log.warn({ err: error }, 'skill lookup failed');
@@ -49,6 +102,17 @@ export function skillRoutes(app: FastifyInstance, deps: ApiDeps): void {
         `Couldn't fetch that: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`,
       );
     }
+  });
+
+  /**
+   * Searches for skills online: skills.sh, GitHub repositories tagged as holding skills, inside
+   * GitHub repositories (needs a GitHub connection) and featured collections. Finds only;
+   * reviewing and installing go through /lookup and /install-online.
+   */
+  app.get('/api/skills/search', async (request) => {
+    const { q, sources } = parse(SearchQuery, request.query);
+    const { fetch, authorization, connection } = await fetcher();
+    return searcher.search(fetch, { q, sources, githubToken: Boolean(authorization), connection });
   });
 
   /** Installs exactly what /lookup showed, once the person said yes. */

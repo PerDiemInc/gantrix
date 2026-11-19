@@ -1,10 +1,18 @@
-import type { SkillDto, SkillLookupDto, SkillPreviewDto } from '@gantrix/shared';
-import { type FormEvent, useEffect, useState } from 'react';
+import {
+  SKILL_SEARCH_SOURCES,
+  type SkillDto,
+  type SkillHitDto,
+  type SkillLookupDto,
+  type SkillPreviewDto,
+  type SkillSearchDto,
+  type SkillSearchSource,
+} from '@gantrix/shared';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
 import { bytes } from '../format.ts';
 
-type Source = 'web' | 'folder';
+type Source = 'search' | 'link' | 'folder';
 
 /** Where a skill came from, as a short label: "github.com/acme/skills/pdf @ a1b2c3d". */
 export const sourceLabel = (s: Pick<SkillDto, 'sourceUrl' | 'sourceRef'>): string | null => {
@@ -106,14 +114,82 @@ function Review({
   );
 }
 
-/** Paste a link, see what it is, then decide. Nothing is installed until the yes. */
-function WebInstall({ onInstalled }: { onInstalled: (skill: SkillDto) => void }) {
+const SOURCE_LOOK: Record<SkillSearchSource, { label: string; hint: string }> = {
+  'skills-sh': { label: 'skills.sh', hint: 'A directory of skills with install counts' },
+  featured: { label: 'Featured collections', hint: 'Anthropic’s skills and Gantrix’s examples' },
+  github: { label: 'GitHub repositories', hint: 'Repositories tagged as holding skills' },
+  'github-code': {
+    label: 'Inside GitHub repos',
+    hint: 'SKILL.md files on GitHub; needs a GitHub connection',
+  },
+};
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
+/** One search result: what it is, where it is from, and how popular it is. */
+function Hit({ hit, busy, onReview }: { hit: SkillHitDto; busy: boolean; onReview: () => void }) {
+  return (
+    <li className="item skill-hit">
+      <div className="item-head">
+        <strong>{hit.name}</strong>
+        <span className="chip">{hit.sourceLabel}</span>
+        {hit.installs !== null && (
+          <span className="muted small num">{compact.format(hit.installs)} installs</span>
+        )}
+        {hit.stars !== null && (
+          <span className="muted small num">★ {compact.format(hit.stars)}</span>
+        )}
+        <button type="button" className="ghost small push" disabled={busy} onClick={onReview}>
+          {hit.kind === 'repo' ? 'See its skills' : 'Review'}
+        </button>
+      </div>
+      {hit.description && hit.description !== hit.repo && <p>{hit.description}</p>}
+      <p className="muted mono small">
+        {hit.repo}
+        {hit.path ? `/${hit.path}` : ''}
+      </p>
+    </li>
+  );
+}
+
+/**
+ * Find a skill online or paste a link, see what it is, then decide. Nothing is installed until
+ * the yes: a result, a link and a repository's skills all end at the same review.
+ */
+function OnlineInstall({
+  mode,
+  onInstalled,
+}: {
+  mode: 'search' | 'link';
+  onInstalled: (skill: SkillDto) => void;
+}) {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<SkillLookupDto | null>(null);
   const [error, setError] = useState('');
   const [installError, setInstallError] = useState('');
   const [done, setDone] = useState<SkillDto | null>(null);
+  const [query, setQuery] = useState('');
+  const [sources, setSources] = useState<Set<SkillSearchSource>>(new Set(SKILL_SEARCH_SOURCES));
+  const [results, setResults] = useState<SkillSearchDto | null>(null);
+  const [searching, setSearching] = useState(false);
+  const review = useRef<HTMLDivElement>(null);
+
+  const search = async (q: string, from: Iterable<SkillSearchSource>) => {
+    setSearching(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ q, sources: [...from].join(',') });
+      setResults(await api.get<SkillSearchDto>(`/api/skills/search?${params}`));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setSearching(false);
+  };
+  // Something to look at before anything is typed: the featured collections.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the tab opens
+  useEffect(() => {
+    if (mode === 'search') void search('', ['featured']);
+  }, [mode]);
 
   const look = async (link: string) => {
     setBusy(true);
@@ -123,14 +199,15 @@ function WebInstall({ onInstalled }: { onInstalled: (skill: SkillDto) => void })
     setFound(null);
     try {
       setFound(await api.post<SkillLookupDto>('/api/skills/lookup', { url: link }));
+      // The review is what to read next: bring it into view.
+      setTimeout(
+        () => review.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+        50,
+      );
     } catch (err) {
       setError((err as Error).message);
     }
     setBusy(false);
-  };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    void look(url.trim());
   };
   const install = async (skill: SkillPreviewDto) => {
     setBusy(true);
@@ -149,31 +226,93 @@ function WebInstall({ onInstalled }: { onInstalled: (skill: SkillDto) => void })
     }
     setBusy(false);
   };
+  const toggle = (s: SkillSearchSource) =>
+    setSources((cur) => {
+      const next = new Set(cur);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+
+  const grouped = (results?.hits ?? []).reduce<Map<string, SkillHitDto[]>>((m, h) => {
+    const key = h.source === 'featured' ? 'Featured collections' : h.sourceLabel;
+    m.set(key, [...(m.get(key) ?? []), h]);
+    return m;
+  }, new Map());
 
   return (
     <>
-      <p className="muted small">
-        Paste a GitHub link to a skill, a folder of skills, or a repository, or a direct link to a{' '}
-        <code>SKILL.md</code>. You see what it can do before anything is installed, and GitHub
-        skills are pinned to the version you reviewed.
-      </p>
-      <form className="row-actions" onSubmit={submit}>
-        <label className="sr-only" htmlFor="skill-url">
-          Link to a skill
-        </label>
-        <input
-          id="skill-url"
-          className="grow mono"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
-          spellCheck={false}
-          required
-        />
-        <button type="submit" className="primary" disabled={busy || !url.trim()}>
-          {busy && !found ? 'Looking…' : 'Review'}
-        </button>
-      </form>
+      {mode === 'search' ? (
+        <>
+          <p className="muted small">
+            Search skills.sh, GitHub and featured collections at once. Finding a skill installs
+            nothing: you see what it can do first.
+          </p>
+          <form
+            className="row-actions"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void search(query, sources);
+            }}
+          >
+            <label className="sr-only" htmlFor="skill-query">
+              Search for a skill
+            </label>
+            <input
+              id="skill-query"
+              className="grow"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="What should it do? e.g. pdf, frontend design, code review"
+              maxLength={100}
+            />
+            <button type="submit" className="primary" disabled={searching || !sources.size}>
+              {searching ? 'Searching…' : 'Search'}
+            </button>
+          </form>
+          <fieldset className="skill-sources">
+            <legend className="sr-only">Where to search</legend>
+            {SKILL_SEARCH_SOURCES.map((s) => (
+              <label key={s} className="check" title={SOURCE_LOOK[s].hint}>
+                <input type="checkbox" checked={sources.has(s)} onChange={() => toggle(s)} />
+                {SOURCE_LOOK[s].label}
+              </label>
+            ))}
+          </fieldset>
+        </>
+      ) : (
+        <>
+          <p className="muted small">
+            Paste a link to a skill: a GitHub link (a repository, a folder in it, or its{' '}
+            <code>SKILL.md</code>), a skills.sh page like{' '}
+            <code>skills.sh/anthropics/skills/frontend-design</code>, or a direct link to a{' '}
+            <code>SKILL.md</code>. GitHub skills are pinned to the version you review.
+          </p>
+          <form
+            className="row-actions"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              void look(url.trim());
+            }}
+          >
+            <label className="sr-only" htmlFor="skill-url">
+              Link to a skill
+            </label>
+            <input
+              id="skill-url"
+              className="grow mono"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://github.com/owner/repo/tree/main/skills/my-skill"
+              spellCheck={false}
+              required
+            />
+            <button type="submit" className="primary" disabled={busy || !url.trim()}>
+              {busy && !found ? 'Looking…' : 'Review'}
+            </button>
+          </form>
+        </>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -185,42 +324,92 @@ function WebInstall({ onInstalled }: { onInstalled: (skill: SkillDto) => void })
           agent on the <a href="#/agents">Agents page</a>.
         </p>
       )}
-      {found?.kind === 'choices' && (
-        <section aria-label="Skills in this place">
-          <h3>
-            {found.choices.length} skill{found.choices.length === 1 ? '' : 's'} in {found.source}
-          </h3>
-          <ul className="cards">
-            {found.choices.map((c) => (
-              <li key={c.path} className="item">
-                <div className="item-head">
-                  <strong>{c.name}</strong>
-                  <span className="muted mono small">{c.path}</span>
-                  <button
-                    type="button"
-                    className="ghost small push"
-                    disabled={busy}
-                    onClick={() => {
-                      setUrl(c.url);
-                      void look(c.url);
-                    }}
-                  >
-                    Review
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {found?.kind === 'skill' && (
-        <Review
-          skill={found}
-          busy={busy}
-          error={installError}
-          onInstall={() => void install(found)}
-          onCancel={() => setFound(null)}
-        />
+      <div ref={review}>
+        {busy && !found && mode === 'search' && <p className="muted small">Looking it up…</p>}
+        {found?.kind === 'choices' && (
+          <section aria-label="Skills in this place">
+            <h3>
+              {found.choices.length} skill{found.choices.length === 1 ? '' : 's'} in {found.source}
+            </h3>
+            <ul className="cards">
+              {found.choices.map((c) => (
+                <li key={c.path} className="item">
+                  <div className="item-head">
+                    <strong>{c.name}</strong>
+                    <span className="muted mono small">{c.path}</span>
+                    <button
+                      type="button"
+                      className="ghost small push"
+                      disabled={busy}
+                      onClick={() => {
+                        setUrl(c.url);
+                        void look(c.url);
+                      }}
+                    >
+                      Review
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {found?.kind === 'skill' && (
+          <Review
+            skill={found}
+            busy={busy}
+            error={installError}
+            onInstall={() => void install(found)}
+            onCancel={() => setFound(null)}
+          />
+        )}
+      </div>
+      {mode === 'search' && results && (
+        <div className="skill-results">
+          {results.notes.length > 0 && (
+            <ul className="skill-notes">
+              {results.notes.map((n) => (
+                <li
+                  key={`${n.source}:${n.text}`}
+                  className={n.level === 'problem' ? 'error small' : 'muted small'}
+                >
+                  {n.text}
+                  {n.source === 'github-code' && n.text.includes('GitHub connection') && (
+                    <>
+                      {' '}
+                      <a href="#/connections">Connections</a>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {results.githubConnection && (
+            <p className="muted small">
+              Using your GitHub connection <b>{results.githubConnection}</b> for GitHub: more
+              results and a higher limit.
+            </p>
+          )}
+          {[...grouped].map(([label, hits]) => (
+            <section key={label} aria-label={label}>
+              <h3>
+                {label} <span className="muted small num">{hits.length}</span>
+              </h3>
+              <ul className="cards">
+                {hits.map((h) => (
+                  <Hit key={h.id} hit={h} busy={busy} onReview={() => void look(h.url)} />
+                ))}
+              </ul>
+            </section>
+          ))}
+          {!results.hits.length && !searching && (
+            <p className="muted">
+              {results.query
+                ? 'No skills found. Try other words, or paste a link on the “From a link” tab.'
+                : 'Type what you need, for example “pdf”.'}
+            </p>
+          )}
+        </div>
       )}
     </>
   );
@@ -228,7 +417,7 @@ function WebInstall({ onInstalled }: { onInstalled: (skill: SkillDto) => void })
 
 export function SkillsPage() {
   const [skills, setSkills] = useState<SkillDto[]>([]);
-  const [source, setSource] = useState<Source>('web');
+  const [source, setSource] = useState<Source>('search');
   const [path, setPath] = useState('');
   const [error, setError] = useState('');
   const load = () => void api.get<SkillDto[]>('/api/skills').then(setSkills);
@@ -263,7 +452,8 @@ export function SkillsPage() {
           <div className="segmented small-seg" role="tablist" aria-label="Where from">
             {(
               [
-                ['web', 'From the web'],
+                ['search', 'Search online'],
+                ['link', 'From a link'],
                 ['folder', 'From this machine'],
               ] as const
             ).map(([key, text]) => (
@@ -280,8 +470,8 @@ export function SkillsPage() {
             ))}
           </div>
         </div>
-        {source === 'web' ? (
-          <WebInstall onInstalled={load} />
+        {source !== 'folder' ? (
+          <OnlineInstall key={source} mode={source} onInstalled={load} />
         ) : (
           <form onSubmit={(e) => void install(e)}>
             <p className="muted small">
