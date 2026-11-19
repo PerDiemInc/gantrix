@@ -68,9 +68,12 @@ skills
   .description('list installed skills')
   .action(run(() => cmd.listSkills(client)));
 skills
-  .command('add <folder>')
-  .description('install a skill folder containing a SKILL.md')
-  .action(run((folder: string) => cmd.addSkill(client, folder)));
+  .command('add <folder-or-link>')
+  .description(
+    'install a skill: a folder on this machine, or a link on the web (GitHub repository, folder or SKILL.md), shown to you first',
+  )
+  .option('-y, --yes', 'install a skill from the web without asking after showing it')
+  .action(run((source: string, o) => cmd.addSkill(client, source, o)));
 skills
   .command('rm <name[@version]>')
   .description('remove an installed skill')

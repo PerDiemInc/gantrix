@@ -309,6 +309,36 @@ Installing a skill copies it to `~/.gantrix/skills/<name>/<version>` and records
 editing your original folder doesn't change what runs. To update a skill, bump its `version`
 and install it again.
 
+### Install a skill from the web
+
+On **Skills → Install a skill → From the web**, paste a link:
+
+- a GitHub **repository** (it lists the skills inside, and you pick one),
+- a **folder** in one: `https://github.com/owner/repo/tree/main/skills/my-skill`,
+- a skill's **`SKILL.md`** on GitHub, or a direct `https://…/SKILL.md` link.
+
+Gantrix downloads it to a holding area and **shows you what it would install before anything is
+installed**: the description, where it is from, every file, the instructions the agent will
+follow, and in plain words what it can do on your machine: run shell commands, start programs
+(the exact command, for example `npx -y some-mcp`), run tools without asking, and any bundled
+scripts. You tick *I have read what this skill can do* and press Install. What you installed is
+exactly what you were shown: the files are checksummed, and the install is refused if they
+changed. Nothing is run when a skill is installed; it can only do things once an agent that has
+it runs a step.
+
+```bash
+npm run gantrix -- skills add https://github.com/owner/repo/tree/main/skills/my-skill
+# shows the same review, then asks "Install it? [y/N]"  (--yes skips the question)
+```
+
+Skills from GitHub are **pinned to the commit you reviewed** and recorded with their source, so
+the Skills page says where each one came from. A skill is code an agent can run, so only install
+ones you trust. The limits keep it small and plain: GitHub or a direct `SKILL.md` link over
+https (never a private or local address), text files only, at most 100 files, 512 KB each and
+2 MB in all, and no symlinks or submodules. A private repository can't be installed this way;
+download it and install the folder. GitHub allows 60 anonymous lookups an hour, so a busy hour
+may need a wait.
+
 ## Example: build me a website
 
 A project where the agents talk to you as they work:

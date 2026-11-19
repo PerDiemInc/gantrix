@@ -10,6 +10,8 @@ import {
   type JobDto,
   parseEnvText,
   type SkillDto,
+  type SkillLookupDto,
+  type SkillPreviewDto,
   type StepConversationDto,
   type TaskDetailDto,
   type TaskDto,
@@ -133,11 +135,67 @@ export async function listSkills(client: Client): Promise<void> {
   );
 }
 
-export async function addSkill(client: Client, folder: string): Promise<void> {
-  const skill = await client.post<SkillDto>('/api/skills', { path: resolve(folder) });
+export async function addSkill(
+  client: Client,
+  source: string,
+  o: { yes?: boolean } = {},
+): Promise<void> {
+  if (/^https?:\/\//i.test(source)) return addSkillFromWeb(client, source, o);
+  const skill = await client.post<SkillDto>('/api/skills', { path: resolve(source) });
   console.log(
     `Installed ${paint('bold', skill.name)} ${skill.version} (${skill.manifest.tools.length} tools).`,
   );
+}
+
+/** What a skill from the web would do, for a person to read before saying yes. */
+function describeSkill(p: SkillPreviewDto): string {
+  return [
+    `${paint('bold', p.name)} ${p.version}: ${p.description}`,
+    paint('gray', `  from ${p.source}${p.commit ? ` @ ${p.commit.slice(0, 7)}` : ''}`),
+    paint(
+      'gray',
+      `  ${p.files.length} file${p.files.length === 1 ? '' : 's'}, ${(p.totalBytes / 1024).toFixed(1)} KB: ${p.files.map((f) => f.path).join(', ')}`,
+    ),
+    '',
+    'What it can do:',
+    ...p.warnings.map((w) =>
+      w.level === 'caution'
+        ? `  ${paint('yellow', '!')} ${w.text}`
+        : `  ${paint('gray', '·')} ${w.text}`,
+    ),
+    '',
+    'Instructions the agent will follow:',
+    ...p.instructions
+      .split('\n')
+      .slice(0, 25)
+      .map((l) => paint('gray', `  | ${l}`)),
+    p.instructions.split('\n').length > 25 ? paint('gray', '  | …') : '',
+  ].join('\n');
+}
+
+async function addSkillFromWeb(client: Client, link: string, o: { yes?: boolean }): Promise<void> {
+  const found = await client.post<SkillLookupDto>('/api/skills/lookup', { url: link });
+  if (found.kind === 'choices') {
+    console.log(
+      `${found.source} has ${found.choices.length} skills. Run again with one of these links:\n`,
+    );
+    for (const c of found.choices) console.log(`  ${paint('bold', c.name.padEnd(28))} ${c.url}`);
+    return;
+  }
+  console.log(describeSkill(found));
+  if (!o.yes) {
+    const rl = createInterface({ input: stdin, output: stdout });
+    const answer = (await rl.question(paint('yellow', '\nInstall it? [y/N] ')))
+      .trim()
+      .toLowerCase();
+    rl.close();
+    if (answer !== 'y' && answer !== 'yes') return console.log('Not installed.');
+  }
+  const skill = await client.post<SkillDto>('/api/skills/install-online', {
+    previewId: found.id,
+    checksum: found.checksum,
+  });
+  console.log(`Installed ${paint('bold', skill.name)} ${skill.version}.`);
 }
 
 export async function removeSkill(client: Client, ref: string): Promise<void> {

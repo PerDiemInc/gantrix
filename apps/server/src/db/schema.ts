@@ -101,6 +101,9 @@ export const skills = pgTable(
     sourcePath: text('source_path').notNull(), // the skill folder on disk; no code in the DB
     checksum: text('checksum').notNull(), // sha256 of the folder, checked before each use
     manifest: jsonb('manifest').$type<SkillManifest>().notNull(), // parsed SKILL.md frontmatter
+    // Installed from the web: the link it came from (pinned to a commit for GitHub), and that commit.
+    sourceUrl: text('source_url'),
+    sourceRef: text('source_ref'),
     createdAt: createdAt(),
   },
   (t) => [unique('skills_name_version_key').on(t.name, t.version)],
