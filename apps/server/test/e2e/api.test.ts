@@ -8,6 +8,7 @@ import { EventHub } from '../../src/api/event-hub.ts';
 import { buildServer } from '../../src/api/server.ts';
 import { tasks } from '../../src/db/schema.ts';
 import { createTask } from '../../src/engine/commands.ts';
+import { type EnsureOllama, ensureOllama } from '../../src/models/ollama-runtime.ts';
 import { type Engine, startEngine } from './harness.ts';
 
 let e: Engine;
@@ -15,12 +16,18 @@ let app: ReturnType<typeof buildServer>;
 let hub: EventHub;
 const token = 't'.repeat(32);
 const auth = { authorization: `Bearer ${token}` };
+// What the owner chat asks before using Ollama. The real check, unless a test says otherwise.
+let ensure: EnsureOllama = (url, options) => ensureOllama(url, options);
 
 beforeAll(async () => {
   e = await startEngine();
   hub = new EventHub(e.db, e.config.DATABASE_URL);
   await hub.start();
-  app = buildServer({ ...e.deps, hub }, token, false);
+  app = buildServer(
+    { ...e.deps, hub, ensureOllama: (url, options) => ensure(url, options) },
+    token,
+    false,
+  );
 });
 afterAll(async () => {
   await app?.close();
@@ -29,6 +36,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await e.reset();
+  ensure = (url, options) => ensureOllama(url, options);
 });
 
 describe('api', () => {
@@ -298,6 +306,60 @@ describe('api', () => {
     // It changes nothing: no note reached the team, and the project is as it was.
     const detail = (await app.inject({ url: `/api/tasks/${task.id}`, headers: auth })).json();
     expect(detail.status).toBe('succeeded');
+  });
+
+  it('checks Ollama before the owner answers: starts it if needed, and says what to do if it cannot', async () => {
+    await e.addAgent('writer');
+    e.fake.script.plan = () => ({ steps: [] });
+    const task = await createTask(e.deps, { goal: 'Anything' });
+    await e.waitFor(task.id);
+    const talk = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/tasks/${task.id}/discussion`,
+        headers: auth,
+        payload: { text: 'Status?' },
+      });
+    e.fake.script.worker = () => 'All good.';
+
+    // Running already: nothing is started, and nothing is said about it.
+    const running = await talk();
+    expect(running.statusCode).toBe(201);
+    expect(running.json().startedOllama).toBe(false);
+
+    // Not running, and started for the person: the answer says so.
+    const asked: string[] = [];
+    ensure = async (url) => {
+      asked.push(url);
+      return { ok: true, started: true, models: ['fake'] };
+    };
+    const started = await talk();
+    expect(started.statusCode).toBe(201);
+    expect(started.json().startedOllama).toBe(true);
+    expect(asked).toEqual([e.config.OLLAMA_BASE_URL]);
+
+    // Not installed, or no answer: the message says what to do, instead of "fetch failed".
+    ensure = async () => ({
+      ok: false,
+      reason: 'not-installed',
+      message:
+        "Ollama isn't installed on this machine. Install it from https://ollama.com, then try again.",
+    });
+    const missing = await talk();
+    expect(missing.statusCode).toBe(502);
+    expect(missing.json().error).toMatch(/couldn't answer: Ollama isn't installed.*ollama\.com/);
+
+    // Running, but the model was never downloaded.
+    ensure = async () => ({ ok: true, started: false, models: ['other:1b'] });
+    const noModel = await talk();
+    expect(noModel.statusCode).toBe(502);
+    expect(noModel.json().error).toContain(`ollama pull ${e.config.GANTRIX_DEFAULT_MODEL}`);
+
+    // Nothing from the failures was saved.
+    const saved = (
+      await app.inject({ url: `/api/tasks/${task.id}/discussion`, headers: auth })
+    ).json();
+    expect(saved.messages).toHaveLength(4); // the two that worked
   });
 
   it('saves nothing when the owner cannot answer, so the question can be sent again', async () => {

@@ -4,6 +4,7 @@ import { asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { agents, projectDiscussion, type tasks } from '../db/schema.ts';
 import { resolveModelSpec } from '../models/connections.ts';
+import { ensureOllama, hasModel } from '../models/ollama-runtime.ts';
 import { createChatModel } from '../models/provider.ts';
 import { clip } from '../slack/api.ts';
 import { projectFacts } from '../slack/facts.ts';
@@ -110,7 +111,7 @@ export async function discuss(
   deps: EngineDeps,
   task: Task,
   text: string,
-): Promise<{ messages: DiscussionMessageDto[] }> {
+): Promise<{ messages: DiscussionMessageDto[]; startedOllama: boolean }> {
   const { db, config } = deps;
   const question = text.trim();
   const [owner, facts, earlier] = await Promise.all([
@@ -125,11 +126,9 @@ export async function discuss(
   ]);
   // Always the default model: an agent set to Claude Code or Codex can only run steps, and the
   // owner needs no tools. The agent lends its name and what it is for.
-  const model = createChatModel(
-    await resolveModelSpec(db, config, null),
-    'planner',
-    modelDefaults(config),
-  );
+  const spec = await resolveModelSpec(db, config, null);
+  const startedOllama = await ensureModelServer(deps, spec);
+  const model = createChatModel(spec, 'planner', modelDefaults(config));
   const answer = await model.invoke(
     [
       new SystemMessage(
@@ -154,5 +153,30 @@ export async function discuss(
       .returning();
     return [asked, answered];
   });
-  return { messages: saved.flatMap((m) => (m ? [toDto(m)] : [])) };
+  return { messages: saved.flatMap((m) => (m ? [toDto(m)] : [])), startedOllama };
+}
+
+/**
+ * When the model is on Ollama, makes sure it is running (starting it if it is on this machine and
+ * is not), and that the model has been downloaded, so the person gets a fix instead of "fetch
+ * failed". Returns whether Ollama had to be started. Other kinds of model are left alone.
+ */
+async function ensureModelServer(
+  { config, ensureOllama: ensure = ensureOllama }: Pick<EngineDeps, 'config' | 'ensureOllama'>,
+  spec: Awaited<ReturnType<typeof resolveModelSpec>>,
+): Promise<boolean> {
+  const name = spec.model ?? config.GANTRIX_DEFAULT_MODEL;
+  const provider = spec.provider ?? (name.startsWith('openai/') ? 'openai' : 'ollama');
+  if (provider !== 'ollama') return false;
+  const model = spec.provider ? name : name.replace(/^ollama\//, '');
+  const status = await ensure(spec.baseUrl ?? config.OLLAMA_BASE_URL, {
+    ...(spec.headers ? { headers: spec.headers } : {}),
+  });
+  if (!status.ok) throw new Error(status.message);
+  if (!hasModel(status.models, model)) {
+    throw new Error(
+      `Ollama is running, but the model "${model}" isn't downloaded. Run: ollama pull ${model}`,
+    );
+  }
+  return status.started;
 }
