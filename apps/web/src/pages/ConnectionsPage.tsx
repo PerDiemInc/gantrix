@@ -10,6 +10,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { Icon } from '../components/Icon.tsx';
+import { ModelSelect, useModelSources } from '../components/ModelPicker.tsx';
 
 const PROVIDERS: { value: ConnectionProvider; label: string; url: string }[] = [
   { value: 'ollama', label: 'Ollama', url: 'http://127.0.0.1:11434' },
@@ -223,6 +224,14 @@ interface TestResult {
 }
 
 function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: string) => void }) {
+  const { sources } = useModelSources();
+  // Codex also takes "default" (the CLI's own choice), which its list doesn't name.
+  const offered = [
+    ...new Set([
+      ...(c.provider === 'codex' ? ['default'] : []),
+      ...(sources?.find((s) => s.connectionId === c.id)?.models ?? []),
+    ]),
+  ];
   const [model, setModel] = useState(
     c.provider === 'claude-code' ? 'haiku' : c.provider === 'codex' ? 'default' : '',
   );
@@ -247,11 +256,14 @@ function TestPanel({ c, onUsePath }: { c: ConnectionDto; onUsePath?: (path: stri
     <div className="test-panel">
       <div className="row-actions">
         {!service && (
-          <input
+          <ModelSelect
+            models={offered}
             value={model}
-            onChange={(e) => setModel(e.target.value)}
+            onChange={setModel}
+            emptyLabel="Choose a model to test"
             placeholder="model to test"
-            aria-label="Model to test"
+            label="Model to test"
+            typeOnly={c.provider === 'http'}
           />
         )}
         {c.provider === 'http' && (

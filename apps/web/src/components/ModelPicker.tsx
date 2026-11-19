@@ -4,7 +4,89 @@ import { api } from '../api.ts';
 
 const OTHER = '__other__';
 
-/** Where the agent runs, then one of that place's models (or any name typed by hand). */
+/**
+ * A dropdown of models. A name that isn't in the list (a model not installed yet, or one saved
+ * on an agent) stays selectable instead of turning the control into a text box; typing a name by
+ * hand is something you choose with "Other…", and "Back to the list" undoes it. `typeOnly` is for
+ * servers that have no list to offer, where a name has to be typed.
+ */
+export function ModelSelect({
+  models,
+  value,
+  onChange,
+  emptyLabel,
+  placeholder = 'model name',
+  label,
+  typeOnly = false,
+}: {
+  models: readonly string[];
+  value: string;
+  onChange: (model: string) => void;
+  /** The choice that means "no model chosen": the default, or a prompt to pick. */
+  emptyLabel: string;
+  placeholder?: string;
+  /** For screen readers, when no visible label wraps it. */
+  label?: string;
+  typeOnly?: boolean;
+}) {
+  const [typing, setTyping] = useState(false);
+  if (typing || typeOnly) {
+    return (
+      <span className="model-typed">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          aria-label={label ?? 'Model name'}
+        />
+        {!typeOnly && (
+          <button
+            type="button"
+            className="link small"
+            onClick={() => {
+              setTyping(false);
+              if (value && !models.includes(value)) onChange('');
+            }}
+          >
+            Back to the list
+          </button>
+        )}
+      </span>
+    );
+  }
+  return (
+    <select
+      value={value}
+      aria-label={label}
+      onChange={(e) => (e.target.value === OTHER ? setTyping(true) : onChange(e.target.value))}
+    >
+      <option value="">{emptyLabel}</option>
+      {value && !models.includes(value) && (
+        <option value={value}>{models.length ? `${value} (not in the list)` : value}</option>
+      )}
+      {models.map((m) => (
+        <option key={m} value={m}>
+          {m}
+        </option>
+      ))}
+      <option value={OTHER}>Other…</option>
+    </select>
+  );
+}
+
+/** The models each place offers, loaded once; `refresh` asks the servers again. */
+export function useModelSources() {
+  const [sources, setSources] = useState<ModelSource[] | null>(null);
+  const load = (fresh = false) =>
+    api
+      .get<ModelSource[]>(`/api/models${fresh ? '?fresh=true' : ''}`)
+      .then(setSources, () => setSources([]));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load once on mount
+  useEffect(() => void load(), []);
+  return { sources, refresh: () => load(true) };
+}
+
+/** Where the agent runs, then one of that place's models, chosen from a dropdown. */
 export function ModelPicker({
   connectionId,
   model,
@@ -14,27 +96,16 @@ export function ModelPicker({
   model: string;
   onChange: (v: { connectionId: string; model: string }) => void;
 }) {
-  const [sources, setSources] = useState<ModelSource[] | null>(null);
-  const [typing, setTyping] = useState(false);
-  const load = (fresh = false) =>
-    api
-      .get<ModelSource[]>(`/api/models${fresh ? '?fresh=true' : ''}`)
-      .then(setSources, () => setSources([]));
-  // biome-ignore lint/correctness/useExhaustiveDependencies: load once on mount
-  useEffect(() => void load(), []);
+  const { sources, refresh } = useModelSources();
   const source = sources?.find((s) => (s.connectionId ?? '') === connectionId);
   const models = source?.models ?? [];
-  const showInput = typing || (source && !models.length) || (model && !models.includes(model));
   return (
     <>
       <label>
         Runs on
         <select
           value={connectionId}
-          onChange={(e) => {
-            setTyping(false);
-            onChange({ connectionId: e.target.value, model: '' });
-          }}
+          onChange={(e) => onChange({ connectionId: e.target.value, model: '' })}
         >
           {(
             sources ?? [
@@ -49,44 +120,32 @@ export function ModelPicker({
       </label>
       <label>
         Model{' '}
-        <button type="button" className="link small" onClick={() => void load(true)}>
+        <button type="button" className="link small" onClick={() => void refresh()}>
           refresh
         </button>
-        {!showInput ? (
-          <select
-            value={model}
-            onChange={(e) =>
-              e.target.value === OTHER
-                ? setTyping(true)
-                : onChange({ connectionId, model: e.target.value })
-            }
-          >
-            <option value="">
-              {connectionId ? 'Choose a model' : 'Default (GANTRIX_DEFAULT_MODEL)'}
-            </option>
-            {models.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-            <option value={OTHER}>Other…</option>
-          </select>
-        ) : (
-          <input
-            value={model}
-            onChange={(e) => onChange({ connectionId, model: e.target.value })}
-            placeholder={
-              source?.provider === 'claude-code'
-                ? 'sonnet'
-                : source?.provider === 'codex'
-                  ? 'gpt-5.6-sol'
-                  : 'model name'
-            }
-          />
-        )}
+        <ModelSelect
+          models={models}
+          value={model}
+          onChange={(m) => onChange({ connectionId, model: m })}
+          emptyLabel={connectionId ? 'Choose a model' : 'Default (GANTRIX_DEFAULT_MODEL)'}
+          placeholder={
+            source?.provider === 'claude-code'
+              ? 'sonnet'
+              : source?.provider === 'codex'
+                ? 'gpt-5.6-sol'
+                : 'model name'
+          }
+          typeOnly={source?.provider === 'http'}
+        />
         {source?.error && (
           <span className="muted small">
-            Couldn't list models: {source.error}. Type a name instead.
+            Couldn't list models: {source.error}. Start it and press refresh, or choose Other… to
+            type a name.
+          </span>
+        )}
+        {source && !source.error && !models.length && source.provider !== 'http' && (
+          <span className="muted small">
+            No models found here yet. Press refresh, or choose Other… to type a name.
           </span>
         )}
       </label>

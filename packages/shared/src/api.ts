@@ -274,6 +274,26 @@ export interface SystemDto {
   sampledAt: string;
 }
 
+/** One turn in a project's discussion with its owner. */
+export interface DiscussionMessageDto {
+  id: string;
+  role: 'user' | 'owner';
+  text: string;
+  createdAt: string;
+}
+
+/** A project's discussion with its owner, oldest message first. */
+export interface DiscussionDto {
+  owner: {
+    /** The lead agent's name, or "Project owner" when no agent leads the project. */
+    name: string;
+    /** The agent leading the project, if any. */
+    agentId: string | null;
+    avatar: string | null;
+  };
+  messages: DiscussionMessageDto[];
+}
+
 /** One agent (or the planner, or a judge) holding work right now. */
 export interface LiveAgentDto {
   /** The step's id; for the planner, the project's id. */

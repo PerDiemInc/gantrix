@@ -304,6 +304,25 @@ export const taskMessages = pgTable(
   (t) => [index('task_messages_task_idx').on(t.taskId, t.createdAt)],
 );
 
+// A conversation between the user and the project's owner about where the project stands.
+// Unlike task_messages it never reaches the agents or the planner: it changes nothing.
+export const projectDiscussion = pgTable(
+  'project_discussion',
+  {
+    id: id(),
+    taskId: uuid('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    role: text('role').$type<'user' | 'owner'>().notNull(),
+    text: text('text').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('project_discussion_role_valid', sql`${t.role} in ('user', 'owner')`),
+    index('project_discussion_task_idx').on(t.taskId, t.createdAt),
+  ],
+);
+
 // Append-only audit log; also replays missed live events (SSE Last-Event-ID).
 export const events = pgTable(
   'events',

@@ -30,7 +30,7 @@ const TIME_PRESETS: [number, string][] = [
   [480, '8 h'],
 ];
 
-function NewProject({ onClose }: { onClose: () => void }) {
+export function NewProject({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const slackStatus = useSlackStatus();
@@ -616,8 +616,6 @@ export function ProjectsPage({ initialView = 'projects' }: { initialView?: WorkV
     [],
   );
   const agents = useAgents();
-  const [creating, setCreating] = useState(false);
-  const [creatingJob, setCreatingJob] = useState(false);
   const [view, setView] = useState<WorkView>(initialView);
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -641,32 +639,6 @@ export function ProjectsPage({ initialView = 'projects' }: { initialView?: WorkV
           <p className="muted">
             Each project is a goal your agents work on together. Open one to follow it and steer it.
           </p>
-        </div>
-        <div className="row-actions">
-          {!creating && (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => {
-                setView('projects');
-                setCreating(true);
-              }}
-            >
-              <Icon name="plus" /> New Project
-            </button>
-          )}
-          {!creatingJob && (
-            <button
-              type="button"
-              className="primary"
-              onClick={() => {
-                setView('jobs');
-                setCreatingJob(true);
-              }}
-            >
-              <Icon name="plus" /> New Job
-            </button>
-          )}
         </div>
       </header>
 
@@ -699,14 +671,13 @@ export function ProjectsPage({ initialView = 'projects' }: { initialView?: WorkV
       )}
       {view === 'jobs' && (
         <>
-          <JobsPanel creating={creatingJob} onClose={() => setCreatingJob(false)} />
+          <JobsPanel />
           <p className="muted small">
             Each run of a job is a project: open the Projects tab to follow it.
           </p>
         </>
       )}
       {view === 'projects' && <PrScanSettings taskId="github-pr-scan" builtIn />}
-      {view === 'projects' && creating && <NewProject onClose={() => setCreating(false)} />}
 
       {view === 'projects' && (
         <>
@@ -745,9 +716,9 @@ export function ProjectsPage({ initialView = 'projects' }: { initialView?: WorkV
                 Add agents with skills, or run <code>npm run gantrix -- team add</code> for a
                 ready-made team. Then start your first project.
               </p>
-              <button type="button" className="primary" onClick={() => setCreating(true)}>
+              <a className="button primary" href="#/new/project">
                 <Icon name="plus" /> New project
-              </button>
+              </a>
             </section>
           )}
           {data && all.length > 0 && !shown.length && (

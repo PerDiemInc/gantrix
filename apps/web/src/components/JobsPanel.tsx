@@ -42,7 +42,7 @@ function scheduleText(job: JobDto) {
 
 const clipText = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
-function JobForm({
+export function JobForm({
   editing,
   onClose,
   onSaved,
@@ -311,7 +311,7 @@ function JobForm({
   );
 }
 
-export function JobsPanel({ creating, onClose }: { creating: boolean; onClose: () => void }) {
+export function JobsPanel() {
   const { data, reload } = useLive(() => api.get<JobDto[]>('/api/jobs'), '/api/stream', []);
   const [editing, setEditing] = useState<JobDto | null>(null);
   const [message, setMessage] = useState('');
@@ -335,26 +335,24 @@ export function JobsPanel({ creating, onClose }: { creating: boolean; onClose: (
     }
   };
 
-  if (!creating && !editing && jobs.length === 0) {
+  if (!editing && jobs.length === 0) {
     return (
       <section className="card empty">
         <h2>No jobs yet</h2>
-        <p className="muted">
-          A job is a saved list of steps, run on demand or on a schedule. Press <b>+ New Job</b>.
-        </p>
+        <p className="muted">A job is a saved list of steps, run on demand or on a schedule.</p>
+        <a className="button primary" href="#/new/job">
+          <Icon name="plus" /> New job
+        </a>
       </section>
     );
   }
   return (
     <section className="stack" aria-label="Jobs">
-      {(creating || editing) && (
+      {editing && (
         <JobForm
-          key={editing?.id ?? 'new'}
+          key={editing.id}
           editing={editing}
-          onClose={() => {
-            setEditing(null);
-            onClose();
-          }}
+          onClose={() => setEditing(null)}
           onSaved={reload}
         />
       )}
