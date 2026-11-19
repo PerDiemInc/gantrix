@@ -92,7 +92,6 @@ export function NewMenu() {
         <Icon name="plus" size={14} /> New <Icon name="chevronDown" size={14} />
       </button>
       {open && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: the menu role is what makes it interactive; keys are handled for arrow-key navigation
         <div
           ref={list}
           id={menuId}

@@ -352,3 +352,9 @@ footer .foot-links a { color: var(--muted); }
 ul.safety li > a { color: inherit; }
 .page section { display: grid; gap: 14px; min-width: 0; }
 .page section > * { margin-block: 0; }
+
+/* click paths: where to click in another app, as text */
+ol.click-path { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+ol.click-path li { background: var(--surface); border: 2px solid var(--edge); border-radius: 8px; padding: 2px 10px; font-size: 14px; font-weight: 500; }
+ol.click-path li + li::before { content: "\203A"; margin-right: 8px; color: var(--muted); }
+.page .shot { margin: 14px 0 0; }

@@ -449,6 +449,14 @@ export function ConnectionsPage() {
           Agents use the local Ollama unless you give them a connection. Pick one when you add an
           agent. GitHub and Slack connections hold the credentials jobs and scans use.
         </p>
+        <p className="slack-banner">
+          <span>
+            <b>Talk to your agents in Slack.</b> A step-by-step guide gets the tokens for you.
+          </span>
+          <a className="button primary" href="#/connect/slack">
+            Connect Slack
+          </a>
+        </p>
         <ul className="cards">
           {list.map((c) => (
             <li key={c.id} className={`item${editing?.id === c.id ? ' editing' : ''}`}>

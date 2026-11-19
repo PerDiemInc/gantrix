@@ -7,6 +7,7 @@ import { useRoute } from './hooks.ts';
 import { AgentsPage } from './pages/AgentsPage.tsx';
 import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
 import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
+import { ConnectSlackPage } from './pages/ConnectSlackPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
 import { NewPage } from './pages/NewPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
@@ -82,11 +83,13 @@ export function App() {
     route.page === 'live' ||
     route.page === 'jobs'
       ? 'projects'
-      : route.page === 'new'
-        ? route.kind === 'agent'
-          ? 'agents'
-          : 'projects'
-        : route.page;
+      : route.page === 'connect'
+        ? 'connections'
+        : route.page === 'new'
+          ? route.kind === 'agent'
+            ? 'agents'
+            : 'projects'
+          : route.page;
   return (
     <>
       <button
@@ -130,6 +133,7 @@ export function App() {
           {route.page === 'projects' && <ProjectsPage />}
           {route.page === 'jobs' && <ProjectsPage initialView="jobs" />}
           {route.page === 'new' && <NewPage kind={route.kind} />}
+          {route.page === 'connect' && <ConnectSlackPage />}
           {route.page === 'project' && <ProjectPage id={route.id} />}
           {route.page === 'logs' && (
             <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />

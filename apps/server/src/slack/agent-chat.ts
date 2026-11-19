@@ -4,6 +4,7 @@ import { agents, connections } from '../db/schema.ts';
 import { type EngineDeps, modelDefaults } from '../engine/deps.ts';
 import { resolveHeaders, resolveModelSpec } from '../models/connections.ts';
 import { createChatModel } from '../models/provider.ts';
+import { describeWork, isStatusQuestion, loadAgentWork, statusReply } from './agent-work.ts';
 import { clip, SlackApi } from './api.ts';
 import { type SlackEvent, SocketMode } from './socket.ts';
 
@@ -31,13 +32,17 @@ export function parseAgentMessage(raw: string, botUserId: string, named: Agent[]
   return { agent: null, text };
 }
 
-const SYSTEM = (agent: Agent) =>
+const SYSTEM = (agent: Agent, work: string) =>
   [
     `You are ${agent.name}, an AI agent. ${agent.description}`.trim(),
     agent.systemPrompt,
     'You are chatting with a teammate in Slack. Reply briefly (at most 8 short lines) in Slack',
     'formatting (*bold*, • bullets). You cannot run tools or change files in this chat; if the',
     'work needs that, say it should be started as a Gantrix project or job.',
+    'When you are asked about status, progress, what you are doing or what is blocked, summarize',
+    'your current work below in your own voice: what you are on, what is waiting for a person, and',
+    'what you finished. Use only these facts; never invent tasks, results or numbers.',
+    `\n${work}`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -193,9 +198,13 @@ export class AgentSlack {
       return;
     }
     if (!parsed.text) {
-      await reply(`Hi, I'm *${agent.name}*. ${clip(agent.description, 200)} Ask me something.`);
+      await reply(
+        `Hi, I'm *${agent.name}*. ${clip(agent.description, 200)} Ask me something, or ask for my status.`,
+      );
       return;
     }
+    // Fresh on every message, so "what are you on?" is answered from now, not from earlier.
+    const work = await loadAgentWork(db, agent.id).catch(() => null);
     try {
       const history = await this.#history(live, event, thread, agent);
       const model = createChatModel(
@@ -204,13 +213,23 @@ export class AgentSlack {
         modelDefaults(config),
       );
       const answer = await model.invoke(
-        [new SystemMessage(SYSTEM(agent)), ...history, new HumanMessage(parsed.text)],
+        [
+          new SystemMessage(SYSTEM(agent, work ? describeWork(work) : '')),
+          ...history,
+          new HumanMessage(parsed.text),
+        ],
         { signal: AbortSignal.timeout(180_000) },
       );
       const text =
         typeof answer.content === 'string' ? answer.content : JSON.stringify(answer.content);
       await reply(text.trim() || '…');
     } catch (error) {
+      // A model that is down shouldn't leave "what's your status?" unanswered: the facts are
+      // in the database, so say them plainly.
+      if (work && isStatusQuestion(parsed.text)) {
+        await reply(statusReply(agent.name, work)).catch(() => undefined);
+        return;
+      }
       await reply(
         `${agent.name} couldn't answer: ${clip(error instanceof Error ? error.message : String(error), 300)}`,
       ).catch(() => undefined);

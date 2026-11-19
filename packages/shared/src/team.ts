@@ -75,3 +75,9 @@ export const TEAM = [
 ] as const;
 
 export type TeamRole = (typeof TEAM)[number]['name'];
+
+/**
+ * Names that mean "the agent who keeps a project on track", best first. The project owner in the
+ * dashboard's Owner chat, and the agent the Slack guide suggests turning on first.
+ */
+export const OWNER_AGENT_NAMES = ['cpo', 'pm', 'project-manager', 'product-manager', 'owner'];

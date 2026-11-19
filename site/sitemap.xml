@@ -2,6 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://perdieminc.github.io/gantrix/</loc><lastmod>2026-11-16</lastmod></url>
   <url><loc>https://perdieminc.github.io/gantrix/local-ai-agents-ollama/</loc><lastmod>2026-11-16</lastmod></url>
+  <url><loc>https://perdieminc.github.io/gantrix/connect-slack/</loc><lastmod>2026-11-19</lastmod></url>
   <url><loc>https://perdieminc.github.io/gantrix/vs/crewai/</loc><lastmod>2026-11-16</lastmod></url>
   <url><loc>https://perdieminc.github.io/gantrix/vs/langgraph/</loc><lastmod>2026-11-16</lastmod></url>
 </urlset>
