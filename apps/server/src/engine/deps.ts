@@ -2,6 +2,7 @@ import type { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import type { ModelDefaults } from '../models/provider.ts';
+import type { SkillFetch } from '../skills/remote.ts';
 import type { CheckUrl } from '../skills/tools/verify.ts';
 import type { Queues } from './queues.ts';
 
@@ -12,6 +13,8 @@ export interface EngineDeps {
   config: Config;
   /** How deployed URLs are fetched; tests replace it. Default: a real public fetch. */
   checkUrl?: CheckUrl;
+  /** How skills are downloaded from the web; tests replace it. Default: a guarded public fetch. */
+  skillFetch?: SkillFetch;
 }
 
 export const modelDefaults = (config: Config): ModelDefaults => ({

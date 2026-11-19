@@ -42,8 +42,52 @@ export interface SkillDto extends SkillRef {
   sourcePath: string;
   checksum: string;
   manifest: SkillManifest;
+  /** Where it was installed from on the web, pinned to a commit; null for a local folder. */
+  sourceUrl: string | null;
+  /** The commit it was pinned to. */
+  sourceRef: string | null;
   createdAt: string;
 }
+
+/** Something worth knowing before installing a skill: what it can do on this machine. */
+export interface SkillReviewWarning {
+  level: 'info' | 'caution';
+  text: string;
+}
+
+/** A skill downloaded to a holding area and shown to the user, not yet installed. */
+export interface SkillPreviewDto {
+  kind: 'skill';
+  /** Pass this back to install exactly what was shown. Expires. */
+  id: string;
+  expiresAt: string;
+  /** Where it is from, for display: github.com/owner/repo/path. */
+  source: string;
+  /** The pinned link it will be recorded with. */
+  sourceUrl: string;
+  /** The commit it was pinned to, for GitHub sources. */
+  commit: string | null;
+  name: string;
+  version: string;
+  description: string;
+  manifest: SkillManifest;
+  /** The text the agent is given. */
+  instructions: string;
+  files: { path: string; size: number }[];
+  totalBytes: number;
+  warnings: SkillReviewWarning[];
+  /** Of the downloaded files; install refuses if they changed since. */
+  checksum: string;
+}
+
+/** A link to a place with several skills: pick one to review. */
+export interface SkillChoicesDto {
+  kind: 'choices';
+  source: string;
+  choices: { name: string; path: string; url: string }[];
+}
+
+export type SkillLookupDto = SkillPreviewDto | SkillChoicesDto;
 
 export interface TaskDto {
   id: string;
