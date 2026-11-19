@@ -43,8 +43,8 @@ and what is unknown. Be brief: at most 6 short lines. Use Slack formatting (*bol
 Don't invent progress, files or numbers.`;
 
 /**
- * Two-way Slack. Out: each project with Slack on gets one thread in SLACK_CHANNEL_ID, and its
- * progress posts there. In (Socket Mode, needs SLACK_APP_TOKEN): replies in the thread steer
+ * Two-way Slack. Out: each project with Slack on gets one thread in the Slack channel (Settings →
+ * Slack), and its progress posts there. In (Socket Mode, needs the app-level token): replies in the thread steer
  * the project or answer an agent's question; mentions ask about it or change it.
  */
 export class SlackBridge {
@@ -68,7 +68,7 @@ export class SlackBridge {
   ) {
     const { config } = deps;
     if (!config.SLACK_BOT_TOKEN || !config.SLACK_CHANNEL_ID) {
-      throw new Error('SlackBridge needs SLACK_BOT_TOKEN and SLACK_CHANNEL_ID');
+      throw new Error('SlackBridge needs a bot token and a channel (Settings → Slack)');
     }
     this.#deps = deps;
     this.#hub = hub;
@@ -344,7 +344,7 @@ export class SlackBridge {
     const allowed = this.#deps.config.SLACK_ALLOWED_USERS.includes(ev.user);
     const denied = () =>
       reply(
-        `Only people listed in SLACK_ALLOWED_USERS can change this project. Ask the Gantrix owner to add your Slack id (${ev.user}).`,
+        `Only people listed under Settings → Slack can change this project. Ask the Gantrix owner to add your Slack id (${ev.user}).`,
       );
 
     if (!mention) {

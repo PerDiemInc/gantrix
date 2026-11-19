@@ -18,6 +18,7 @@ export type Route =
   | { page: 'connections' }
   | { page: 'approvals' }
   | { page: 'system' }
+  | { page: 'settings' }
   | { page: 'live' };
 
 export function parseHash(hash: string): Route {
@@ -40,6 +41,7 @@ export function parseHash(hash: string): Route {
     page === 'connections' ||
     page === 'approvals' ||
     page === 'system' ||
+    page === 'settings' ||
     page === 'live'
   ) {
     return { page };

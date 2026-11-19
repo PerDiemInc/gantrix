@@ -2671,3 +2671,27 @@ a.button.primary {
 .skill-hit p {
   margin: 4px 0 0;
 }
+
+/* ---------- settings ---------- */
+.settings-page {
+  max-width: 820px;
+}
+.setting-field {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+}
+.setting-field > label {
+  font-weight: 500;
+}
+.setting-field p {
+  margin: 0;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 4px 20px;
+}
+.settings-grid input[type="number"] {
+  width: 100%;
+}

@@ -27,26 +27,30 @@ console.log('\n→ Applying migrations…');
 run('npm', ['run', 'db:migrate']);
 
 // Local agents run on Ollama; warn (don't block) if it is missing or the model isn't pulled.
-const ollama = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434';
-// The default model is a setting saved in the database (Agents → Default model).
+// The default model and Ollama's address are settings saved in the database (Agents → Default
+// model, Settings → Ollama), not environment variables.
 const saved = await (async () => {
   const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  const fallback = { model: DEFAULT_MODEL, onConnection: false, ollama: 'http://127.0.0.1:11434' };
   try {
     await db.connect();
     const r = await db.query(
-      "select value->>'model' as model, value->>'connectionId' as connection from app_settings where key = 'default_model'",
+      "select key, value from app_settings where key in ('default_model', 'ollama')",
     );
+    const row = (key: string) => r.rows.find((x: { key: string }) => x.key === key)?.value;
     return {
-      model: r.rows[0]?.model || DEFAULT_MODEL,
-      onConnection: Boolean(r.rows[0]?.connection),
+      model: row('default_model')?.model || fallback.model,
+      onConnection: Boolean(row('default_model')?.connectionId),
+      ollama: String(row('ollama')?.baseUrl || fallback.ollama).replace(/\/+$/, ''),
     };
   } catch {
-    return { model: DEFAULT_MODEL, onConnection: false };
+    return fallback;
   } finally {
     await db.end().catch(() => {});
   }
 })();
 const model = saved.model;
+const ollama = saved.ollama;
 try {
   const res = await fetch(`${ollama}/api/tags`, { signal: AbortSignal.timeout(3000) });
   const { models = [] } = (await res.json()) as { models?: { name: string }[] };

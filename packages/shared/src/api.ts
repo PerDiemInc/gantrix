@@ -397,6 +397,77 @@ export interface DefaultModelDto extends DefaultModelSettingDto {
   builtIn: string;
 }
 
+/** What a new project starts with: limits, and how careful it is. */
+export interface TaskDefaultsDto {
+  maxMinutes: number;
+  maxTokens: number;
+  maxReplans: number;
+  maxStepAttempts: number;
+  /** New projects ask before shell, web, MCP and email tools. */
+  askFirst: boolean;
+  /** Each step works in its own folder. */
+  isolatedSteps: boolean;
+  /** Model calls at once per worker. */
+  llmConcurrency: number;
+}
+
+/**
+ * The settings chosen on the Settings page, as saved. Secrets are never returned: a token is only
+ * reported as set or not.
+ */
+export interface RuntimeSettingsDto {
+  ollama: { baseUrl: string; builtIn: string };
+  taskDefaults: TaskDefaultsDto;
+  taskDefaultsBuiltIn: TaskDefaultsDto;
+  slack: {
+    botTokenSet: boolean;
+    appTokenSet: boolean;
+    channelId: string | null;
+    allowedUsers: string[];
+    dashboardUrl: string;
+    dashboardUrlBuiltIn: string;
+    /** Projects can post to a thread (bot token and channel set). */
+    posts: boolean;
+    /** Replies in the thread reach the project (an app token too). */
+    listens: boolean;
+  };
+}
+
+/** The result of checking an Ollama address. */
+/** What looking for an Ollama on this machine turned up. */
+export interface OllamaDetectDto {
+  /** The address to use, or null when none was found. */
+  baseUrl: string | null;
+  /** It was not running, so Gantrix started it. */
+  started: boolean;
+  models: string[];
+  /** The addresses that were tried. */
+  tried: string[];
+  message: string | null;
+}
+
+export interface OllamaCheckDto {
+  ok: boolean;
+  /** It was not running, so Gantrix started it. */
+  started: boolean;
+  /** The models it has downloaded. */
+  models: string[];
+  /** Why it is not usable, in words. */
+  message: string | null;
+}
+
+/** The result of testing the saved Slack settings. */
+export interface SlackSettingsTestDto {
+  ok: boolean;
+  summary: string;
+  bot: string | null;
+  team: string | null;
+  socketMode: boolean;
+  problems: { field: 'bot' | 'app'; message: string }[];
+  /** found: the bot can see the channel; invite: it can't yet. */
+  channel: 'found' | 'invite' | null;
+}
+
 /** The answer to a message to the project owner. */
 export interface DiscussionReplyDto {
   /** The message and the owner's answer, saved together. */

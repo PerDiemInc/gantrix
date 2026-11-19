@@ -15,6 +15,8 @@ import { taskRoutes } from './routes/tasks.ts';
 
 export interface ApiDeps extends EngineDeps {
   hub: EventHub;
+  /** Called after the Slack settings change, so the Slack bridge can restart on them. */
+  onSlackSettings?: () => Promise<void>;
 }
 
 /** Postgres error code, whether Drizzle wrapped the error or not. */
