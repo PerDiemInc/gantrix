@@ -57,7 +57,7 @@ export async function runPlanJob(
   const why = await whyReplan(deps, task.id, job.version, all);
 
   const chat = createChatModel(
-    await resolveModelSpec(db, deps.config, null),
+    await resolveModelSpec(db, null),
     'planner',
     modelDefaults(deps.config),
   );

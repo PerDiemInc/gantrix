@@ -22,6 +22,7 @@ import {
   type WorkJob,
 } from '../../src/engine/queues.ts';
 import { buildSupervisor, tick } from '../../src/engine/supervisor.ts';
+import { saveDefaultModel } from '../../src/settings.ts';
 import { installSkill } from '../../src/skills/loader.ts';
 import { startFakeOllama } from './fake-ollama.ts';
 
@@ -54,7 +55,6 @@ export async function startEngine() {
     DATABASE_URL: databaseUrl,
     REDIS_URL,
     OLLAMA_BASE_URL: fake.url,
-    GANTRIX_DEFAULT_MODEL: 'fake',
     // The engine tests exercise approvals, so new tasks ask unless a test says otherwise.
     GANTRIX_APPROVE_ALL: 'false',
     GANTRIX_TOKEN: 't'.repeat(32),
@@ -64,6 +64,7 @@ export async function startEngine() {
   });
   const { db, pool } = createDb(databaseUrl);
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)) });
+  await saveDefaultModel(db, { connectionId: null, model: 'fake' });
   await pool.query('create schema if not exists langgraph');
   const checkpointer = new PostgresSaver(pool, undefined, { schema: 'langgraph' });
   await checkpointer.setup();
@@ -138,12 +139,16 @@ export async function startEngine() {
     throw new Error(`Timed out waiting for task ${taskId} (status: ${task?.status})`);
   }
 
+  /** The default model is a saved setting; the engine tests run on the fake model. */
+  const useFakeModel = () => saveDefaultModel(db, { connectionId: null, model: 'fake' });
+
   async function reset() {
     fake.reset();
     await db.execute(
-      'truncate tasks, jobs, agents, skills, connections, task_messages, project_discussion cascade',
+      'truncate tasks, jobs, agents, skills, connections, task_messages, project_discussion, app_settings cascade',
     );
     await rm(config.GANTRIX_SKILLS_DIR, { recursive: true, force: true });
+    await useFakeModel();
   }
 
   async function close() {

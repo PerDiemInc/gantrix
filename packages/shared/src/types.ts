@@ -80,6 +80,9 @@ export interface HttpRequestConfig {
   replyPath: string;
 }
 
+/** The model used until one is chosen on the Agents page: a small, capable local model. */
+export const DEFAULT_MODEL = 'qwen3:8b';
+
 export const DEFAULT_HTTP_REQUEST: HttpRequestConfig = {
   method: 'POST',
   contentType: 'application/json',

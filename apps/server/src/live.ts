@@ -1,11 +1,12 @@
 import type {
+  DefaultModelSettingDto,
   LiveAgentDto,
   LiveDto,
   LoadedModelDto,
   ModelProvider,
   ModelServerDto,
 } from '@gantrix/shared';
-import { projectTitle, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
+import { DEFAULT_MODEL, projectTitle, TERMINAL_TASK_STATUSES } from '@gantrix/shared';
 import { and, asc, count, eq, inArray, notInArray } from 'drizzle-orm';
 import type { Config } from './config.ts';
 import type { Db } from './db/client.ts';
@@ -17,6 +18,7 @@ import {
   isModelConnection,
   resolveHeaders,
 } from './models/connections.ts';
+import { loadDefaultModel } from './settings.ts';
 
 type Connection = typeof connections.$inferSelect;
 type AgentModel = Pick<
@@ -37,10 +39,13 @@ export type ModelUse = Pick<LiveAgentDto, 'model' | 'provider' | 'connection' | 
  * throws and never reads header values: a broken setup shows as it is saved.
  */
 export function describeModel(
-  config: Pick<Config, 'GANTRIX_DEFAULT_MODEL' | 'GANTRIX_DEFAULT_CONNECTION' | 'OLLAMA_BASE_URL'>,
+  config: Pick<Config, 'OLLAMA_BASE_URL'>,
   rows: Connection[],
   agent: Omit<AgentModel, 'id'> | null,
+  /** The default model chosen on the Agents page. */
+  def: DefaultModelSettingDto,
 ): ModelUse {
+  const fallback = def.model ?? DEFAULT_MODEL;
   const viaConnection = (
     c: Connection & { provider: ModelProvider },
     model: string | null,
@@ -49,9 +54,8 @@ export function describeModel(
     return {
       model:
         model ??
-        (c.name === config.GANTRIX_DEFAULT_CONNECTION || c.provider === 'ollama'
-          ? config.GANTRIX_DEFAULT_MODEL
-          : 'default'),
+        (c.id === def.connectionId ? def.model : c.provider === 'ollama' ? fallback : null) ??
+        'default',
       provider: c.provider,
       connection: c.name,
       // Claude Code and Codex run here but send the prompts to their vendors.
@@ -61,7 +65,7 @@ export function describeModel(
   const own = agent?.connectionId ? rows.find((c) => c.id === agent.connectionId) : undefined;
   if (own && isModelConnection(own)) return viaConnection(own, agent?.model ?? null);
   if (agent?.model || agent?.modelBaseUrl) {
-    const name = agent.model ?? config.GANTRIX_DEFAULT_MODEL;
+    const name = agent.model ?? fallback;
     const provider: ModelProvider = name.startsWith('openai/') ? 'openai' : 'ollama';
     const url = agent.modelBaseUrl ?? (provider === 'ollama' ? config.OLLAMA_BASE_URL : '');
     return {
@@ -71,12 +75,11 @@ export function describeModel(
       isLocal: isLocalUrl(url),
     };
   }
-  const fallback = config.GANTRIX_DEFAULT_CONNECTION
-    ? rows.find((c) => c.name === config.GANTRIX_DEFAULT_CONNECTION)
-    : undefined;
-  if (fallback && isModelConnection(fallback)) return viaConnection(fallback, null);
+  const chosen = def.connectionId ? rows.find((c) => c.id === def.connectionId) : undefined;
+  if (chosen && isModelConnection(chosen)) return viaConnection(chosen, def.model);
   return {
-    model: config.GANTRIX_DEFAULT_MODEL,
+    // A saved connection that is gone, or can't be a default, means the built-in model.
+    model: def.connectionId ? DEFAULT_MODEL : fallback,
     provider: 'ollama',
     connection: null,
     isLocal: isLocalUrl(config.OLLAMA_BASE_URL),
@@ -151,7 +154,12 @@ async function sampleServers(config: Config, rows: Connection[]): Promise<ModelS
   return Promise.all([...targets].map(([url, t]) => sampleServer(t.name, url, t.headers)));
 }
 
-async function liveAgents(db: Db, config: Config, rows: Connection[]): Promise<LiveAgentDto[]> {
+async function liveAgents(
+  db: Db,
+  config: Config,
+  rows: Connection[],
+  def: DefaultModelSettingDto,
+): Promise<LiveAgentDto[]> {
   const [active, planning] = await Promise.all([
     db
       .select({ step: steps, task: tasks, agent: agents })
@@ -168,13 +176,15 @@ async function liveAgents(db: Db, config: Config, rows: Connection[]): Promise<L
       .orderBy(asc(steps.startedAt)),
     db.select().from(tasks).where(eq(tasks.status, 'planning')).orderBy(asc(tasks.createdAt)),
   ]);
-  const planner = describeModel(config, rows, null);
+  const planner = describeModel(config, rows, null, def);
   return [
     ...active.map(({ step, task, agent }): LiveAgentDto => {
       // The judge runs on the default model, whatever the agent that did the work used.
       const judging = step.status === 'judging';
       const use =
-        judging || !agent ? planner : describeModel(config, rows, agentForProject(task, agent));
+        judging || !agent
+          ? planner
+          : describeModel(config, rows, agentForProject(task, agent), def);
       return {
         id: step.id,
         role: judging ? 'judge' : 'agent',
@@ -215,9 +225,9 @@ async function liveAgents(db: Db, config: Config, rows: Connection[]): Promise<L
 
 /** Who is working right now, on which model, and which models are loaded in memory. */
 export async function sampleLive(db: Db, config: Config): Promise<LiveDto> {
-  const rows = await db.select().from(connections);
+  const [rows, def] = await Promise.all([db.select().from(connections), loadDefaultModel(db)]);
   const [working, servers, queued] = await Promise.all([
-    liveAgents(db, config, rows),
+    liveAgents(db, config, rows, def),
     sampleServers(config, rows),
     db
       .select({ n: count() })
@@ -230,7 +240,7 @@ export async function sampleLive(db: Db, config: Config): Promise<LiveDto> {
     agents: working,
     queued,
     servers,
-    defaultModel: describeModel(config, rows, null).model,
+    defaultModel: describeModel(config, rows, null, def).model,
     sampledAt: new Date().toISOString(),
   };
 }

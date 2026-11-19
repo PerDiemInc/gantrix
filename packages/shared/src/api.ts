@@ -24,7 +24,7 @@ export interface AgentDto {
   systemPrompt: string;
   model: string | null;
   modelBaseUrl: string | null;
-  /** A saved model connection; null = the default (Ollama, or GANTRIX_DEFAULT_CONNECTION). */
+  /** A saved model connection; null = the default model's place (see Agents → Default model). */
   connectionId: string | null;
   /** A Slack connection (bot and app token): people can chat with this agent in Slack. */
   slackConnectionId: string | null;
@@ -373,6 +373,28 @@ export interface DiscussionDto {
     avatar: string | null;
   };
   messages: DiscussionMessageDto[];
+}
+
+/** The saved choice of default model: where it runs and which model. Both null = the built-in. */
+export interface DefaultModelSettingDto {
+  /** A saved model connection (Ollama, OpenAI or Anthropic); null = the local Ollama. */
+  connectionId: string | null;
+  /** null = the built-in model. */
+  model: string | null;
+}
+
+/** The default model, as saved and as it works out now. */
+export interface DefaultModelDto extends DefaultModelSettingDto {
+  /** What the planner, the judges and every agent without its own model use right now. */
+  effective: {
+    model: string;
+    provider: ModelProvider;
+    /** The connection's name; null for the local Ollama. */
+    connection: string | null;
+    isLocal: boolean;
+  };
+  /** The model used when none is chosen. */
+  builtIn: string;
 }
 
 /** The answer to a message to the project owner. */

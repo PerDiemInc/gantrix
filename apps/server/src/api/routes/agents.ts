@@ -26,7 +26,7 @@ const AgentFields = z.object({
     .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'name must be lowercase letters, digits and dashes'),
   description: z.string().max(500),
   systemPrompt: z.string().max(20_000),
-  model: z.string().min(1).nullable(), // null → GANTRIX_DEFAULT_MODEL
+  model: z.string().min(1).nullable(), // null → the default model
   modelBaseUrl: z.url().nullable(), // null → OLLAMA_BASE_URL
   connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
   // A Slack connection with a bot token and an app-level token; null → not in Slack.

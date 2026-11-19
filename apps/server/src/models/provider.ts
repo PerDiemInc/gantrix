@@ -14,7 +14,7 @@ export type ModelRole = 'planner' | 'worker' | 'judge';
 export interface ModelSpec {
   model: string | null;
   baseUrl: string | null;
-  /** Set when the agent (or GANTRIX_DEFAULT_CONNECTION) uses a saved connection. */
+  /** Set when the agent (or the default model) uses a saved connection. */
   provider?: ModelProvider;
   /** Already resolved: "env:NAME" values are replaced by the worker's environment. */
   headers?: Record<string, string>;

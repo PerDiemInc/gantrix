@@ -466,7 +466,7 @@ export class SlackBridge {
     const { db, config } = this.#deps;
     const facts = await projectFacts(db, task, detailed);
     const model = createChatModel(
-      await resolveModelSpec(db, config, null),
+      await resolveModelSpec(db, null),
       'planner',
       modelDefaults(config),
     );

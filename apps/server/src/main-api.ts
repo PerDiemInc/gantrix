@@ -2,7 +2,7 @@ import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { Redis } from 'ioredis';
 import { EventHub } from './api/event-hub.ts';
 import { buildServer } from './api/server.ts';
-import { loadConfig } from './config.ts';
+import { loadConfig, removedEnvWarnings } from './config.ts';
 import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
 import { prTasks } from './integrations/pr-tasks.ts';
@@ -12,6 +12,7 @@ import { SlackBridge } from './slack/bridge.ts';
 import { seedDefaultTeam } from './team-seed.ts';
 
 const config = loadConfig();
+for (const warning of removedEnvWarnings()) console.warn(`Warning: ${warning}`);
 if (!config.GANTRIX_TOKEN) {
   console.error('GANTRIX_TOKEN is required to start the API. Generate one: openssl rand -hex 32');
   process.exit(1);

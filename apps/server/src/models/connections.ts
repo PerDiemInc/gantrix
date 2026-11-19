@@ -1,8 +1,13 @@
-import { type ConnectionDto, isServiceProvider, type ModelProvider } from '@gantrix/shared';
+import {
+  type ConnectionDto,
+  DEFAULT_MODEL,
+  isServiceProvider,
+  type ModelProvider,
+} from '@gantrix/shared';
 import { eq } from 'drizzle-orm';
-import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
 import { type agents, connections, type tasks } from '../db/schema.ts';
+import { loadDefaultModel } from '../settings.ts';
 import { DEFAULT_URLS, type ModelSpec } from './provider.ts';
 
 type Connection = typeof connections.$inferSelect;
@@ -130,47 +135,48 @@ export function agentForProject<A extends AgentModel>(task: ProjectModels, agent
 }
 
 /**
- * The model an agent's steps use. Without an agent (planner and judges) or without its own
- * settings, GANTRIX_DEFAULT_CONNECTION if set, else Ollama.
+ * The model an agent's steps use. Without an agent (the planner and judges), or when the agent
+ * has no model of its own, it is the default model chosen on the Agents page (saved in the
+ * database): a saved connection and a model, or the built-in model on the local Ollama.
  */
 export async function resolveModelSpec(
   db: Db,
-  config: Config,
   agent: Pick<Agent, 'model' | 'modelBaseUrl' | 'connectionId'> | null,
 ): Promise<ModelSpec> {
+  const def = await loadDefaultModel(db);
+  // The name to use on an Ollama server when nothing more specific is chosen.
+  const fallback = def.model ?? DEFAULT_MODEL;
   if (agent?.connectionId) {
     const c = await db.query.connections.findFirst({
       where: eq(connections.id, agent.connectionId),
     });
     if (!c) throw new Error("The agent's connection was deleted.");
     if (!isModelConnection(c)) throw new Error(`Connection "${c.name}" is not a model connection.`);
-    // GANTRIX_DEFAULT_MODEL names a model on the default connection, not on this one.
-    if (needsModel(c.provider) && !agent.model && c.name !== config.GANTRIX_DEFAULT_CONNECTION) {
+    const isDefault = c.id === def.connectionId;
+    // The default model names a model on the default connection, not on this one.
+    if (needsModel(c.provider) && !agent.model && !isDefault) {
       throw new Error(`Connection "${c.name}" needs a model: choose one for this agent.`);
     }
-    return connectionSpec(c, agent.model);
+    return connectionSpec(
+      c,
+      agent.model ?? (c.provider === 'ollama' ? fallback : isDefault ? def.model : null),
+    );
   }
   if (agent?.model || agent?.modelBaseUrl) {
-    return { model: agent.model, baseUrl: agent.modelBaseUrl };
+    return { model: agent.model ?? fallback, baseUrl: agent.modelBaseUrl };
   }
-  if (config.GANTRIX_DEFAULT_CONNECTION) {
-    const c = await db.query.connections.findFirst({
-      where: eq(connections.name, config.GANTRIX_DEFAULT_CONNECTION),
-    });
-    if (!c) {
-      throw new Error(
-        `GANTRIX_DEFAULT_CONNECTION is "${config.GANTRIX_DEFAULT_CONNECTION}", but no connection has that name.`,
-      );
-    }
-    if (!isModelConnection(c)) {
-      throw new Error(`GANTRIX_DEFAULT_CONNECTION "${c.name}" is not a model connection.`);
-    }
+  if (def.connectionId) {
+    const c = await db.query.connections.findFirst({ where: eq(connections.id, def.connectionId) });
+    // A connection that is gone can't be the default any more: use the built-in model.
+    if (!c) return { model: DEFAULT_MODEL, baseUrl: null };
+    if (!isModelConnection(c))
+      throw new Error(`The default model's connection "${c.name}" is not a model connection.`);
     if (c.provider === 'claude-code' || c.provider === 'codex' || c.provider === 'http') {
       throw new Error(
-        "GANTRIX_DEFAULT_CONNECTION can't be a Claude Code, Codex or custom HTTP connection: the planner and judge need an Ollama, OpenAI or Anthropic model.",
+        `The default model can't be on "${c.name}" (${c.provider}): the planner and judges need an Ollama, OpenAI or Anthropic model. Choose another on the Agents page.`,
       );
     }
-    return connectionSpec(c, null);
+    return connectionSpec(c, def.model);
   }
-  return { model: null, baseUrl: null };
+  return { model: fallback, baseUrl: null };
 }

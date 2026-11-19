@@ -5,6 +5,7 @@ import {
   type AgentDto,
   type ApprovalListItem,
   type ConnectionDto,
+  type DefaultModelDto,
   EXAMPLES,
   isTerminal,
   type JobDto,
@@ -133,6 +134,27 @@ export async function listSkills(client: Client): Promise<void> {
         s.description,
       ]),
     ]),
+  );
+}
+
+export async function defaultModel(
+  client: Client,
+  model: string | undefined,
+  o: { connection?: string; reset?: boolean } = {},
+): Promise<void> {
+  if (o.reset && (model || o.connection)) throw new Error('Use --reset on its own.');
+  if (model || o.connection || o.reset) {
+    const connectionId = o.connection ? (await connectionByName(client, o.connection)).id : null;
+    await client.put<DefaultModelDto>('/api/settings/default-model', {
+      connectionId,
+      model: o.reset ? null : (model ?? null),
+    });
+  }
+  const d = await client.get<DefaultModelDto>('/api/settings/default-model');
+  const where = d.effective.connection ? `on ${d.effective.connection}` : 'on the local Ollama';
+  console.log(
+    `Default model: ${paint('bold', d.effective.model)} ${where} (${d.effective.isLocal ? 'local' : 'cloud'})` +
+      (d.model === null && d.connectionId === null ? paint('gray', ' · the built-in model') : ''),
   );
 }
 

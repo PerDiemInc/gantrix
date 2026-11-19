@@ -353,7 +353,7 @@ describe('api', () => {
     ensure = async () => ({ ok: true, started: false, models: ['other:1b'] });
     const noModel = await talk();
     expect(noModel.statusCode).toBe(502);
-    expect(noModel.json().error).toContain(`ollama pull ${e.config.GANTRIX_DEFAULT_MODEL}`);
+    expect(noModel.json().error).toContain('ollama pull fake');
 
     // Nothing from the failures was saved.
     const saved = (

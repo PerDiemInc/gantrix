@@ -24,7 +24,7 @@ produce, like "product/brief.md lists the audience and the four pages". No vague
 /** An OKR drafted by the default model (the planner's) from what the user wrote. */
 export async function suggestGoal(deps: EngineDeps, description: string): Promise<SuggestedGoal> {
   const chat = createChatModel(
-    await resolveModelSpec(deps.db, deps.config, null),
+    await resolveModelSpec(deps.db, null),
     'planner',
     modelDefaults(deps.config),
     0,
