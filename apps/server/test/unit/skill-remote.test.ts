@@ -44,6 +44,32 @@ describe('where a skill may come from', () => {
     });
   });
 
+  it('reads a skills.sh link: the skill is found by name once the repository is listed', () => {
+    expect(parseSkillSource('https://www.skills.sh/anthropics/skills/frontend-design')).toEqual({
+      kind: 'github',
+      owner: 'anthropics',
+      repo: 'skills',
+      rest: [],
+      blob: false,
+      pick: 'frontend-design',
+    });
+    expect(parseSkillSource('https://skills.sh/anthropics/skills')).toEqual({
+      kind: 'github',
+      owner: 'anthropics',
+      repo: 'skills',
+      rest: [],
+      blob: false,
+    });
+    for (const bad of [
+      'https://skills.sh/',
+      'https://skills.sh/trending',
+      'https://skills.sh/a/b/c/d',
+      'https://skills.sh/a/b/c d',
+    ]) {
+      expect(() => parseSkillSource(bad), bad).toThrow(/skills\.sh link/);
+    }
+  });
+
   it('refuses everything else', () => {
     const bad: [string, RegExp][] = [
       ['not a link', /not a link/],
@@ -241,6 +267,35 @@ describe('looking a skill up', () => {
         gh.fetch,
       ),
     ).toMatchObject({ kind: 'skill', name: 'xlsx' });
+  });
+
+  it('finds the folder for a skills.sh link by the skill name', async () => {
+    const gh = fakeGithub('acme', 'skills', repo);
+    const found = await lookupSkill(store, 'https://www.skills.sh/acme/skills/xlsx', gh.fetch);
+    expect(found).toMatchObject({
+      kind: 'skill',
+      name: 'xlsx',
+      source: 'github.com/acme/skills/skills/xlsx',
+      sourceUrl: `https://github.com/acme/skills/tree/${SHA}/skills/xlsx`,
+      commit: SHA,
+    });
+    // A skill with that name in several places: pick which.
+    const twice = fakeGithub('acme', 'skills', {
+      files: { ...repo.files, 'old/pdf/SKILL.md': skillMd('pdf', '', '0.1.0') },
+    });
+    const choices = await lookupSkill(store, 'https://skills.sh/acme/skills/pdf', twice.fetch);
+    expect(choices).toMatchObject({
+      kind: 'choices',
+      choices: [{ path: 'old/pdf' }, { path: 'skills/pdf' }],
+    });
+    // A name that is not in the repository.
+    await expect(
+      lookupSkill(store, 'https://skills.sh/acme/skills/nope', gh.fetch),
+    ).rejects.toThrow(/Couldn't find a skill called "nope" in acme\/skills/);
+    // Just the repository, from skills.sh: the list.
+    expect(await lookupSkill(store, 'https://skills.sh/acme/skills', gh.fetch)).toMatchObject({
+      kind: 'choices',
+    });
   });
 
   it('says what went wrong, in words, and leaves nothing held', async () => {

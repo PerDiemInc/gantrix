@@ -80,7 +80,7 @@ interface Fetched {
   body: string;
 }
 
-function get(url: URL): Promise<Fetched> {
+function get(url: URL, extra: Record<string, string> = {}): Promise<Fetched> {
   return new Promise((resolve, reject) => {
     const req = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
       url,
@@ -91,6 +91,7 @@ function get(url: URL): Promise<Fetched> {
         headers: {
           'user-agent': 'Gantrix/0.1 (+https://github.com/PerDiemInc/gantrix)',
           'accept-encoding': 'identity',
+          ...extra,
         },
       },
       (res) => {
@@ -141,17 +142,25 @@ export interface PublicResponse {
   body: string;
 }
 
-/** GET a public http(s) URL, following redirects; private and local addresses are refused. */
-export async function fetchPublic(url: string): Promise<PublicResponse> {
+/**
+ * GET a public http(s) URL, following redirects; private and local addresses are refused.
+ * `headers` (e.g. a token) go only to the host that was asked for, never along a redirect to
+ * another host.
+ */
+export async function fetchPublic(
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<PublicResponse> {
   let current: URL;
   try {
     current = new URL(url);
   } catch {
     throw new ToolError(`"${url}" isn't a URL.`);
   }
+  const origin = current.hostname;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     assertAllowedUrl(current);
-    const response = await get(current);
+    const response = await get(current, current.hostname === origin ? headers : {});
     const location = response.headers.location;
     if (response.status >= 300 && response.status < 400 && location) {
       current = new URL(location, current); // each hop is checked again

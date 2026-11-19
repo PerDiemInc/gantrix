@@ -309,13 +309,35 @@ Installing a skill copies it to `~/.gantrix/skills/<name>/<version>` and records
 editing your original folder doesn't change what runs. To update a skill, bump its `version`
 and install it again.
 
-### Install a skill from the web
+### Find and install a skill from the web
 
-On **Skills → Install a skill → From the web**, paste a link:
+On **Skills → Install a skill**, there are two ways to find one online, and both end at the same
+review.
+
+**Search online** looks in several places at once, and you choose which:
+
+| Source | What it searches | Needs |
+|---|---|---|
+| **skills.sh** | The [skills.sh](https://skills.sh) directory, ranked by installs | nothing |
+| **Featured collections** | The skills in Anthropic's [`anthropics/skills`](https://github.com/anthropics/skills) and in this project's [`examples/skills`](examples/skills), listed from the repositories themselves | nothing |
+| **GitHub repositories** | Repositories tagged `agent-skills` or `claude-skills`, or mentioning `SKILL.md` in their readme, by stars | nothing |
+| **Inside GitHub repos** | `SKILL.md` files on GitHub whose text matches | a GitHub connection: GitHub only allows code search with a token |
+
+With nothing typed, it shows the featured collections. A source that can't answer (a rate limit,
+no token, skills.sh down) says so and the others still do. If you have a **GitHub connection**
+(Connections), its token is used for GitHub's search and lookups: a much higher rate limit, and
+it enables the code search. It is sent only to `api.github.com`, never to skills.sh or to the
+file downloads. skills.sh's search is an unofficial, undocumented endpoint, so it may change;
+some of its results come from other registries and can't be installed from GitHub, which it says.
+
+**From a link** takes a paste instead:
 
 - a GitHub **repository** (it lists the skills inside, and you pick one),
 - a **folder** in one: `https://github.com/owner/repo/tree/main/skills/my-skill`,
-- a skill's **`SKILL.md`** on GitHub, or a direct `https://…/SKILL.md` link.
+- a skill's **`SKILL.md`** on GitHub, or a direct `https://…/SKILL.md` link,
+- a **skills.sh page**: `https://skills.sh/anthropics/skills/frontend-design`. The link names the
+  skill but not its folder, so Gantrix finds the folder with that name in the repository (and
+  asks you to pick if there are several).
 
 Gantrix downloads it to a holding area and **shows you what it would install before anything is
 installed**: the description, where it is from, every file, the instructions the agent will
@@ -327,7 +349,8 @@ changed. Nothing is run when a skill is installed; it can only do things once an
 it runs a step.
 
 ```bash
-npm run gantrix -- skills add https://github.com/owner/repo/tree/main/skills/my-skill
+npm run gantrix -- skills search "frontend design"       # every source; --sources skills-sh,github
+npm run gantrix -- skills add https://skills.sh/anthropics/skills/frontend-design
 # shows the same review, then asks "Install it? [y/N]"  (--yes skips the question)
 ```
 

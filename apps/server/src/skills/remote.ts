@@ -12,12 +12,26 @@ import { type ParsedSkill, parseSkillFile } from './manifest.ts';
 import { fetchPublic } from './tools/web.ts';
 
 /** One GET of a public URL. The default refuses private and local addresses, at every redirect. */
-export type SkillFetch = (url: string) => Promise<{ status: number; body: string }>;
+export type SkillFetch = (
+  url: string,
+  headers?: Record<string, string>,
+) => Promise<{ status: number; body: string }>;
 
-export const defaultSkillFetch: SkillFetch = async (url) => {
-  const res = await fetchPublic(url);
+export const defaultSkillFetch: SkillFetch = async (url, headers) => {
+  const res = await fetchPublic(url, headers);
   return { status: res.status, body: res.body };
 };
+
+/**
+ * The same fetch, signing requests to api.github.com with the given Authorization value (a
+ * higher rate limit, and code search). Other hosts, such as raw.githubusercontent.com or
+ * skills.sh, never see it.
+ */
+export function withGithubAuth(f: SkillFetch, authorization: string | null): SkillFetch {
+  if (!authorization) return f;
+  return (url, headers) =>
+    f(url, new URL(url).hostname === 'api.github.com' ? { ...headers, authorization } : headers);
+}
 
 export const MAX_FILES = 100;
 export const MAX_FILE_BYTES = 512 * 1024;
@@ -34,7 +48,15 @@ const SAFE_NAME = /^[A-Za-z0-9_.-]+$/;
 export class SkillSourceError extends Error {}
 
 export type SkillSource =
-  | { kind: 'github'; owner: string; repo: string; rest: string[]; blob: boolean }
+  | {
+      kind: 'github';
+      owner: string;
+      repo: string;
+      rest: string[];
+      blob: boolean;
+      /** A skill's name, from a skills.sh link: the folder in the repository is looked up. */
+      pick?: string;
+    }
   | { kind: 'file'; url: string };
 
 /**
@@ -68,6 +90,20 @@ export function parseSkillSource(input: string): SkillSource {
     throw new SkillSourceError(
       'Link to the repository, a folder in it (…/tree/main/folder) or its SKILL.md.',
     );
+  }
+  if (host === 'skills.sh' || host === 'www.skills.sh') {
+    // https://skills.sh/<owner>/<repo>/<skill>: where the skill is inside the repository is
+    // not in the link, so it is found by name once the repository's files are listed.
+    const [owner, repo, pick, ...extra] = parts;
+    const ok = owner && repo && SAFE_NAME.test(owner) && SAFE_NAME.test(repo);
+    if (!ok || extra.length || (pick !== undefined && !SAFE_NAME.test(pick))) {
+      throw new SkillSourceError(
+        'Use a skills.sh link to a skill: https://skills.sh/owner/repo/skill.',
+      );
+    }
+    return pick
+      ? { kind: 'github', owner, repo, rest: [], blob: false, pick }
+      : { kind: 'github', owner, repo, rest: [], blob: false };
   }
   if (host === 'raw.githubusercontent.com') {
     const [owner, repo, ...rest] = parts;
@@ -452,6 +488,19 @@ export async function lookupSkill(
         throw new SkillSourceError(
           `No SKILL.md found${resolved.dir ? ` in ${resolved.dir}` : ' in that repository'}.`,
         );
+      }
+      if (source.pick) {
+        // A skills.sh link names the skill; its folder is the one with that name.
+        const matches = holders.filter(
+          (h) => (h.split('/').pop() || resolved.repo) === source.pick,
+        );
+        if (!matches.length) {
+          throw new SkillSourceError(
+            `Couldn't find a skill called "${source.pick}" in ${resolved.owner}/${resolved.repo}. Paste the repository link to see which skills it has.`,
+          );
+        }
+        if (matches.length === 1) resolved.dir = matches[0] ?? '';
+        else holders.splice(0, holders.length, ...matches);
       }
       if (!holders.includes(resolved.dir)) {
         // Not a skill itself: a place that holds some. Let the person pick.

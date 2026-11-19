@@ -3,6 +3,7 @@ import type {
   ApprovalStatus,
   ConnectionProvider,
   ModelProvider,
+  SkillSearchSource,
   StepStatus,
   TaskStatus,
 } from './status.ts';
@@ -88,6 +89,42 @@ export interface SkillChoicesDto {
 }
 
 export type SkillLookupDto = SkillPreviewDto | SkillChoicesDto;
+
+/** One thing a search found: a skill, or a repository that may hold some. */
+export interface SkillHitDto {
+  /** Unique within a result set. */
+  id: string;
+  source: SkillSearchSource;
+  /** For display: "skills.sh", "Featured", "GitHub", "GitHub code". */
+  sourceLabel: string;
+  kind: 'skill' | 'repo';
+  name: string;
+  description: string;
+  /** owner/repo on GitHub. */
+  repo: string;
+  /** The folder in the repository, when known. */
+  path: string | null;
+  /** What to look up to review it: a skills.sh or GitHub link. */
+  url: string;
+  /** How many times it was installed, where the source counts. */
+  installs: number | null;
+  stars: number | null;
+}
+
+export interface SkillSearchNote {
+  source: SkillSearchSource;
+  level: 'info' | 'problem';
+  text: string;
+}
+
+export interface SkillSearchDto {
+  query: string;
+  hits: SkillHitDto[];
+  /** Why a source gave nothing, or how to get more from it. */
+  notes: SkillSearchNote[];
+  /** The GitHub connection whose token was used, if any. */
+  githubConnection: string | null;
+}
 
 export interface TaskDto {
   id: string;

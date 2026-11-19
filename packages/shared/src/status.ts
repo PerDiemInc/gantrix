@@ -63,3 +63,7 @@ export type ConnectionProvider = (typeof CONNECTION_PROVIDERS)[number];
 
 export const isServiceProvider = (p: string): p is ServiceProvider =>
   (SERVICE_PROVIDERS as readonly string[]).includes(p);
+
+/** Where skills can be searched online. */
+export const SKILL_SEARCH_SOURCES = ['skills-sh', 'featured', 'github', 'github-code'] as const;
+export type SkillSearchSource = (typeof SKILL_SEARCH_SOURCES)[number];

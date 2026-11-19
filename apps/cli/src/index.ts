@@ -75,6 +75,14 @@ skills
   .option('-y, --yes', 'install a skill from the web without asking after showing it')
   .action(run((source: string, o) => cmd.addSkill(client, source, o)));
 skills
+  .command('search [words...]')
+  .description('search for skills online (skills.sh, GitHub, featured collections)')
+  .option(
+    '--sources <list>',
+    'comma-separated: skills-sh, featured, github, github-code (default: all)',
+  )
+  .action(run((words: string[], o) => cmd.searchSkills(client, words.join(' '), o)));
+skills
   .command('rm <name[@version]>')
   .description('remove an installed skill')
   .action(run((ref: string) => cmd.removeSkill(client, ref)));
