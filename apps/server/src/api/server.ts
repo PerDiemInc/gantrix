@@ -7,6 +7,7 @@ import { agentRoutes } from './routes/agents.ts';
 import { approvalRoutes } from './routes/approvals.ts';
 import { connectionRoutes } from './routes/connections.ts';
 import { jobRoutes } from './routes/jobs.ts';
+import { settingsRoutes } from './routes/settings.ts';
 import { skillRoutes } from './routes/skills.ts';
 import { streamRoutes } from './routes/stream.ts';
 import { systemRoutes } from './routes/system.ts';
@@ -64,5 +65,6 @@ export function buildServer(deps: ApiDeps, token: string, logger = true) {
   approvalRoutes(app, deps);
   streamRoutes(app, deps);
   systemRoutes(app, deps);
+  settingsRoutes(app, deps);
   return app;
 }

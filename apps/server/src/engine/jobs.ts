@@ -65,7 +65,7 @@ async function runGoalJob(
     verdict = { passed: false, reason: notLive, tokens: 0 };
   } else {
     const judge = createChatModel(
-      await resolveModelSpec(db, deps.config, null),
+      await resolveModelSpec(db, null),
       'judge',
       modelDefaults(deps.config),
     );

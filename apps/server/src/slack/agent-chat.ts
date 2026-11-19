@@ -208,7 +208,7 @@ export class AgentSlack {
     try {
       const history = await this.#history(live, event, thread, agent);
       const model = createChatModel(
-        await resolveModelSpec(db, config, agent),
+        await resolveModelSpec(db, agent),
         'worker',
         modelDefaults(config),
       );

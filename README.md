@@ -806,9 +806,26 @@ Run it as `npm run gantrix -- <command>`. `<task>` is `last`, a full ID, or the 
 
 ## Models
 
-`GANTRIX_DEFAULT_MODEL` (default `qwen3:8b`) plans and judges, and runs agents that don't set
-their own model. An agent's `--model` can be any Ollama model, or `openai/<model>` with a base
-URL for any OpenAI-compatible server (vLLM, llama.cpp, LM Studio).
+The **default model** plans projects, judges every task, and runs agents that don't set their
+own model. It is a setting, not an environment variable: choose it on the **Agents** page
+(**Default model**, the same dropdowns as everywhere), or with the CLI:
+
+```bash
+npm run gantrix -- default-model                                 # show it
+npm run gantrix -- default-model llama3.1:8b                     # a model on the local Ollama
+npm run gantrix -- default-model gpt-5-mini --connection openai  # on a saved connection
+npm run gantrix -- default-model --reset                         # the built-in qwen3:8b
+```
+
+It is saved in the database, so the API and the worker always agree and a change applies to the
+next task with no restart. Until you choose one it is the built-in `qwen3:8b` on the local
+Ollama. It can be a model on Ollama, OpenAI or Anthropic (it must plan and judge, so not Claude
+Code, Codex or a custom HTTP server), and its connection can't be deleted while it is the default.
+`GANTRIX_DEFAULT_MODEL` and `GANTRIX_DEFAULT_CONNECTION` are not read any more: if they are still
+in your `.env`, the API and worker warn at start; choose the model once and delete the lines.
+
+An agent's own model can be any Ollama model, or `openai/<model>` with a base URL for any
+OpenAI-compatible server (vLLM, llama.cpp, LM Studio).
 
 Small models tend to plan steps one after another and sometimes reject good work. A larger model
 plans more parallel steps and judges more accurately.
@@ -951,7 +968,7 @@ npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -
 - Each run is started without MCP servers and without a saved session. It doesn't get the
   API keys or Gantrix secrets in its environment, so it always uses your Claude login.
 - The planner and judge still need an Ollama, OpenAI or Anthropic model, so Claude Code can't be
-  `GANTRIX_DEFAULT_CONNECTION`.
+  the default model's connection.
 - The step's tokens come from Claude Code's own report (new tokens only), and its usage counts
   against your Claude plan.
 
@@ -962,8 +979,9 @@ npm run gantrix -- agents add coder -d "Writes and edits code" -c claude-local -
 - `Authorization: Bearer …` and `x-api-key` go to each SDK's key setting. Without either, the
   SDKs read `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` themselves.
 
-**Using a connection for everything.** To have the planner and judge use a connection too, set
-`GANTRIX_DEFAULT_CONNECTION=<name>` and `GANTRIX_DEFAULT_MODEL=<that server's model>`.
+**Using a connection for everything.** To have the planner and judge use a connection too, choose
+it as the **Default model** on the Agents page (or `gantrix default-model <model> --connection
+<name>`).
 
 A connection whose URL isn't on this machine or your network is marked **cloud**. Prompts and
 task content then go to that service, and its prices apply.
@@ -977,9 +995,7 @@ All settings are environment variables in `.env`; see [`.env.example`](.env.exam
 | `DATABASE_URL`, `REDIS_URL` | Compose ports | Postgres and Valkey |
 | `GANTRIX_TOKEN` | set by `npm run setup` | API token, at least 32 characters |
 | `GANTRIX_HOST`, `GANTRIX_PORT` | `127.0.0.1`, `4700` | API address |
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Default model server |
-| `GANTRIX_DEFAULT_MODEL` | `qwen3:8b` | Planner, judge and default agent model |
-| `GANTRIX_DEFAULT_CONNECTION` | unset (Ollama) | A saved connection for the planner, judge and agents without their own |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | The local Ollama. (The default *model* is chosen on the Agents page, not here.) |
 | `GANTRIX_LLM_CONCURRENCY` | `2` | Model calls at once per worker |
 | `GANTRIX_WORKSPACES_DIR`, `GANTRIX_SKILLS_DIR` | `~/.gantrix/…` | Where task files and skills live |
 | `GANTRIX_MAX_STEP_ATTEMPTS`, `_MAX_REPLANS`, `_MAX_TOKENS`, `_MAX_MINUTES` | 3, 5, 200000, 60 | Default budgets per task |

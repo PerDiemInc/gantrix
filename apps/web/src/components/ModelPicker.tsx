@@ -91,12 +91,21 @@ export function ModelPicker({
   connectionId,
   model,
   onChange,
+  emptyLabel,
+  modelServersOnly = false,
 }: {
   connectionId: string;
   model: string;
   onChange: (v: { connectionId: string; model: string }) => void;
+  /** What "no model chosen" means here. Default: "The default model". */
+  emptyLabel?: string;
+  /** Only places that can plan and judge (Ollama, OpenAI, Anthropic), for choosing the default. */
+  modelServersOnly?: boolean;
 }) {
-  const { sources, refresh } = useModelSources();
+  const { sources: all, refresh } = useModelSources();
+  const sources = all
+    ? all.filter((s) => !modelServersOnly || ['ollama', 'openai', 'anthropic'].includes(s.provider))
+    : all;
   const source = sources?.find((s) => (s.connectionId ?? '') === connectionId);
   const models = source?.models ?? [];
   return (
@@ -127,7 +136,7 @@ export function ModelPicker({
           models={models}
           value={model}
           onChange={(m) => onChange({ connectionId, model: m })}
-          emptyLabel={connectionId ? 'Choose a model' : 'Default (GANTRIX_DEFAULT_MODEL)'}
+          emptyLabel={connectionId ? 'Choose a model' : (emptyLabel ?? 'The default model')}
           placeholder={
             source?.provider === 'claude-code'
               ? 'sonnet'

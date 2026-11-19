@@ -3,6 +3,8 @@
 // default model, then runs the API, worker and dashboard together. Ctrl+C stops all three.
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { DEFAULT_MODEL } from '@gantrix/shared';
+import pg from 'pg';
 
 const root = new URL('../', import.meta.url).pathname;
 const envFile = `${root}.env`;
@@ -26,12 +28,32 @@ run('npm', ['run', 'db:migrate']);
 
 // Local agents run on Ollama; warn (don't block) if it is missing or the model isn't pulled.
 const ollama = process.env.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434';
-const model = process.env.GANTRIX_DEFAULT_MODEL ?? 'qwen3:8b';
+// The default model is a setting saved in the database (Agents → Default model).
+const saved = await (async () => {
+  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  try {
+    await db.connect();
+    const r = await db.query(
+      "select value->>'model' as model, value->>'connectionId' as connection from app_settings where key = 'default_model'",
+    );
+    return {
+      model: r.rows[0]?.model || DEFAULT_MODEL,
+      onConnection: Boolean(r.rows[0]?.connection),
+    };
+  } catch {
+    return { model: DEFAULT_MODEL, onConnection: false };
+  } finally {
+    await db.end().catch(() => {});
+  }
+})();
+const model = saved.model;
 try {
   const res = await fetch(`${ollama}/api/tags`, { signal: AbortSignal.timeout(3000) });
   const { models = [] } = (await res.json()) as { models?: { name: string }[] };
   const have = models.some((m) => m.name === model || m.name === `${model}:latest`);
-  if (!have) console.warn(`\n⚠ Model "${model}" is not pulled. Run: ollama pull ${model}`);
+  if (saved.onConnection)
+    console.log('\n✔ Ollama is up. The default model runs on a saved connection.');
+  else if (!have) console.warn(`\n⚠ Model "${model}" is not pulled. Run: ollama pull ${model}`);
   else console.log(`\n✔ Ollama is up and has ${model}.`);
 } catch {
   console.warn(

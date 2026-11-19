@@ -25,6 +25,7 @@ import {
 import { callHttp, listPaths } from '../../models/http-request.ts';
 import { detectLocalAgents } from '../../models/local-agents.ts';
 import { createChatModel } from '../../models/provider.ts';
+import { loadDefaultModel } from '../../settings.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import type { ApiDeps } from '../server.ts';
 
@@ -321,6 +322,13 @@ export function connectionRoutes(app: FastifyInstance, { db, config }: ApiDeps):
       throw new HttpError(
         409,
         `Connection is used by ${users.map((u) => u.name).join(', ')}; move them to another connection first.`,
+      );
+    }
+    // The default model's connection can't go while it is the default: nothing would use it.
+    if ((await loadDefaultModel(db)).connectionId === id) {
+      throw new HttpError(
+        409,
+        "This is the default model's connection; choose another default model first (Agents page).",
       );
     }
     const [row] = await db

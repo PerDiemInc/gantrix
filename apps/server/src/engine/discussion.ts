@@ -1,4 +1,9 @@
-import { type DiscussionDto, type DiscussionMessageDto, OWNER_AGENT_NAMES } from '@gantrix/shared';
+import {
+  DEFAULT_MODEL,
+  type DiscussionDto,
+  type DiscussionMessageDto,
+  OWNER_AGENT_NAMES,
+} from '@gantrix/shared';
 import { AIMessage, type BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
@@ -126,7 +131,7 @@ export async function discuss(
   ]);
   // Always the default model: an agent set to Claude Code or Codex can only run steps, and the
   // owner needs no tools. The agent lends its name and what it is for.
-  const spec = await resolveModelSpec(db, config, null);
+  const spec = await resolveModelSpec(db, null);
   const startedOllama = await ensureModelServer(deps, spec);
   const model = createChatModel(spec, 'planner', modelDefaults(config));
   const answer = await model.invoke(
@@ -165,7 +170,7 @@ async function ensureModelServer(
   { config, ensureOllama: ensure = ensureOllama }: Pick<EngineDeps, 'config' | 'ensureOllama'>,
   spec: Awaited<ReturnType<typeof resolveModelSpec>>,
 ): Promise<boolean> {
-  const name = spec.model ?? config.GANTRIX_DEFAULT_MODEL;
+  const name = spec.model ?? DEFAULT_MODEL;
   const provider = spec.provider ?? (name.startsWith('openai/') ? 'openai' : 'ollama');
   if (provider !== 'ollama') return false;
   const model = spec.provider ? name : name.replace(/^ollama\//, '');

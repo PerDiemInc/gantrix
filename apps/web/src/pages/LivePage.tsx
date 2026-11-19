@@ -308,7 +308,9 @@ export function LivePage({ embedded = false }: { embedded?: boolean }) {
             <section className="card stat">
               <h2>Default model</h2>
               <p className="stat-value live-default mono">{data.defaultModel}</p>
-              <p className="muted small">planner, judges and agents without their own</p>
+              <p className="muted small">
+                planner, judges and agents without their own · <a href="#/agents">Change</a>
+              </p>
             </section>
           </div>
 

@@ -63,7 +63,7 @@ export const agents = pgTable(
     name: text('name').notNull().unique(),
     description: text('description').notNull().default(''),
     systemPrompt: text('system_prompt').notNull().default(''),
-    model: text('model'), // null → GANTRIX_DEFAULT_MODEL
+    model: text('model'), // null → the default model (app_settings)
     modelBaseUrl: text('model_base_url'), // null → OLLAMA_BASE_URL
     // Wins over modelBaseUrl. Restrict: remove the connection from agents before deleting it.
     connectionId: uuid('connection_id').references(() => connections.id, {
@@ -90,6 +90,16 @@ export const agents = pgTable(
     ),
   ],
 );
+
+/**
+ * Settings chosen in the dashboard, one row each, so every process (the API and the worker)
+ * reads the same value. Key "default_model": see settings.ts.
+ */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<Record<string, unknown>>().notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
 
 export const skills = pgTable(
   'skills',

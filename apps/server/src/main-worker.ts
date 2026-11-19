@@ -3,7 +3,7 @@ import { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import { Worker } from 'bullmq';
 import { notInArray } from 'drizzle-orm';
 import { Redis } from 'ioredis';
-import { loadConfig } from './config.ts';
+import { loadConfig, removedEnvWarnings } from './config.ts';
 import { createDb } from './db/client.ts';
 import { tasks } from './db/schema.ts';
 import type { EngineDeps } from './engine/deps.ts';
@@ -21,6 +21,7 @@ import {
 import { buildSupervisor, tick } from './engine/supervisor.ts';
 
 const config = loadConfig();
+for (const warning of removedEnvWarnings()) console.warn(`Warning: ${warning}`);
 const { db, pool } = createDb(config.DATABASE_URL);
 const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null }); // BullMQ requires null
 const queues = createQueues(connection);

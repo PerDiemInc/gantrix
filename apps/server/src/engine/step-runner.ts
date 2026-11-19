@@ -239,7 +239,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
     }
   }
   // The project's own choice (or offload) wins over the agent's setting.
-  const spec = await resolveModelSpec(db, config, agentForProject(task, agent));
+  const spec = await resolveModelSpec(db, agentForProject(task, agent));
   const localCli = spec.provider === 'claude-code' || spec.provider === 'codex';
   const shellEnv = toolkit.builtinTools.has('shell') ? await loadShellEnv(db, task.id) : {};
   const mcp = await openMcpTools(localCli ? {} : toolkit.mcpServers, workspace);
@@ -406,11 +406,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
 
     await setStep(db, task.id, step, 'judging', {});
     const workspaceFiles = await describeWorkspace(workspace, after.values.messages ?? [], changed);
-    const judge = createChatModel(
-      await resolveModelSpec(db, config, null),
-      'judge',
-      modelDefaults(config),
-    );
+    const judge = createChatModel(await resolveModelSpec(db, null), 'judge', modelDefaults(config));
     const verdict = await judgeStep(judge, {
       title: step.title,
       acceptance: step.acceptance,

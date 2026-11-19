@@ -1,7 +1,8 @@
-import type { AgentDto, ConnectionDto, SkillDto } from '@gantrix/shared';
+import type { AgentDto, ConnectionDto, DefaultModelDto, SkillDto } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { AvatarPicker } from '../components/AvatarPicker.tsx';
+import { Icon } from '../components/Icon.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
 
 /** How long one run of this agent's task may take before it is stopped and retried. */
@@ -329,6 +330,99 @@ function SlackChat({
   );
 }
 
+/**
+ * The model that plans, judges and runs every agent that has none of its own. Chosen here and
+ * kept in the database, so the API and the worker always agree and no restart is needed.
+ */
+function DefaultModel() {
+  const [saved, setSaved] = useState<DefaultModelDto | null>(null);
+  const [value, setValue] = useState({ connectionId: '', model: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [ok, setOk] = useState(false);
+  const adopt = (d: DefaultModelDto) => {
+    setSaved(d);
+    setValue({ connectionId: d.connectionId ?? '', model: d.model ?? '' });
+  };
+  useEffect(() => {
+    api.get<DefaultModelDto>('/api/settings/default-model').then(
+      (d) => {
+        setSaved(d);
+        setValue({ connectionId: d.connectionId ?? '', model: d.model ?? '' });
+      },
+      (e: Error) => setError(e.message),
+    );
+  }, []);
+
+  const dirty =
+    saved !== null &&
+    (value.connectionId !== (saved.connectionId ?? '') || value.model !== (saved.model ?? ''));
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    setOk(false);
+    try {
+      adopt(
+        await api.put<DefaultModelDto>('/api/settings/default-model', {
+          connectionId: value.connectionId || null,
+          model: value.model.trim() || null,
+        }),
+      );
+      setOk(true);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <form className="card default-model" onSubmit={(e) => void save(e)}>
+      <h2>Default model</h2>
+      <p className="muted small">
+        The model that plans projects, judges every task, and runs each agent that has none of its
+        own. A change applies to the next task; there is nothing to restart.
+      </p>
+      {saved && (
+        <p className="small" aria-live="polite">
+          Now: <b className="mono">{saved.effective.model}</b>{' '}
+          {saved.effective.connection ? `on ${saved.effective.connection}` : 'on the local Ollama'}{' '}
+          <span
+            className={`pill ${saved.effective.isLocal ? 's-succeeded' : 's-awaiting_approval'}`}
+          >
+            {saved.effective.isLocal ? 'local' : 'cloud'}
+          </span>
+        </p>
+      )}
+      <ModelPicker
+        connectionId={value.connectionId}
+        model={value.model}
+        onChange={(v) => {
+          setValue(v);
+          setOk(false);
+        }}
+        emptyLabel={`Built-in (${saved?.builtIn ?? 'qwen3:8b'})`}
+        modelServersOnly
+      />
+      <div className="row-actions">
+        <button type="submit" className="primary" disabled={!dirty || busy}>
+          {busy ? 'Saving…' : 'Save default model'}
+        </button>
+        {ok && !dirty && (
+          <span className="ok-note small" role="status">
+            <Icon name="check" size={14} /> Saved
+          </span>
+        )}
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export function AgentsPage() {
   const [agents, setAgents] = useState<AgentDto[]>([]);
   const [skills, setSkills] = useState<SkillDto[]>([]);
@@ -347,6 +441,7 @@ export function AgentsPage() {
   };
   return (
     <div className="stack">
+      <DefaultModel />
       <section className="card">
         <h2>Agents</h2>
         {!agents.length && (

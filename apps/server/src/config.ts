@@ -25,9 +25,6 @@ const ConfigSchema = z.object({
   // Optional here so the worker and migrations run without it; the API requires it at startup.
   GANTRIX_TOKEN: z.string().min(32, 'GANTRIX_TOKEN must be at least 32 characters').optional(),
   OLLAMA_BASE_URL: z.url().default('http://127.0.0.1:11434'),
-  GANTRIX_DEFAULT_MODEL: z.string().min(1).default('qwen3:8b'),
-  // A saved connection (by name) for the planner, judges and agents without their own model.
-  GANTRIX_DEFAULT_CONNECTION: z.string().min(1).optional(),
   GANTRIX_LLM_CONCURRENCY: positiveInt(2),
   GANTRIX_WORKSPACES_DIR: path('~/.gantrix/workspaces'),
   GANTRIX_SKILLS_DIR: path('~/.gantrix/skills'),
@@ -77,4 +74,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid configuration:\n${z.prettifyError(parsed.error)}`);
   }
   return parsed.data;
+}
+
+/**
+ * Variables that used to choose the default model. They are not read any more (the default model
+ * is a setting, chosen on the Agents page), so say so instead of ignoring them silently.
+ */
+export function removedEnvWarnings(env: NodeJS.ProcessEnv = process.env): string[] {
+  const removed: Record<string, string> = {
+    GANTRIX_DEFAULT_MODEL: 'the default model',
+    GANTRIX_DEFAULT_CONNECTION: "the default model's connection",
+  };
+  return Object.entries(removed).flatMap(([name, what]) =>
+    env[name]?.trim()
+      ? [
+          `${name}=${env[name]?.trim()} is no longer read: ${what} is a setting now. Choose it on the Agents page (Default model), then delete the line from .env.`,
+        ]
+      : [],
+  );
 }

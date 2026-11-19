@@ -4,11 +4,9 @@ import { describeModel, parseOllamaPs } from '../../src/live.ts';
 
 type Connection = typeof connections.$inferSelect;
 
-const config = {
-  GANTRIX_DEFAULT_MODEL: 'qwen3:8b',
-  GANTRIX_DEFAULT_CONNECTION: undefined,
-  OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
-};
+const config = { OLLAMA_BASE_URL: 'http://127.0.0.1:11434' };
+/** Nothing chosen on the Agents page: the built-in model on the local Ollama. */
+const NONE = { connectionId: null, model: null };
 const connection = (over: Partial<Connection>): Connection => ({
   id: 'c1',
   name: 'claude',
@@ -51,23 +49,24 @@ describe('live view', () => {
   });
 
   it('says which model an agent runs on and whether it stays on this machine', () => {
-    expect(describeModel(config, [], null)).toEqual({
+    expect(describeModel(config, [], null, NONE)).toEqual({
       model: 'qwen3:8b',
       provider: 'ollama',
       connection: null,
       isLocal: true,
     });
-    expect(describeModel(config, [], { ...agent, model: 'ollama/gemma3:4b' })).toMatchObject({
+    expect(describeModel(config, [], { ...agent, model: 'ollama/gemma3:4b' }, NONE)).toMatchObject({
       model: 'gemma3:4b',
       provider: 'ollama',
       isLocal: true,
     });
     expect(
-      describeModel(config, [], {
-        ...agent,
-        model: 'openai/gpt',
-        modelBaseUrl: 'https://llm.example.com/v1',
-      }),
+      describeModel(
+        config,
+        [],
+        { ...agent, model: 'openai/gpt', modelBaseUrl: 'https://llm.example.com/v1' },
+        NONE,
+      ),
     ).toMatchObject({ model: 'gpt', provider: 'openai', isLocal: false });
 
     const rows = [
@@ -81,7 +80,12 @@ describe('live view', () => {
       }),
     ];
     expect(
-      describeModel(config, rows, { ...agent, connectionId: 'c1', model: 'claude-sonnet-5-5' }),
+      describeModel(
+        config,
+        rows,
+        { ...agent, connectionId: 'c1', model: 'claude-sonnet-5-5' },
+        NONE,
+      ),
     ).toEqual({
       model: 'claude-sonnet-5-5',
       provider: 'anthropic',
@@ -89,24 +93,63 @@ describe('live view', () => {
       isLocal: false,
     });
     // Claude Code runs here, but the prompts go to Anthropic.
-    expect(describeModel(config, rows, { ...agent, connectionId: 'c2' })).toMatchObject({
+    expect(describeModel(config, rows, { ...agent, connectionId: 'c2' }, NONE)).toMatchObject({
       model: 'default',
       provider: 'claude-code',
       isLocal: false,
     });
     expect(
-      describeModel(config, rows, { ...agent, connectionId: 'c3', model: 'local-model' }),
+      describeModel(config, rows, { ...agent, connectionId: 'c3', model: 'local-model' }, NONE),
     ).toMatchObject({ connection: 'lmstudio', isLocal: true });
     // A deleted connection falls back to what is saved on the agent, without throwing.
-    expect(describeModel(config, rows, { ...agent, connectionId: 'gone' }).model).toBe('qwen3:8b');
+    expect(describeModel(config, rows, { ...agent, connectionId: 'gone' }, NONE).model).toBe(
+      'qwen3:8b',
+    );
   });
 
-  it('uses GANTRIX_DEFAULT_CONNECTION for the planner, judges and plain agents', () => {
+  it('uses the default model chosen on the Agents page for the planner, judges and plain agents', () => {
     const rows = [
-      connection({ name: 'gateway', provider: 'openai', baseUrl: 'https://gw.example.com/v1' }),
+      connection({
+        id: 'g1',
+        name: 'gateway',
+        provider: 'openai',
+        baseUrl: 'https://gw.example.com/v1',
+      }),
+      connection({
+        id: 'o1',
+        name: 'office-ollama',
+        provider: 'ollama',
+        baseUrl: 'http://10.0.0.5:11434',
+      }),
     ];
-    expect(describeModel({ ...config, GANTRIX_DEFAULT_CONNECTION: 'gateway' }, rows, null)).toEqual(
-      { model: 'qwen3:8b', provider: 'openai', connection: 'gateway', isLocal: false },
+    // A cloud connection with its model.
+    expect(describeModel(config, rows, null, { connectionId: 'g1', model: 'gpt-5-mini' })).toEqual({
+      model: 'gpt-5-mini',
+      provider: 'openai',
+      connection: 'gateway',
+      isLocal: false,
+    });
+    // Only a model: the local Ollama, with that model.
+    expect(describeModel(config, rows, null, { connectionId: null, model: 'llama3.1:8b' })).toEqual(
+      {
+        model: 'llama3.1:8b',
+        provider: 'ollama',
+        connection: null,
+        isLocal: true,
+      },
+    );
+    // An agent without a model of its own takes the default's name on its Ollama connection.
+    expect(
+      describeModel(
+        config,
+        rows,
+        { ...agent, connectionId: 'o1' },
+        { connectionId: null, model: 'llama3.1:8b' },
+      ),
+    ).toMatchObject({ model: 'llama3.1:8b', connection: 'office-ollama', isLocal: true });
+    // The default's connection is gone: the built-in model, without throwing.
+    expect(describeModel(config, [], null, { connectionId: 'g1', model: 'gpt-5-mini' }).model).toBe(
+      'qwen3:8b',
     );
   });
 });

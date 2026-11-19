@@ -1,3 +1,4 @@
+import { DEFAULT_MODEL } from '@gantrix/shared';
 import type { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
@@ -21,6 +22,7 @@ export interface EngineDeps {
 }
 
 export const modelDefaults = (config: Config): ModelDefaults => ({
-  defaultModel: config.GANTRIX_DEFAULT_MODEL,
+  // Only a last resort: resolveModelSpec fills in the model chosen on the Agents page.
+  defaultModel: DEFAULT_MODEL,
   ollamaBaseUrl: config.OLLAMA_BASE_URL,
 });

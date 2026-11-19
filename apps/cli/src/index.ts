@@ -43,7 +43,7 @@ agents
   .description('add an agent')
   .option('-d, --description <text>', 'what the agent is good at (the planner reads this)')
   .option('-s, --skills <names>', 'comma-separated skill names')
-  .option('-m, --model <model>', 'e.g. qwen3:8b or openai/<model> (default: GANTRIX_DEFAULT_MODEL)')
+  .option('-m, --model <model>', 'e.g. qwen3:8b or openai/<model> (default: the default model)')
   .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
   .option(
@@ -86,6 +86,15 @@ skills
   .command('rm <name[@version]>')
   .description('remove an installed skill')
   .action(run((ref: string) => cmd.removeSkill(client, ref)));
+
+program
+  .command('default-model [model]')
+  .description(
+    'show or set the default model: what plans, judges and runs agents without their own model',
+  )
+  .option('-c, --connection <name>', 'a saved Ollama, OpenAI or Anthropic connection to run it on')
+  .option('--reset', 'go back to the built-in model on the local Ollama')
+  .action(run((model: string | undefined, o) => cmd.defaultModel(client, model, o)));
 
 const connections = program
   .command('connections')
@@ -175,7 +184,7 @@ team
     'install the CTO, CMO, CRO, CISO, CPO, designer and engineer agents and their skills',
   )
   .option('--only <roles>', 'comma-separated, e.g. cto,cpo')
-  .option('-m, --model <model>', 'model for all of them (default: GANTRIX_DEFAULT_MODEL)')
+  .option('-m, --model <model>', 'model for all of them (default: the default model)')
   .action(run((o) => addTeam(client, o)));
 
 program
