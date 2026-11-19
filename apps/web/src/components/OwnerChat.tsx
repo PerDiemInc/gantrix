@@ -1,4 +1,4 @@
-import type { DiscussionDto, DiscussionMessageDto } from '@gantrix/shared';
+import type { DiscussionDto, DiscussionMessageDto, DiscussionReplyDto } from '@gantrix/shared';
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { chatMarkdown } from '../markdown.ts';
@@ -14,14 +14,17 @@ export const STARTERS = [
 ];
 
 /** The answer takes a while on a local model, so it says so instead of looking stuck. */
-function Waiting({ owner }: { owner: string }) {
+function Waiting({ owner, slow }: { owner: string; slow: boolean }) {
   return (
     <li className="line line-owner" aria-live="polite">
       <span className="speaker speaker-system" aria-hidden="true">
         <Icon name="clock" size={16} />
       </span>
       <div className="bubble">
-        <p className="muted">{owner} is looking at the project…</p>
+        <p className="muted">
+          {owner} is looking at the project…
+          {slow && ' This is taking a while: the model may still be starting or loading.'}
+        </p>
       </div>
     </li>
   );
@@ -39,6 +42,8 @@ export function OwnerChat({ taskId }: { taskId: string }) {
   const [asking, setAsking] = useState('');
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [slow, setSlow] = useState(false);
   const end = useRef<HTMLLIElement>(null);
 
   useEffect(() => {
@@ -70,18 +75,20 @@ export function OwnerChat({ taskId }: { taskId: string }) {
     if (!q || asking) return;
     setAsking(q);
     setError('');
+    setSlow(false);
+    // A local model can take a while to load, or Ollama may be starting: say so, not nothing.
+    const timer = setTimeout(() => setSlow(true), 6_000);
     try {
-      const r = await api.post<{ messages: DiscussionMessageDto[] }>(
-        `/api/tasks/${taskId}/discussion`,
-        { text: q },
-      );
+      const r = await api.post<DiscussionReplyDto>(`/api/tasks/${taskId}/discussion`, { text: q });
       setMessages((list) => [...list, ...r.messages]);
+      if (r.startedOllama) setNotice("Ollama wasn't running, so Gantrix started it.");
       setText('');
     } catch (err) {
       // Nothing was saved, so the question stays in the box to send again.
       setText(q);
       setError((err as Error).message);
     }
+    clearTimeout(timer);
     setAsking('');
   };
   const submit = (e: FormEvent) => {
@@ -113,6 +120,11 @@ export function OwnerChat({ taskId }: { taskId: string }) {
           change what the team does, use the Team chat.
         </span>
       </p>
+      {notice && (
+        <p className="muted small" role="status">
+          {notice}
+        </p>
+      )}
       <ol className="meeting-lines" aria-live="polite" aria-relevant="additions">
         {!messages.length && !asking && (
           <li className="owner-starters">
@@ -174,7 +186,7 @@ export function OwnerChat({ taskId }: { taskId: string }) {
                 <p>{asking}</p>
               </div>
             </li>
-            <Waiting owner={owner.name} />
+            <Waiting owner={owner.name} slow={slow} />
           </>
         )}
         <li ref={end} className="line-end" />

@@ -375,6 +375,14 @@ export interface DiscussionDto {
   messages: DiscussionMessageDto[];
 }
 
+/** The answer to a message to the project owner. */
+export interface DiscussionReplyDto {
+  /** The message and the owner's answer, saved together. */
+  messages: DiscussionMessageDto[];
+  /** Ollama was not running, so Gantrix started it for this answer. */
+  startedOllama: boolean;
+}
+
 /** One agent (or the planner, or a judge) holding work right now. */
 export interface LiveAgentDto {
   /** The step's id; for the planner, the project's id. */

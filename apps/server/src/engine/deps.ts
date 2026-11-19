@@ -1,6 +1,7 @@
 import type { PostgresSaver } from '@langchain/langgraph-checkpoint-postgres';
 import type { Config } from '../config.ts';
 import type { Db } from '../db/client.ts';
+import type { EnsureOllama } from '../models/ollama-runtime.ts';
 import type { ModelDefaults } from '../models/provider.ts';
 import type { SkillFetch } from '../skills/remote.ts';
 import type { CheckUrl } from '../skills/tools/verify.ts';
@@ -15,6 +16,8 @@ export interface EngineDeps {
   checkUrl?: CheckUrl;
   /** How skills are downloaded from the web; tests replace it. Default: a guarded public fetch. */
   skillFetch?: SkillFetch;
+  /** Checks that Ollama answers and starts it when it doesn't; tests replace it. */
+  ensureOllama?: EnsureOllama;
 }
 
 export const modelDefaults = (config: Config): ModelDefaults => ({
