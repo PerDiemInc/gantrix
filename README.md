@@ -1034,6 +1034,26 @@ npm run test:e2e      # the real engine against Docker, with a fake model (no GP
 The end-to-end tests use their own database (`gantrix_test`) and Valkey DB 2, so they don't
 touch your data.
 
+### Database migrations
+
+Until the first release the schema has **one baseline migration**,
+`apps/server/drizzle/0000_init.sql`. To change the schema, edit `apps/server/src/db/schema.ts` and
+regenerate that one file:
+
+```bash
+rm -rf apps/server/drizzle
+npm run db:generate -w @gantrix/server -- --name init
+```
+
+then recreate your dev database (`docker compose down -v && npm run infra:up && npm run db:migrate`).
+From the first release on, schema changes become new numbered migration files instead
+(`npm run db:generate`), because deployed databases can't be recreated.
+
+A dev database that was migrated before the history was squashed into the baseline has the old
+migrations on record, so `npm run db:migrate` would try to create tables that already exist. If it
+has all the current tables, `npm run db:rebaseline` records the baseline as applied (it reports
+first, and changes nothing without `--yes`; no data is touched). Otherwise recreate it as above.
+
 Layout: `apps/server` (API, engine, worker), `apps/cli`, `apps/web` (dashboard),
 `packages/shared` (types used by all three), `packages/media-mcp` (image and video server),
 `examples/skills`, `scripts` (setup), `site` (the website).
