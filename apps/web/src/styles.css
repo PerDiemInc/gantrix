@@ -2695,3 +2695,65 @@ a.button.primary {
 .settings-grid input[type="number"] {
   width: 100%;
 }
+
+/* ---------- a project that is working right now ---------- */
+.busy-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--s-running);
+  flex: none;
+}
+.project.busy {
+  border-color: color-mix(in srgb, var(--s-running) 60%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--s-running) 25%, transparent),
+    var(--shadow);
+  overflow: hidden;
+}
+.busy-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--s-running) 14%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--s-running) 35%, transparent);
+}
+.busy-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: 40%;
+  background: var(--s-running);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .busy-dot {
+    animation: busy-pulse 1.4s ease-in-out infinite;
+  }
+  .busy-bar::after {
+    animation: busy-slide 1.8s ease-in-out infinite;
+  }
+}
+@keyframes busy-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--s-running) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+@keyframes busy-slide {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}

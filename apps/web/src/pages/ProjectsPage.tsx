@@ -529,11 +529,22 @@ function ProjectCard({
   const name = (agentId: string | null) => (agentId && agents.get(agentId)?.name) || 'agent';
   const stepAgent = new Map(p.active.map((s) => [s.id, name(s.agentId)]));
   const live = !isTerminal(p.status);
+  const busy = ['running', 'planning', 'delegating', 'judging'].includes(p.status);
   const end = p.finishedAt ? Date.parse(p.finishedAt) : Date.now();
   const working = p.active.filter((s) => s.status !== 'queued');
   const queued = p.active.filter((s) => s.status === 'queued');
   return (
-    <li className={`project${p.pendingApprovals ? ' needs-you' : ''}`}>
+    <li className={`project${p.pendingApprovals ? ' needs-you' : ''}${busy ? ' busy' : ''}`}>
+      {busy && (
+        <div className="busy-bar" role="status">
+          <span className="busy-dot" aria-hidden="true" />
+          {working.length
+            ? `Working now · ${working.length} task${working.length === 1 ? '' : 's'} running`
+            : p.status === 'planning'
+              ? 'Planning the work'
+              : 'Running'}
+        </div>
+      )}
       <a className="project-link" href={`#/projects/${p.id}`}>
         <div className="project-head">
           <StatusPill status={p.status} />

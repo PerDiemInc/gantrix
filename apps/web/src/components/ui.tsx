@@ -7,6 +7,9 @@ import { Icon, STATUS_ICON } from './Icon.tsx';
 export function StatusPill({ status, big }: { status: TaskStatus | StepStatus; big?: boolean }) {
   return (
     <span className={`pill s-${status}${big ? ' big' : ''}`}>
+      {['running', 'planning', 'delegating', 'judging'].includes(status) && (
+        <span className="busy-dot" aria-hidden="true" />
+      )}
       <Icon name={STATUS_ICON[status] ?? 'dot'} size={big ? 14 : 12} />
       {label(status)}
     </span>
