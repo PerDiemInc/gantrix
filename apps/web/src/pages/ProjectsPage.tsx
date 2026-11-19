@@ -40,7 +40,7 @@ export function NewProject({ onClose }: { onClose: () => void }) {
   const [goal, setGoal] = useState('');
   const [minutes, setMinutes] = useState('180');
   // Approvals are off by default; "Ask first" turns them on for this project.
-  // null until the user touches the switch: then the server's GANTRIX_APPROVE_ALL decides.
+  // null until the user touches the switch: then the Settings page's choice decides.
   const [askChoice, setAskChoice] = useState<boolean | null>(null);
   const [serverApproveAll, setServerApproveAll] = useState(true);
   const askFirst = askChoice ?? !serverApproveAll;

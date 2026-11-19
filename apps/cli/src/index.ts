@@ -44,7 +44,7 @@ agents
   .option('-d, --description <text>', 'what the agent is good at (the planner reads this)')
   .option('-s, --skills <names>', 'comma-separated skill names')
   .option('-m, --model <model>', 'e.g. qwen3:8b or openai/<model> (default: the default model)')
-  .option('--base-url <url>', 'model server URL (default: OLLAMA_BASE_URL)')
+  .option('--base-url <url>', 'model server URL (default: the Ollama address in Settings)')
   .option('--max-concurrency <n>', 'steps this agent may run at once', '1')
   .option(
     '--timeout <minutes>',
@@ -207,7 +207,7 @@ program
     '--offload <claude|chatgpt>',
     'run the team on Claude Code or the Codex CLI on this machine',
   )
-  .option('--slack', 'post progress to Slack (needs SLACK_BOT_TOKEN and SLACK_CHANNEL_ID)')
+  .option('--slack', 'post progress to Slack (set up on the Settings page)')
   .option('--agents <names>', 'only these agents may work on it, e.g. cpo,designer,engineer')
   .option('--ask', 'ask before shell, web, MCP and email tools (approvals on)')
   .option(

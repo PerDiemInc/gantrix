@@ -64,7 +64,7 @@ export const agents = pgTable(
     description: text('description').notNull().default(''),
     systemPrompt: text('system_prompt').notNull().default(''),
     model: text('model'), // null → the default model (app_settings)
-    modelBaseUrl: text('model_base_url'), // null → OLLAMA_BASE_URL
+    modelBaseUrl: text('model_base_url'), // null → the Ollama address in Settings
     // Wins over modelBaseUrl. Restrict: remove the connection from agents before deleting it.
     connectionId: uuid('connection_id').references(() => connections.id, {
       onDelete: 'restrict',

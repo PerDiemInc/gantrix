@@ -363,7 +363,7 @@ export function taskRoutes(app: FastifyInstance, deps: ApiDeps): void {
     if (input.slack && !(deps.config.SLACK_BOT_TOKEN && deps.config.SLACK_CHANNEL_ID)) {
       throw new HttpError(
         400,
-        "Slack isn't set up: add SLACK_BOT_TOKEN and SLACK_CHANNEL_ID to .env.",
+        "Slack isn't set up: add a bot token and a channel on the Settings page (Slack).",
       );
     }
     await updateTask(deps, task.id, input);

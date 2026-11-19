@@ -7,8 +7,9 @@ import { createDb } from './db/client.ts';
 import { createQueues } from './engine/queues.ts';
 import { prTasks } from './integrations/pr-tasks.ts';
 import { createPreviewServer } from './preview.ts';
+import { startSettingsSync } from './settings.ts';
 import { AgentSlack } from './slack/agent-chat.ts';
-import { SlackBridge } from './slack/bridge.ts';
+import { SlackManager } from './slack/manager.ts';
 import { seedDefaultTeam } from './team-seed.ts';
 
 const config = loadConfig();
@@ -24,6 +25,12 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(config.GANTRIX_HOST)) {
 }
 
 const { db, pool } = createDb(config.DATABASE_URL);
+// The Ollama address, task defaults and Slack settings are saved in the database, not the
+// environment: load them, and keep them current if they change from elsewhere.
+let slackChanged: () => Promise<void> = async () => {};
+const settingsSync = await startSettingsSync(db, config, {
+  onChange: (change) => (change.slack ? slackChanged() : undefined),
+});
 const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null });
 const queues = createQueues(connection);
 const checkpointer = new PostgresSaver(pool, undefined, { schema: 'langgraph' });
@@ -39,7 +46,10 @@ const seeded = await seedDefaultTeam(db, connection, config).catch((error: unkno
 });
 if (seeded) console.log(`Added ${seeded} starter agents. Edit them on the Agents page.`);
 
-const app = buildServer({ db, queues, checkpointer, config, hub }, config.GANTRIX_TOKEN);
+const app = buildServer(
+  { db, queues, checkpointer, config, hub, onSlackSettings: () => slackChanged() },
+  config.GANTRIX_TOKEN,
+);
 const prScans = prTasks(app, db, connection, pool, config, config.GANTRIX_TOKEN);
 await app.listen({ host: config.GANTRIX_HOST, port: config.GANTRIX_PORT });
 
@@ -50,26 +60,11 @@ const preview = createPreviewServer(config.GANTRIX_SITES_DIR, {
 preview.on('error', (error) => console.error(`Preview server: ${error.message}`));
 preview.listen(config.GANTRIX_PREVIEW_PORT, config.GANTRIX_HOST);
 
-// Slack (optional): progress posts to a thread per project; Socket Mode brings replies back.
-let slack: SlackBridge | null = null;
-if (config.SLACK_BOT_TOKEN && config.SLACK_CHANNEL_ID) {
-  slack = new SlackBridge(
-    { db, queues, checkpointer, config },
-    hub,
-    undefined,
-    prScans.handleSlack,
-  );
-  await slack.start().then(
-    () =>
-      console.log(
-        `Slack: posting to ${config.SLACK_CHANNEL_ID}${config.SLACK_APP_TOKEN ? ', listening for replies' : ' (add SLACK_APP_TOKEN for replies)'}`,
-      ),
-    (error: unknown) => {
-      console.error(`Slack is off: ${error instanceof Error ? error.message : String(error)}`);
-      slack = null;
-    },
-  );
-}
+// Slack for projects (Settings → Slack): progress posts to a thread per project, and Socket Mode
+// brings replies back. It restarts when its settings change.
+const slack = new SlackManager({ db, queues, checkpointer, config }, hub, prScans.handleSlack);
+slackChanged = () => slack.apply(true);
+await slack.apply();
 
 // Agents with a Slack connection (bot + app token) can be chatted with in Slack.
 const agentSlack = new AgentSlack({ db, queues, checkpointer, config });
@@ -82,7 +77,8 @@ async function shutdown() {
   preview.closeAllConnections();
   preview.close();
   await app.close();
-  await slack?.close();
+  settingsSync.stop();
+  await slack.close();
   await agentSlack.close();
   await prScans.close();
   await hub.close();

@@ -11,6 +11,7 @@ import { ConnectSlackPage } from './pages/ConnectSlackPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
 import { NewPage } from './pages/NewPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
+import { SettingsPage } from './pages/SettingsPage.tsx';
 import { SkillsPage } from './pages/SkillsPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
 import { ProjectPage } from './pages/TaskPage.tsx';
@@ -75,6 +76,7 @@ export function App() {
     ['skills', 'Skills'],
     ['connections', 'Connections'],
     ['approvals', 'Approvals'],
+    ['settings', 'Settings'],
     ['system', 'System'],
   ] as const;
   const current =
@@ -143,6 +145,7 @@ export function App() {
           {route.page === 'connections' && <ConnectionsPage />}
           {route.page === 'approvals' && <ApprovalsPage />}
           {route.page === 'live' && <ProjectsPage initialView="agents" />}
+          {route.page === 'settings' && <SettingsPage />}
           {route.page === 'system' && <SystemPage />}
         </ErrorBoundary>
       </main>

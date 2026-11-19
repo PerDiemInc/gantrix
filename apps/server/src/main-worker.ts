@@ -19,10 +19,19 @@ import {
   type WorkJob,
 } from './engine/queues.ts';
 import { buildSupervisor, tick } from './engine/supervisor.ts';
+import { startSettingsSync } from './settings.ts';
 
 const config = loadConfig();
 for (const warning of removedEnvWarnings()) console.warn(`Warning: ${warning}`);
 const { db, pool } = createDb(config.DATABASE_URL);
+// Ollama's address and how many model calls run at once are saved in the database; the API
+// changes them, so look again every few seconds.
+let setConcurrency: (n: number) => void = () => {};
+const settingsSync = await startSettingsSync(db, config, {
+  onChange: (change) => {
+    if (change.concurrency) setConcurrency(config.GANTRIX_LLM_CONCURRENCY);
+  },
+});
 const connection = new Redis(config.REDIS_URL, { maxRetriesPerRequest: null }); // BullMQ requires null
 const queues = createQueues(connection);
 const checkpointer = new PostgresSaver(pool, undefined, { schema: 'langgraph' });
@@ -40,6 +49,10 @@ const workWorker = new Worker<WorkJob>(WORK_QUEUE, (job) => runWorkJob(deps, job
   connection,
   concurrency: config.GANTRIX_LLM_CONCURRENCY,
 });
+setConcurrency = (n) => {
+  workWorker.concurrency = n;
+  console.log(`Model slots: ${n}.`);
+};
 // A job's cron schedule fired: start a run (skipped while the last run is still going).
 const scheduleWorker = new Worker<ScheduleJob>(
   SCHEDULES_QUEUE,
@@ -85,6 +98,7 @@ async function shutdown(signal: string) {
     console.log('Jobs still running; stopping anyway. They will resume on the next start.');
     process.exit(0);
   }, SHUTDOWN_GRACE_MS).unref();
+  settingsSync.stop();
   await Promise.all([tickWorker.close(), workWorker.close(), scheduleWorker.close()]);
   await queues.close();
   connection.disconnect();

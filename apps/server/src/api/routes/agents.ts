@@ -27,7 +27,7 @@ const AgentFields = z.object({
   description: z.string().max(500),
   systemPrompt: z.string().max(20_000),
   model: z.string().min(1).nullable(), // null → the default model
-  modelBaseUrl: z.url().nullable(), // null → OLLAMA_BASE_URL
+  modelBaseUrl: z.url().nullable(), // null → the Ollama address in Settings
   connectionId: z.uuid().nullable(), // null → the default; wins over modelBaseUrl
   // A Slack connection with a bot token and an app-level token; null → not in Slack.
   slackConnectionId: z.uuid().nullable(),

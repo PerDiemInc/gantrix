@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Redis } from 'ioredis';
 import pg from 'pg';
-import { loadConfig } from '../../src/config.ts';
+import { loadConfig, RUNTIME_DEFAULTS } from '../../src/config.ts';
 import { createDb } from '../../src/db/client.ts';
 import { agentSkills, agents, skills, tasks } from '../../src/db/schema.ts';
 import type { EngineDeps } from '../../src/engine/deps.ts';
@@ -50,18 +50,25 @@ async function freshDatabase(): Promise<string> {
 export async function startEngine() {
   const databaseUrl = await freshDatabase();
   const fake = await startFakeOllama();
-  const dir = await mkdtemp(join(tmpdir(), 'gantrix-e2e-'));
-  const config = loadConfig({
-    DATABASE_URL: databaseUrl,
-    REDIS_URL,
+  // The settings the engine tests run with. A test that saves a setting changes the config, so
+  // reset() puts these back.
+  const harnessSettings = {
     OLLAMA_BASE_URL: fake.url,
     // The engine tests exercise approvals, so new tasks ask unless a test says otherwise.
-    GANTRIX_APPROVE_ALL: 'false',
-    GANTRIX_TOKEN: 't'.repeat(32),
-    GANTRIX_WORKSPACES_DIR: join(dir, 'workspaces'),
-    GANTRIX_SKILLS_DIR: join(dir, 'skills'),
-    GANTRIX_LLM_CONCURRENCY: '4',
-  });
+    GANTRIX_APPROVE_ALL: false,
+    GANTRIX_LLM_CONCURRENCY: 4,
+  };
+  const dir = await mkdtemp(join(tmpdir(), 'gantrix-e2e-'));
+  const config = loadConfig(
+    {
+      DATABASE_URL: databaseUrl,
+      REDIS_URL,
+      GANTRIX_TOKEN: 't'.repeat(32),
+      GANTRIX_WORKSPACES_DIR: join(dir, 'workspaces'),
+      GANTRIX_SKILLS_DIR: join(dir, 'skills'),
+    },
+    harnessSettings,
+  );
   const { db, pool } = createDb(databaseUrl);
   await migrate(db, { migrationsFolder: fileURLToPath(new URL('../../drizzle', import.meta.url)) });
   await saveDefaultModel(db, { connectionId: null, model: 'fake' });
@@ -149,6 +156,9 @@ export async function startEngine() {
     );
     await rm(config.GANTRIX_SKILLS_DIR, { recursive: true, force: true });
     await useFakeModel();
+    // Only the runtime settings: the rest of the config (paths, the Slack API address a test
+    // points at a fake) stays as it is.
+    Object.assign(config, RUNTIME_DEFAULTS, harnessSettings, { SLACK_ALLOWED_USERS: [] });
   }
 
   async function close() {

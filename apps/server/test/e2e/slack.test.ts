@@ -22,6 +22,9 @@ const step = (key: string, agent: string) => ({
 function fakeSlack() {
   const calls: { method: string; body: Record<string, unknown> }[] = [];
   let ts = 1000;
+  const resetTs = () => {
+    ts = 1000;
+  };
   const server: Server = createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => {
@@ -39,7 +42,7 @@ function fakeSlack() {
       res.end(JSON.stringify({ ok: true }));
     });
   });
-  return { calls, server };
+  return { calls, server, resetTs };
 }
 
 let e: Engine;
@@ -90,6 +93,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await e.reset();
   slack.calls.length = 0;
+  slack.resetTs();
 });
 
 describe('slack', () => {

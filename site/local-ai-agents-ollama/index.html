@@ -118,7 +118,7 @@ npm run gantrix -- agents add editor -d "Turns notes into a polished summary" -s
       <ul class="safety">
         <li><b>One default.</b> The <b>Default model</b> on the Agents page sets the model for the planner, the judges and every agent without its own. It is a saved setting, so changing it needs no restart.</li>
         <li><b>A model per agent.</b> Give a small model to simple agents and a bigger one to the agent that writes code. Any model from <code>ollama list</code> works.</li>
-        <li><b>How many run at once.</b> <code>GANTRIX_LLM_CONCURRENCY</code> caps model calls in flight; the default is 2.</li>
+        <li><b>How many run at once.</b> The <b>Model calls at once</b> setting (Settings → Task defaults) caps model calls in flight; the default is 2. It applies within a few seconds.</li>
         <li><b>Other local servers.</b> vLLM, llama.cpp, LM Studio and LiteLLM connect as OpenAI-compatible servers.</li>
         <li><b>Cloud when you choose it.</b> Add an OpenAI or Anthropic connection, or hand a project to Claude Code. Those are labelled cloud.</li>
       </ul>
