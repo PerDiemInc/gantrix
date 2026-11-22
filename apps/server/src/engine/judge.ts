@@ -25,16 +25,32 @@ If it fails, say exactly what is missing so the agent can fix it.`;
 const GOAL_JUDGE = `You decide whether a goal has been achieved, based on the results of the steps
 taken. If it hasn't, say what is still missing so a planner can add steps.`;
 
+/** Ollama refuses `think` for a model that has no thinking mode. */
+const NO_THINKING = /does not support thinking/i;
+
 async function verdict(model: BaseChatModel, system: string, prompt: string): Promise<Verdict> {
   const judge = model.withStructuredOutput(VerdictSchema, {
     name: 'verdict',
     includeRaw: true,
     ...structuredMethod(model),
   });
-  const { raw, parsed } = await judge.invoke([
+  const messages = [
     { role: 'system', content: system },
     { role: 'user', content: prompt },
-  ]);
+  ];
+  let result: Awaited<ReturnType<typeof judge.invoke>>;
+  try {
+    result = await judge.invoke(messages);
+  } catch (error) {
+    // A model without a thinking mode (some local models) judges without it, now and from here on.
+    const m = model as { think?: boolean };
+    if (!m.think || !NO_THINKING.test(error instanceof Error ? error.message : String(error))) {
+      throw error;
+    }
+    m.think = false;
+    result = await judge.invoke(messages);
+  }
+  const { raw, parsed } = result;
   return { ...parsed, tokens: tokensUsed(raw as Parameters<typeof tokensUsed>[0]) };
 }
 
