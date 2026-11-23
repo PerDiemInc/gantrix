@@ -2,7 +2,8 @@ import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { agentSkills, agents, connections, plans, skills, steps, tasks } from '../db/schema.ts';
 import { emit } from '../events.ts';
 import { agentForProject, resolveModelSpec } from '../models/connections.ts';
-import { createChatModel, structuredMethod, tokensUsed } from '../models/provider.ts';
+import { createChatModel, tokensUsed } from '../models/provider.ts';
+import { structured } from '../models/structured.ts';
 import { validatePlan } from '../plan/dag.ts';
 import { type Plan, PlanSchema } from '../plan/schema.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
@@ -61,11 +62,7 @@ export async function runPlanJob(
     'planner',
     modelDefaults(deps.config),
   );
-  const model = chat.withStructuredOutput(PlanSchema, {
-    name: 'plan',
-    includeRaw: true,
-    ...structuredMethod(chat),
-  });
+  const model = structured(chat, PlanSchema, 'plan');
   const ctx = {
     agentNames: new Set(team.map((a) => a.name)),
     doneKeys: new Set(done.map((s) => s.key)),

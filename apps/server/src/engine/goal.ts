@@ -1,7 +1,8 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { z } from 'zod';
 import { resolveModelSpec } from '../models/connections.ts';
-import { createChatModel, structuredMethod } from '../models/provider.ts';
+import { createChatModel } from '../models/provider.ts';
+import { structured } from '../models/structured.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
 
 export const GoalSchema = z.object({
@@ -29,11 +30,12 @@ export async function suggestGoal(deps: EngineDeps, description: string): Promis
     modelDefaults(deps.config),
     0,
   );
-  const model = chat.withStructuredOutput(GoalSchema, { name: 'okr', ...structuredMethod(chat) });
-  return model.invoke(
+  const model = structured(chat, GoalSchema, 'okr');
+  const { parsed } = await model.invoke(
     [new SystemMessage(SYSTEM), new HumanMessage(`Project description:\n${description}`)],
     {
       signal: AbortSignal.timeout(90_000),
     },
   );
+  return parsed;
 }

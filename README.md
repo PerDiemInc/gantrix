@@ -833,6 +833,15 @@ in your `.env`, the API and worker warn at start; choose the model once and dele
 An agent's own model can be any Ollama model, or `openai/<model>` with a base URL for any
 OpenAI-compatible server (vLLM, llama.cpp, LM Studio).
 
+**Models without structured output or thinking.** Gantrix asks the planner and judge for JSON
+and the judge to think first. A model that can't (Ollama says "structured output is
+unavailable" or "does not support thinking") still works: Gantrix asks it for JSON in the prompt
+and checks the answer, and the judge goes on without thinking. Thinking Machines'
+[Inkling 2 Mini](https://thinkingmachines.ai/news/inkling-2-mini/) is one: install it with
+`ollama pull inkling-2-mini` (about 20 GB, a Mac with 32 GB or more, Ollama 0.40.17 or newer;
+the Hugging Face GGUF builds don't load in Ollama yet). Its model card says it is less reliable
+than larger models at following instructions with tools, so try it on a small project first.
+
 Small models tend to plan steps one after another and sometimes reject good work. A larger model
 plans more parallel steps and judges more accurately.
 
