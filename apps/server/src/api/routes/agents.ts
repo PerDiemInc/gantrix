@@ -1,7 +1,9 @@
+import { type AgentSetupDto, MAX_SETUP_ANSWER_CHARS } from '@gantrix/shared';
 import { asc, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { agentSkills, agents, connections, skills } from '../../db/schema.ts';
+import { SetupError, saveAgentSetup } from '../../skills/setup.ts';
 import { HttpError, IdParams, notFound, parse } from '../http.ts';
 import { requireModelFor } from '../model-checks.ts';
 import type { ApiDeps } from '../server.ts';
@@ -32,6 +34,8 @@ const AgentFields = z.object({
   // A Slack connection with a bot token and an app-level token; null → not in Slack.
   slackConnectionId: z.uuid().nullable(),
   avatar: Avatar.nullable(),
+  // A GitHub connection the agent may read through; null → no GitHub access.
+  githubConnectionId: z.uuid().nullable(),
   maxConcurrency: z.number().int().min(1).max(16),
   // One run of a step may take this long; null = no limit. Shell commands may run as long.
   stepTimeoutMinutes: z
@@ -45,8 +49,24 @@ const AgentFields = z.object({
 // Omitted fields get the database defaults.
 const CreateAgent = AgentFields.partial().required({ name: true });
 const UpdateAgent = AgentFields.partial();
+// The setup interview. Access is separate from the answers: a token never becomes an answer.
+const Setup = z.object({
+  answers: z.record(z.string().max(40), z.string().max(MAX_SETUP_ANSWER_CHARS)),
+  github: z
+    .discriminatedUnion('mode', [
+      z.object({
+        mode: z.literal('token'),
+        token: z.string().min(1).max(1_000),
+        org: z.string().max(100).optional(),
+        repos: z.string().max(2_000).optional(),
+      }),
+      z.object({ mode: z.literal('connection'), connectionId: z.uuid() }),
+      z.object({ mode: z.literal('none') }),
+    ])
+    .optional(),
+});
 
-export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
+export function agentRoutes(app: FastifyInstance, { db, config, githubFetch }: ApiDeps): void {
   async function withSkills(rows: (typeof agents.$inferSelect)[]) {
     const ids = rows.map((a) => a.id);
     const links = ids.length
@@ -86,6 +106,12 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
     }
   }
 
+  async function requireGithub(connectionId: string | null | undefined) {
+    if (!connectionId) return;
+    const c = await db.query.connections.findFirst({ where: eq(connections.id, connectionId) });
+    if (c?.provider !== 'github') throw new HttpError(400, 'That is not a GitHub connection.');
+  }
+
   async function getAgent(id: string) {
     const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
     if (!agent) throw notFound('Agent');
@@ -103,6 +129,7 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
     const { skillIds, ...fields } = parse(CreateAgent, request.body);
     await requireModelFor(db, fields.connectionId, fields.model);
     await requireSlackBot(fields.slackConnectionId);
+    await requireGithub(fields.githubConnectionId);
     const id = await db.transaction(async (tx) => {
       const [row] = await tx.insert(agents).values(fields).returning({ id: agents.id });
       if (!row) throw new HttpError(500, 'Agent insert returned no row.');
@@ -120,6 +147,7 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
     const { id } = parse(IdParams, request.params);
     const { skillIds, ...fields } = parse(UpdateAgent, request.body);
     await requireSlackBot(fields.slackConnectionId);
+    await requireGithub(fields.githubConnectionId);
     if (fields.connectionId !== undefined || fields.model !== undefined) {
       const current = await db.query.agents.findFirst({ where: eq(agents.id, id) });
       await requireModelFor(
@@ -145,6 +173,46 @@ export function agentRoutes(app: FastifyInstance, { db }: ApiDeps): void {
       }
     });
     return getAgent(id);
+  });
+
+  /** What the setup interview needs besides the questions, which the dashboard already has. */
+  app.get('/api/agents/:id/setup', async (request): Promise<AgentSetupDto> => {
+    const { id } = parse(IdParams, request.params);
+    const agent = await db.query.agents.findFirst({ where: eq(agents.id, id) });
+    if (!agent) throw notFound('Agent');
+    const github = await db
+      .select()
+      .from(connections)
+      .where(eq(connections.provider, 'github'))
+      .orderBy(asc(connections.name));
+    return {
+      githubConnections: github.map((c) => ({
+        id: c.id,
+        name: c.name,
+        org: c.settings.org ?? '',
+        repos: c.settings.repos ?? '',
+      })),
+      githubConnectionId: agent.githubConnectionId,
+      setup: agent.setup,
+    };
+  });
+
+  /** Saves the interview: writes the agent's skill and any access that was given. */
+  app.post('/api/agents/:id/setup', async (request) => {
+    const { id } = parse(IdParams, request.params);
+    const input = parse(Setup, request.body);
+    const saved = await saveAgentSetup(
+      { db, skillsDir: config.GANTRIX_SKILLS_DIR, ...(githubFetch ? { githubFetch } : {}) },
+      id,
+      input,
+    ).catch((error: Error) => {
+      if (error instanceof SetupError || error.name === 'ToolError') {
+        throw new HttpError(400, error.message);
+      }
+      throw error;
+    });
+    if (!saved) throw notFound('Agent');
+    return { agent: await getAgent(id), ...saved };
   });
 
   // Steps that used this agent keep their history; pending ones fail and trigger a replan.

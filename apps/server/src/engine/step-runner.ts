@@ -21,6 +21,7 @@ import { createChatModel } from '../models/provider.ts';
 import { changedFiles, snapshotFiles } from '../skills/file-changes.ts';
 import { type AgentToolkit, combineSkills, loadVerifiedSkill } from '../skills/loader.ts';
 import { openMcpTools } from '../skills/mcp.ts';
+import { githubForStep } from '../skills/setup.ts';
 import { loadShellEnv } from '../skills/shell-env.ts';
 import {
   snapshotProjectInput,
@@ -242,6 +243,10 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
   const spec = await resolveModelSpec(db, agentForProject(task, agent));
   const localCli = spec.provider === 'claude-code' || spec.provider === 'codex';
   const shellEnv = toolkit.builtinTools.has('shell') ? await loadShellEnv(db, task.id) : {};
+  const github = await githubForStep(db, agent, localCli, deps.githubFetch);
+  if (github) {
+    toolkit.instructions = [toolkit.instructions, github.note].filter(Boolean).join('\n\n');
+  }
   const mcp = await openMcpTools(localCli ? {} : toolkit.mcpServers, workspace);
   // A model turn can last 30 minutes on a CLI: Stop has to reach it during the turn.
   const abort = new AbortController();
@@ -287,6 +292,7 @@ async function execute(deps: EngineDeps, task: Task, step: Step): Promise<'again
             },
           },
         ),
+        ...(github?.tools ?? []),
         ...delegates,
         ...mcp.tools,
       ],

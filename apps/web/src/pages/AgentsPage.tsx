@@ -1,6 +1,7 @@
 import type { AgentDto, ConnectionDto, DefaultModelDto, SkillDto } from '@gantrix/shared';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import { AgentSetup } from '../components/AgentSetup.tsx';
 import { AvatarPicker } from '../components/AvatarPicker.tsx';
 import { Icon } from '../components/Icon.tsx';
 import { ModelPicker } from '../components/ModelPicker.tsx';
@@ -467,6 +468,7 @@ export function AgentsPage() {
                   Remove
                 </button>
               </div>
+              <AgentSetup key={`setup-${a.id}`} agent={a} onSaved={load} />
               <RunsOn agent={a} connections={connections} onSaved={load} />
               <TimeLimit agent={a} onSaved={load} />
               <SlackChat agent={a} connections={connections} onSaved={load} />

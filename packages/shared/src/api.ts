@@ -17,6 +17,32 @@ export interface SkillRef {
   version: string;
 }
 
+export interface AgentSetupRecord {
+  answers: Record<string, string>;
+  skillId: string;
+  updatedAt: string;
+}
+
+/** Read access to GitHub, given during setup. Left out → whatever the agent has stays. */
+export type GithubAccessInput =
+  | { mode: 'token'; token: string; org?: string | undefined; repos?: string | undefined }
+  | { mode: 'connection'; connectionId: string }
+  | { mode: 'none' };
+
+export interface AgentSetupDto {
+  /** Saved GitHub connections the agent could use. */
+  githubConnections: { id: string; name: string; org: string; repos: string }[];
+  githubConnectionId: string | null;
+  setup: AgentSetupRecord | null;
+}
+
+export interface AgentSetupResultDto {
+  agent: AgentDto;
+  skill: { name: string; version: string; markdown: string };
+  /** Set when access was given or changed. */
+  github: { connection: string; reply: string; warning: string | null } | null;
+}
+
 export interface AgentDto {
   id: string;
   name: string;
@@ -28,6 +54,10 @@ export interface AgentDto {
   connectionId: string | null;
   /** A Slack connection (bot and app token): people can chat with this agent in Slack. */
   slackConnectionId: string | null;
+  /** A GitHub connection this agent may read through (github_read). */
+  githubConnectionId: string | null;
+  /** The setup interview's last answers and the skill written from them; null → not set up. */
+  setup: AgentSetupRecord | null;
   /** "preset:<id>", "initials", a data:image URL, or null for the default picked by name. */
   avatar: string | null;
   maxConcurrency: number;

@@ -1,5 +1,6 @@
 import {
   type AgentModelChoice,
+  type AgentSetupRecord,
   APPROVAL_STATUSES,
   type ApprovalStatus,
   type Budget,
@@ -73,6 +74,12 @@ export const agents = pgTable(
     slackConnectionId: uuid('slack_connection_id').references(() => connections.id, {
       onDelete: 'set null',
     }),
+    // A GitHub connection this agent may read through (the github_read tool).
+    githubConnectionId: uuid('github_connection_id').references(() => connections.id, {
+      onDelete: 'set null',
+    }),
+    // The setup interview: the answers and the skill written from them. Never holds a token.
+    setup: jsonb('setup').$type<AgentSetupRecord>(),
     maxConcurrency: integer('max_concurrency').notNull().default(1), // enforced by the supervisor
     // Longest one run of a step may take; then the attempt fails and is retried. Shell commands
     // may run this long too. null → no step limit, and shell commands get two minutes.

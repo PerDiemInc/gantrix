@@ -1,3 +1,4 @@
+export * from './agent-setup.ts';
 export type * from './api.ts';
 export * from './events.ts';
 export * from './examples.ts';

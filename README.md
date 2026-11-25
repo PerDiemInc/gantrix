@@ -295,6 +295,7 @@ Instructions the agent gets whenever it has this skill.
 | `read_file`, `write_file`, `list_files` | Text files in the project's folder (the step's own folder with isolated steps) | never |
 | `web_fetch` | Public web pages; refuses local and private addresses | on projects that ask first, unless a skill auto-approves it |
 | `shell` | A shell command in the task's folder, 2-minute limit | on projects that ask first (no skill can skip that) |
+| `github_read` | Reads the GitHub API, GET only, within the repositories you allowed; given by [setup](#set-up-an-agent), not by a skill | on projects that ask first |
 | `ask_user` | Asks you a question, optionally with answers to pick from, and waits for your reply | always waits for you |
 | `deploy_site` | Publishes a workspace folder with an `index.html` on the local preview server (port 4702) | on projects that ask first |
 
@@ -361,6 +362,33 @@ https (never a private or local address), text files only, at most 100 files, 51
 2 MB in all, and no symlinks or submodules. A private repository can't be installed this way;
 download it and install the folder. GitHub allows 60 anonymous lookups an hour, so a busy hour
 may need a wait.
+
+## Set up an agent
+
+Each agent can write its own skill by asking how you work. On the **Agents** page press
+**Set up** (or run `npm run gantrix -- agents setup cto`). It asks one question at a time, you
+skip what you like, you read the skill, then save it. The CTO, for example, asks:
+
+1. **How do you save your code?**
+2. If it's GitHub: **can I have read access?** Paste a token, name a variable in `.env`, or
+   pick a saved GitHub connection. Otherwise it asks where the code is.
+3. What it's built with, how changes ship, and what it must never do.
+
+Every starter agent has its own questions; agents you add get general ones. The answers become
+the skill `setup-<agent>`, which the agent reads on every task. **Redo** writes a new version
+with your earlier answers filled in.
+
+**GitHub access is read-only.** The agent gets a `github_read` tool (GET requests only),
+limited to the repositories or organization you name; if you name none, it can read whatever
+the token can. Use a fine-grained token with **Contents**, **Pull requests** and **Issues** set
+to **Read**. On projects that ask first, each read waits for your approval. Claude Code and
+Codex agents use their own tools, so they don't get `github_read`.
+
+The token is saved as the connection `github-<agent>` (in the local database, or as `env:NAME`).
+It is never written into the skill, sent to a model or returned by the API, and an answer that
+looks like a token is refused. Like any GitHub connection, it may also be used for online
+skill search (the first one by name is). To take access away, **Redo** and choose **Remove my
+GitHub access**, or delete the connection.
 
 ## Example: build me a website
 

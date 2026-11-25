@@ -17,6 +17,8 @@ export interface EngineDeps {
   checkUrl?: CheckUrl;
   /** How skills are downloaded from the web; tests replace it. Default: a guarded public fetch. */
   skillFetch?: SkillFetch;
+  /** How agents call GitHub; tests replace it. Default: fetch. */
+  githubFetch?: typeof fetch;
   /** Checks that Ollama answers and starts it when it doesn't; tests replace it. */
   ensureOllama?: EnsureOllama;
 }

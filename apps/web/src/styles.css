@@ -1997,6 +1997,30 @@ button.chip {
 }
 
 /* which model an agent runs on */
+.setup {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 8px 0;
+}
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stack-tight p {
+  margin: 0;
+}
+.setup .row-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.setup-preview {
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow: auto;
+}
 .runs-on {
   display: flex;
   flex-wrap: wrap;

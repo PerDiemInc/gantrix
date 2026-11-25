@@ -6,6 +6,7 @@ import { createChatModel, tokensUsed } from '../models/provider.ts';
 import { structured } from '../models/structured.ts';
 import { validatePlan } from '../plan/dag.ts';
 import { type Plan, PlanSchema } from '../plan/schema.ts';
+import { GITHUB_READ } from '../skills/tools/github.ts';
 import { type EngineDeps, modelDefaults } from './deps.ts';
 import { latestGoalVerdict, teamNotesFor } from './supervisor.ts';
 
@@ -126,6 +127,7 @@ async function loadTeam(deps: EngineDeps, task: typeof tasks.$inferSelect): Prom
       model: agents.model,
       modelBaseUrl: agents.modelBaseUrl,
       connectionId: agents.connectionId,
+      githubConnectionId: agents.githubConnectionId,
     })
     .from(agents)
     .leftJoin(agentSkills, eq(agentSkills.agentId, agents.id))
@@ -157,6 +159,7 @@ async function loadTeam(deps: EngineDeps, task: typeof tasks.$inferSelect): Prom
       ];
     } else if (r.manifest) {
       member.tools.push(
+        ...(r.githubConnectionId ? [GITHUB_READ] : []),
         ...r.manifest.tools,
         ...Object.keys(r.manifest.mcpServers).map((s) => `${s} (MCP)`),
       );

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { createClient } from './client.ts';
 import * as cmd from './commands.ts';
+import { setupAgent } from './setup.ts';
 import { addTeam } from './team.ts';
 
 // Settings come from the environment, falling back to the repo's .env (never overriding).
@@ -57,6 +58,10 @@ agents
     'a Slack connection (bot token, app token, allowed users) to chat with this agent in Slack',
   )
   .action(run((name: string, o) => cmd.addAgent(client, name, o)));
+agents
+  .command('setup <name>')
+  .description('the agent asks how you work and writes its own skill from your answers')
+  .action(run((name: string) => setupAgent(client, name)));
 agents
   .command('rm <name>')
   .description('remove an agent')
