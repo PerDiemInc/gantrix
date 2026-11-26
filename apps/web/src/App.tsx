@@ -9,6 +9,7 @@ import { ApprovalsPage } from './pages/ApprovalsPage.tsx';
 import { ConnectionsPage } from './pages/ConnectionsPage.tsx';
 import { ConnectSlackPage } from './pages/ConnectSlackPage.tsx';
 import { LogsPage } from './pages/LogsPage.tsx';
+import { MeetingsPage } from './pages/MeetingsPage.tsx';
 import { NewPage } from './pages/NewPage.tsx';
 import { ProjectsPage } from './pages/ProjectsPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
@@ -72,6 +73,7 @@ export function App() {
 
   const nav = [
     ['projects', 'Projects'],
+    ['meetings', 'Meetings'],
     ['agents', 'Agents'],
     ['skills', 'Skills'],
     ['connections', 'Connections'],
@@ -140,6 +142,7 @@ export function App() {
           {route.page === 'logs' && (
             <LogsPage id={route.id} {...(route.stepId ? { stepId: route.stepId } : {})} />
           )}
+          {route.page === 'meetings' && <MeetingsPage />}
           {route.page === 'agents' && <AgentsPage />}
           {route.page === 'skills' && <SkillsPage />}
           {route.page === 'connections' && <ConnectionsPage />}
