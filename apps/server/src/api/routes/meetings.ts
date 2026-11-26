@@ -31,7 +31,9 @@ export function meetingRoutes(app: FastifyInstance, { db, config }: ApiDeps): vo
     ));
     const spec = await resolveModelSpec(db, input.override
       ? { ...agent, ...input.override, modelBaseUrl: null }
-      : agent);
+      : agent).catch(() => {
+        throw new HttpError(400, 'Cannot resolve the selected model. Check the connection and model name.');
+      });
     if (spec.provider === 'claude-code' || spec.provider === 'codex') {
       throw new HttpError(400, 'Meeting chat requires a chat model, not a coding CLI. Choose another model.');
     }
@@ -58,7 +60,7 @@ export function meetingRoutes(app: FastifyInstance, { db, config }: ApiDeps): vo
           typeof part === 'object' && 'text' in part && typeof part.text === 'string' ? part.text : '').join('');
         if (text) reply.raw.write(JSON.stringify({ text }) + '\n');
       }
-      if (!signal.aborted) reply.raw.write(JSON.stringify({ done: true }) + '\n');
+      if (!controller.signal.aborted) reply.raw.write(JSON.stringify(signal.aborted ? { error: 'Model timed out.' } : { done: true }) + '\n');
     } catch {
       if (!controller.signal.aborted) reply.raw.write(JSON.stringify({ error: 'Model failed or timed out. Try another model.' }) + '\n');
     } finally {
