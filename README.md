@@ -226,6 +226,12 @@ npm run gantrix -- logs last                # every step
 npm run gantrix -- logs last compare_facts  # one step; add --full for system prompts and thinking
 ```
 
+### Meet with your agents
+
+Open **Meetings** in the dashboard, select the agents you want to talk to, and choose a model for each participant. Each agent receives its own assigned skill instructions and the shared discussion transcript. Address everyone or one agent, stream replies, and interrupt the discussion whenever needed.
+
+Use **Change for meeting** to switch models without editing the saved agent. Changes take effect on the next turn. Meeting chat does not execute tools; use a project or job for that. The transcript is temporary and stays in the tab until you leave or reset. Cloud models receive the conversation and the selected agent's skill instructions.
+
 ### Troubleshooting
 
 | You see | Fix |
