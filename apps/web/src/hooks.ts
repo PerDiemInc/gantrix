@@ -1,5 +1,5 @@
 import type { AgentDto, StreamEvent, TaskDetailDto } from '@gantrix/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, subscribe } from './api.ts';
 
 /** What the New menu can create. */
@@ -51,14 +51,23 @@ export function parseHash(hash: string): Route {
   return { page: 'projects' };
 }
 
+// Observe the URL itself instead of keeping a second, potentially stale route in state.
+// Embedded browsers can update history without dispatching hashchange or popstate.
+function subscribeToRoute(onChange: () => void): () => void {
+  addEventListener('hashchange', onChange);
+  addEventListener('popstate', onChange);
+  const timer = setInterval(onChange, 250);
+  return () => {
+    removeEventListener('hashchange', onChange);
+    removeEventListener('popstate', onChange);
+    clearInterval(timer);
+  };
+}
+
+const routeSnapshot = () => location.hash;
+
 export function useRoute(): Route {
-  const [route, setRoute] = useState(() => parseHash(location.hash));
-  useEffect(() => {
-    const onChange = () => setRoute(parseHash(location.hash));
-    addEventListener('hashchange', onChange);
-    return () => removeEventListener('hashchange', onChange);
-  }, []);
-  return route;
+  return parseHash(useSyncExternalStore(subscribeToRoute, routeSnapshot));
 }
 
 export const go = (hash: string) => {
